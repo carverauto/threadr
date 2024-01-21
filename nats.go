@@ -1,4 +1,4 @@
-// Package main ./nats.go
+// Package main ./broker.go
 package main
 
 import (
