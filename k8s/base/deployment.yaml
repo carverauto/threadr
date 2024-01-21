@@ -1,3 +1,9 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: threadnexus-irc-account
+  namespace: threadnexus
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,6 +19,9 @@ spec:
       labels:
         app: threadnexus-irc
     spec:
+      serviceAccountName: threadnexus-irc-account
+      imagePullSecrets:
+        - name: ghcr-io
       containers:
         - name: threadnexus
           image: ghcr.io/carverauto/threadnexus:v0.0.1
