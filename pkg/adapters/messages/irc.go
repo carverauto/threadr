@@ -85,6 +85,6 @@ func (irc *IRCAdapter) Listen(onMessage func(msg string)) {
 	})
 
 	// Start processing events
-	log.Println("Listening for messages...")
+	log.Println("Listening for messages..")
 	irc.Connection.Loop()
 }
