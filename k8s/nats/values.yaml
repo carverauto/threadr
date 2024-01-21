@@ -1,0 +1,37 @@
+config:
+  cluster:
+    enabled: true
+    replicas: 2
+  jetstream:
+    enabled: true
+    fileStore:
+      pvc:
+        size: 10Gi
+  merge:
+    authorization:
+      users:
+        - nkey: << $NKEY >>
+
+podTemplate:
+  topologySpreadConstraints:
+    kubernetes.io/hostname:
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule
+
+container:
+  env:
+    - name: NKEY
+      valueFrom:
+        secretKeyRef:
+          name: nats-user-credentials
+          key: nkey
+
+promExporter:
+  enabled: true
+  image:
+    repository: natsio/prometheus-nats-exporter
+    tag: 0.13.0
+    pullPolicy: IfNotPresent
+  port: 7777
+  podMonitor:
+    enabled: true
