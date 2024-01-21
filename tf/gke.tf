@@ -8,15 +8,10 @@ variable "gke_password" {
   description = "gke password"
 }
 
-variable "gke_num_nodes" {
-  default     = 2
-  description = "number of gke nodes"
-}
-
 # GKE cluster
 data "google_container_engine_versions" "gke_version" {
   location = var.region
-  version_prefix = "1.27."
+  version_prefix = "1.27.3"
 }
 
 resource "google_container_cluster" "primary" {
