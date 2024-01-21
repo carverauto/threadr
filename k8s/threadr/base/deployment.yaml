@@ -25,3 +25,4 @@ spec:
       containers:
         - name: threadnexus
           image: ghcr.io/carverauto/threadnexus:latest
+          imagePullPolicy: Always
