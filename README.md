@@ -1,4 +1,6 @@
- # Description
+![threadNexus](https://raw.githubusercontent.com/carverauto/threadnexus/main/assets/thread-banner.png)
+
+# Description
 
 Create an opensource social graph tool identifying relationships between actors,
 particularly threat actors, creating graphs and clusters. Identify the strength 
