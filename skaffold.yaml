@@ -10,7 +10,7 @@ build:
 manifests:
   kustomize:
     paths:
-      - k8s/nats/base
+      - k8s/threadr/base
 profiles:
   - name: base
     manifests:

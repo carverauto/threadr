@@ -3,16 +3,44 @@ package broker
 
 import (
 	"context"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nkeys"
+	"log"
+	"time"
 )
+
+type natsConfig struct {
+	NatsURL  string `envconfig:"NATS_URL" default:"nats://nats.cluster.local.svc:4022" required:"true"`
+	NKey     string `envconfig:"NKEY" default:"" required:"true"`
+	NkeySeed string `envconfig:"NKEYSEED" default:"" required:"true"`
+}
 
 type NATSAdapter struct {
 	js jetstream.JetStream
 }
 
-func NewNATSAdapter(url string, options ...nats.Option) (*NATSAdapter, error) {
-	nc, err := nats.Connect(url, options...)
+func NewNATSAdapter() (*NATSAdapter, error) {
+	var env natsConfig
+	if err := envconfig.Process("", &env); err != nil {
+		log.Fatal("Failed to process NATS config:", err)
+	}
+
+	natsOpts := []nats.Option{
+		nats.RetryOnFailedConnect(true),
+		nats.Timeout(30 * time.Second),
+		nats.ReconnectWait(1 * time.Second),
+		nats.Nkey(env.NKey, func(bytes []byte) ([]byte, error) {
+			sk, err := nkeys.FromSeed([]byte(env.NkeySeed))
+			if err != nil {
+				return nil, err
+			}
+			return sk.Sign(bytes)
+		}),
+	}
+
+	nc, err := nats.Connect(env.NatsURL, natsOpts...)
 	if err != nil {
 		return nil, err
 	}

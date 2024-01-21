@@ -26,3 +26,14 @@ spec:
         - name: threadnexus
           image: ghcr.io/carverauto/threadnexus:v0.0.2
           imagePullPolicy: Always
+          env:
+            - name: NKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-secret
+                  key: NKEY
+            - name: NKEYSEED
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-seed-secret
+                  key: NKEYSEED

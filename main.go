@@ -12,7 +12,7 @@ import (
 
 func main() {
 	// Initialize NATS adapter
-	natsAdapter, err := pb.NewNATSAdapter("nats://nats.nats.svc.cluster.local:4222")
+	natsAdapter, err := pb.NewNATSAdapter()
 	if err != nil {
 		log.Fatal(err)
 	}
