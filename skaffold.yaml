@@ -1,0 +1,19 @@
+apiVersion: skaffold/v4beta8
+kind: Config
+metadata:
+  name: threadnexus
+build:
+  artifacts:
+    - image: ghcr.io/carverauto/threadnexus
+      buildpacks:
+        builder: gcr.io/buildpacks/builder:v1
+manifests:
+  kustomize:
+    paths:
+      - k8s/nats/base
+profiles:
+  - name: base
+    manifests:
+      kustomize:
+        paths:
+          - k8s/threadr/base
