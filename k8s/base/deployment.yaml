@@ -13,7 +13,6 @@ spec:
       labels:
         app: threadnexus-irc
     spec:
-      serviceAccountName: threadnexus-irc-account
       containers:
         - name: threadnexus
           image: ghcr.io/carverauto/threadnexus:v0.0.1
