@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadnexus-irc
+  namespace: threadnexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: threadnexus-irc
+  template:
+    metadata:
+      labels:
+        app: threadnexus-irc
+    spec:
+      serviceAccountName: threadnexus-irc-account
+      containers:
+        - name: threadnexus
+          image: ghcr.io/carverauto/threadnexus:v0.0.1
