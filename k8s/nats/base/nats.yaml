@@ -14,7 +14,7 @@ spec:
         valueFiles:
           - $values/k8s/nats/values.yml
     - repoURL: 'git@github.com:carverauto/threadnexus.git'
-      targetRevision: HEAD
+      targetRevision: main
       ref: values
   destination:
     server: 'https://kubernetes.default.svc'
