@@ -1,3 +1,6 @@
 .idea
 .env
 *.pem
+.terraform
+.terraform*
+*.tfstate
