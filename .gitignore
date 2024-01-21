@@ -1,6 +1,7 @@
 .idea
 .env
 *.pem
+tf/terraform.tfstate.backup
 .terraform
 .terraform*
 *.tfstate
