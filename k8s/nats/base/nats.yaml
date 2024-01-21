@@ -13,7 +13,7 @@ spec:
         releaseName: nats
         valueFiles:
           - $values/k8s/nats/values.yml
-    - repoURL: 'https://github.com/carverauto/threadnexus.git'
+    - repoURL: 'git@github.com:carverauto/threadnexus.git'
       targetRevision: HEAD
       ref: values
   destination:
