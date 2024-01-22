@@ -4,6 +4,5 @@ package broker
 import "context"
 
 type Broker interface {
-	Publish(ctx context.Context, subject string, message []byte) error
-	Subscribe(ctx context.Context, subject string, handler func(msg []byte)) error
+	PublishEvent(ctx context.Context, sequence int, message []byte) error
 }

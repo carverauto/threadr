@@ -5,11 +5,23 @@ import (
 	"context"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 	"log"
 	"time"
+
+	cejsm "github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2"
+	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/google/uuid"
 )
+
+type CloudEventsNATSHandler struct {
+	client cloudevents.Client
+}
+
+type Message struct {
+	Sequence int    `json:"id"`
+	Message  string `json:"message"`
+}
 
 type natsConfig struct {
 	NatsURL  string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
@@ -17,11 +29,7 @@ type natsConfig struct {
 	NkeySeed string `envconfig:"NKEYSEED" required:"true"`
 }
 
-type NATSAdapter struct {
-	js jetstream.JetStream
-}
-
-func NewNATSAdapter() (*NATSAdapter, error) {
+func NewCloudEventsNATSHandler(natsURL, subject string) (*CloudEventsNATSHandler, error) {
 	var env natsConfig
 	if err := envconfig.Process("", &env); err != nil {
 		log.Fatal("Failed to process NATS config:", err)
@@ -40,31 +48,31 @@ func NewNATSAdapter() (*NATSAdapter, error) {
 		}),
 	}
 
-	nc, err := nats.Connect(env.NatsURL, natsOpts...)
+	p, err := cejsm.NewSender(natsURL, "messages", subject, natsOpts, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	js, err := jetstream.New(nc)
+	c, err := cloudevents.NewClient(p)
 	if err != nil {
 		return nil, err
 	}
 
-	return &NATSAdapter{js: js}, nil
+	return &CloudEventsNATSHandler{client: c}, nil
 }
 
-func (n *NATSAdapter) Publish(ctx context.Context, subject string, message []byte) error {
-	_, err := n.js.Publish(ctx, subject, message)
-	return err
-}
+func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, sequence int, message string) error {
+	e := cloudevents.NewEvent()
+	e.SetID(uuid.New().String())
+	e.SetType("com.carverauto.threadnexus.irc.message")
+	e.SetSource("threadnexus-irc-bot")
+	e.SetTime(time.Now())
+	if err := e.SetData(cloudevents.ApplicationJSON, &Message{
+		Message:  message,
+		Sequence: sequence,
+	}); err != nil {
+		return err
+	}
 
-func (n *NATSAdapter) Subscribe(ctx context.Context, subject string, handler func(msg []byte)) error {
-	/*
-		_, err := n.js.Subscribe(ctx, subject, func(m *nats.Msg) {
-			handler(m.Data)
-		})
-
-				return err
-	*/
-	return nil
+	return h.client.Send(ctx, e)
 }

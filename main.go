@@ -2,42 +2,47 @@ package main
 
 import (
 	"context"
-	pb "github.com/carverauto/threadnexus/pkg/adapters/broker"
+	"github.com/carverauto/threadnexus/pkg/adapters/broker"
 	adapters "github.com/carverauto/threadnexus/pkg/adapters/messages"
-	"github.com/carverauto/threadnexus/pkg/ports/broker"
 	pm "github.com/carverauto/threadnexus/pkg/ports/messages"
 	"log"
 	"time"
 )
 
+type Example struct {
+	Sequence int    `json:"id"`
+	Message  string `json:"message"`
+}
+
 func main() {
-	// Initialize NATS adapter
-	natsAdapter, err := pb.NewNATSAdapter()
+	natsURL := "nats://nats.nats.svc.cluster.local:4222" // Update this with the actual NATS URL
+	subject := "messages.irc"                            // Update this with the desired NATS subject
+
+	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	// Use the adapter through the Broker interface
-	var b broker.Broker = natsAdapter
-
 	var ircAdapter pm.MessageAdapter = adapters.NewIRCAdapter()
-
 	if err := ircAdapter.Connect(); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
+	// start a counter for received messages
+	msgCounter := 0
 	ircAdapter.Listen(func(msg string) {
-		// Create a context with a timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		// Process each message, e.g., publish to NATS
-		log.Println("Received message:", msg)
-		if err := b.Publish(ctx, "irc", []byte(msg)); err != nil {
-			log.Println("Failed to publish message to NATS:", err)
+		err := cloudEventsHandler.PublishEvent(ctx, msgCounter, msg)
+		if err != nil {
+			log.Printf("Failed to send CloudEvent: %v", err)
+		} else {
+			log.Printf("Sent CloudEvent for message [%d]", msgCounter)
 		}
+		msgCounter++
 	})
 
 	// Keep the application running
-	select {} // or another mechanism to keep the app alive
+	select {} // Or another mechanism to keep the app alive
 }
