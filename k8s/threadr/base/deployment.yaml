@@ -27,6 +27,8 @@ spec:
           image: ghcr.io/carverauto/threadnexus:v0.0.2
           imagePullPolicy: Always
           env:
+            - name: NATSURL
+              value: nats://nats.nats.svc.cluster.local:4222
             - name: NKEY
               valueFrom:
                 secretKeyRef:

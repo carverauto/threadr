@@ -12,9 +12,9 @@ import (
 )
 
 type natsConfig struct {
-	NatsURL  string `envconfig:"NATS_URL" default:"nats://nats.cluster.local.svc:4022" required:"true"`
-	NKey     string `envconfig:"NKEY" default:"" required:"true"`
-	NkeySeed string `envconfig:"NKEYSEED" default:"" required:"true"`
+	NatsURL  string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
+	NKey     string `envconfig:"NKEY" required:"true"`
+	NkeySeed string `envconfig:"NKEYSEED" required:"true"`
 }
 
 type NATSAdapter struct {

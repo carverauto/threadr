@@ -28,12 +28,12 @@ func main() {
 
 	ircAdapter.Listen(func(msg string) {
 		// Create a context with a timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		// Process each message, e.g., publish to NATS
 		log.Println("Received message:", msg)
-		if err := b.Publish(ctx, "messages.irc", []byte(msg)); err != nil {
+		if err := b.Publish(ctx, "irc", []byte(msg)); err != nil {
 			log.Println("Failed to publish message to NATS:", err)
 		}
 	})
