@@ -3,6 +3,7 @@ package broker
 
 import (
 	"context"
+	"fmt"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
@@ -66,5 +67,11 @@ func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, message Messa
 		return err
 	}
 
-	return h.client.Send(ctx, e)
+	// return h.client.Send(ctx, e)
+	result := h.client.Send(ctx, e)
+	if cloudevents.IsUndelivered(result) {
+		return fmt.Errorf("failed to send: %v", result)
+	}
+
+	return nil
 }

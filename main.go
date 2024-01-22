@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"github.com/carverauto/threadnexus/pkg/adapters/broker"
-	adapters "github.com/carverauto/threadnexus/pkg/adapters/messages"
+	messages "github.com/carverauto/threadnexus/pkg/adapters/messages"
 	pm "github.com/carverauto/threadnexus/pkg/ports/messages"
 	"log"
 	"time"
@@ -18,23 +18,23 @@ func main() {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	var ircAdapter pm.MessageAdapter = adapters.NewIRCAdapter()
+	var ircAdapter pm.MessageAdapter = messages.NewIRCAdapter()
 	if err := ircAdapter.Connect(); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
 	// start a counter for received messages
 	msgCounter := 0
-	ircAdapter.Listen(func(msg string) {
+	ircAdapter.Listen(func(ircMsg messages.IRCMessage) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		// Create a CloudEvent
 		ce := broker.Message{
 			Sequence:  msgCounter,
-			Message:   msg,
-			Nick:      "nick",
-			Channel:   "channel",
+			Message:   ircMsg.Message,
+			Nick:      ircMsg.Nick,
+			Channel:   ircMsg.Channel,
 			Timestamp: time.Now(),
 		}
 

@@ -25,6 +25,14 @@ type IRCAdapterConfig struct {
 	BotSaslPassword string `envconfig:"BOT_SASL_PASSWORD"`
 }
 
+type IRCMessage struct {
+	Nick     string
+	User     string
+	Channel  string
+	Message  string
+	FullUser string // To hold the entire user string
+}
+
 func NewIRCAdapter() *IRCAdapter {
 	var config IRCAdapterConfig
 	err := envconfig.Process("bot", &config)
@@ -66,6 +74,7 @@ func (irc *IRCAdapter) Connect() error {
 
 	irc.Connection.AddCallback("PRIVMSG", func(e ircmsg.Message) {
 		fmt.Println("E:", e)
+		fmt.Println("Source:", e.Source)
 		target, message := e.Params[0], e.Params[1]
 		log.Println("PRIVMSG", target, message)
 		if strings.HasPrefix(message, irc.Connection.Nick) {
@@ -76,14 +85,29 @@ func (irc *IRCAdapter) Connect() error {
 	return irc.Connection.Connect()
 }
 
-func (irc *IRCAdapter) Listen(onMessage func(msg string)) {
+func (irc *IRCAdapter) Listen(onMessage func(message IRCMessage)) {
 	// Add a callback for the 'PRIVMSG' event
 	irc.Connection.AddCallback("PRIVMSG", func(e ircmsg.Message) {
-		// Construct the message in a format you want
-		fullMessage := e.Nick() + ": " + strings.Join(e.Params[1:], " ")
+		// The first parameter in a PRIVMSG is the full prefix: "nickname!username@host"
+		fullPrefix := e.Source
+		fullMessage := strings.Join(e.Params[1:], " ") // The message text
+
+		// Extract nickname and user
+		nick := e.Nick() // Extract nickname using Nick() method
+		_, rest, _ := strings.Cut(fullPrefix, "!")
+
+		log.Println("Nickname:", nick, "User:", rest, "Message:", fullMessage)
+
+		ircMsg := IRCMessage{
+			Nick:     e.Nick(),
+			User:     rest,
+			Channel:  e.Params[0],
+			Message:  strings.Join(e.Params[1:], " "),
+			FullUser: fullPrefix,
+		}
 
 		// Invoke the onMessage function with the new message
-		onMessage(fullMessage)
+		onMessage(ircMsg)
 	})
 
 	// Start processing events

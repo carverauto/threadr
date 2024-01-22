@@ -24,7 +24,7 @@ spec:
         - name: ghcr-io
       containers:
         - name: threadnexus
-          image: ghcr.io/carverauto/threadnexus:v0.0.3
+          image: ghcr.io/carverauto/threadnexus:v0.0.4
           imagePullPolicy: Always
           env:
             - name: NATSURL
