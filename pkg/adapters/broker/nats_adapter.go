@@ -18,11 +18,6 @@ type CloudEventsNATSHandler struct {
 	client cloudevents.Client
 }
 
-type Message struct {
-	Sequence int    `json:"id"`
-	Message  string `json:"message"`
-}
-
 type natsConfig struct {
 	NatsURL  string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
 	NKey     string `envconfig:"NKEY" required:"true"`
@@ -61,16 +56,13 @@ func NewCloudEventsNATSHandler(natsURL, subject string) (*CloudEventsNATSHandler
 	return &CloudEventsNATSHandler{client: c}, nil
 }
 
-func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, sequence int, message string) error {
+func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, message Message) error {
 	e := cloudevents.NewEvent()
 	e.SetID(uuid.New().String())
 	e.SetType("com.carverauto.threadnexus.irc.message")
 	e.SetSource("threadnexus-irc-bot")
 	e.SetTime(time.Now())
-	if err := e.SetData(cloudevents.ApplicationJSON, &Message{
-		Message:  message,
-		Sequence: sequence,
-	}); err != nil {
+	if err := e.SetData(cloudevents.ApplicationJSON, message); err != nil {
 		return err
 	}
 

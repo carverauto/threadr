@@ -3,6 +3,7 @@ package messages
 
 import (
 	"crypto/tls"
+	"fmt"
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 	"github.com/kelseyhightower/envconfig"
@@ -64,6 +65,7 @@ func (irc *IRCAdapter) Connect() error {
 	})
 
 	irc.Connection.AddCallback("PRIVMSG", func(e ircmsg.Message) {
+		fmt.Println("E:", e)
 		target, message := e.Params[0], e.Params[1]
 		log.Println("PRIVMSG", target, message)
 		if strings.HasPrefix(message, irc.Connection.Nick) {

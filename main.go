@@ -9,14 +9,9 @@ import (
 	"time"
 )
 
-type Example struct {
-	Sequence int    `json:"id"`
-	Message  string `json:"message"`
-}
-
 func main() {
-	natsURL := "nats://nats.nats.svc.cluster.local:4222" // Update this with the actual NATS URL
-	subject := "messages.irc"                            // Update this with the desired NATS subject
+	natsURL := "nats://nats.nats.svc.cluster.local:4222"
+	subject := "messages.irc"
 
 	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject)
 	if err != nil {
@@ -34,7 +29,16 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		err := cloudEventsHandler.PublishEvent(ctx, msgCounter, msg)
+		// Create a CloudEvent
+		ce := broker.Message{
+			Sequence:  msgCounter,
+			Message:   msg,
+			Nick:      "nick",
+			Channel:   "channel",
+			Timestamp: time.Now(),
+		}
+
+		err := cloudEventsHandler.PublishEvent(ctx, ce)
 		if err != nil {
 			log.Printf("Failed to send CloudEvent: %v", err)
 		} else {
@@ -44,5 +48,5 @@ func main() {
 	})
 
 	// Keep the application running
-	select {} // Or another mechanism to keep the app alive
+	select {}
 }
