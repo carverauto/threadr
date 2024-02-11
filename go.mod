@@ -3,6 +3,7 @@ module github.com/carverauto/threadr
 go 1.21
 
 require (
+	github.com/cloudevents/sdk-go/protocol/nats/v2 v2.15.0
 	github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2 v2.15.0
 	github.com/cloudevents/sdk-go/v2 v2.15.0
 	github.com/ergochat/irc-go v0.4.0

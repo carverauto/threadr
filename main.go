@@ -11,9 +11,10 @@ import (
 
 func main() {
 	natsURL := "nats://nats.nats.svc.cluster.local:4222"
-	subject := "messages.irc"
+	subject := "irc"
+	stream := "messages"
 
-	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject)
+	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject, stream)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}

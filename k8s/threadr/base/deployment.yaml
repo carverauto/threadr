@@ -24,7 +24,7 @@ spec:
         - name: ghcr-io-cred
       containers:
         - name: threadr
-          image: ghcr.io/carverauto/threadr:v0.0.1
+          image: ghcr.io/carverauto/threadr:v0.0.2
           imagePullPolicy: Always
           env:
             - name: NATSURL

@@ -1,3 +1,5 @@
+github.com/cloudevents/sdk-go/protocol/nats/v2 v2.15.0 h1:vmTEIaTyh8zwq9yAhWoQ+S6LHhJtvfAI49FIkHVi+sU=
+github.com/cloudevents/sdk-go/protocol/nats/v2 v2.15.0/go.mod h1:XfchX06dyOdXbhiSIxMrD3/2eE9mr49Hg0H2wwWpJTM=
 github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2 v2.15.0 h1:Ha0sVELYslbpXSNMdClf69aUKRTOaJrL9QCCsA8S91M=
 github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2 v2.15.0/go.mod h1:PQnmqzGwnUh2aFLmj275XX3pEMaKTkHkCLueRmcjOc4=
 github.com/cloudevents/sdk-go/v2 v2.15.0 h1:aKnhLQhyoJXqEECQdOIZnbZ9VupqlidE6hedugDGr+I=

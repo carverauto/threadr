@@ -25,7 +25,7 @@ type natsConfig struct {
 	NkeySeed string `envconfig:"NKEYSEED" required:"true"`
 }
 
-func NewCloudEventsNATSHandler(natsURL, subject string) (*CloudEventsNATSHandler, error) {
+func NewCloudEventsNATSHandler(natsURL, subject, stream string) (*CloudEventsNATSHandler, error) {
 	var env natsConfig
 	if err := envconfig.Process("", &env); err != nil {
 		log.Fatal("Failed to process NATS config:", err)
@@ -44,7 +44,7 @@ func NewCloudEventsNATSHandler(natsURL, subject string) (*CloudEventsNATSHandler
 		}),
 	}
 
-	p, err := cejsm.NewSender(natsURL, "messages", subject, natsOpts, nil)
+	p, err := cejsm.NewSender(natsURL, stream, subject, natsOpts, nil)
 	if err != nil {
 		return nil, err
 	}
