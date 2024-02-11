@@ -21,7 +21,7 @@ spec:
     spec:
       serviceAccountName: threadr-irc-account
       imagePullSecrets:
-        - name: ghcr-io
+        - name: ghcr-io-cred
       containers:
         - name: threadr
           image: ghcr.io/carverauto/threadr:v0.0.1
