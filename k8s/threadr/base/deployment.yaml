@@ -1,30 +1,30 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: threadnexus-irc-account
-  namespace: threadnexus
+  name: threadr-irc-account
+  namespace: threadr
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: threadnexus-irc
-  namespace: threadnexus
+  name: threadr-irc
+  namespace: threadr
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: threadnexus-irc
+      app: threadr-irc
   template:
     metadata:
       labels:
-        app: threadnexus-irc
+        app: threadr-irc
     spec:
-      serviceAccountName: threadnexus-irc-account
+      serviceAccountName: threadr-irc-account
       imagePullSecrets:
         - name: ghcr-io
       containers:
-        - name: threadnexus
-          image: ghcr.io/carverauto/threadnexus:v0.0.4
+        - name: threadr
+          image: ghcr.io/carverauto/threadr:v0.0.1
           imagePullPolicy: Always
           env:
             - name: NATSURL

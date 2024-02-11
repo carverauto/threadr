@@ -1,6 +1,6 @@
-module github.com/carverauto/threadnexus
+module github.com/carverauto/threadr
 
-go 1.21.3
+go 1.21
 
 require (
 	github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2 v2.15.0
@@ -23,5 +23,4 @@ require (
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
 )
