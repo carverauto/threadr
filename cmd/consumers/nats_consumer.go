@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/carverauto/threadr/pkg/adapters/broker"
+	"github.com/carverauto/threadr/pkg/adapters/messages"
+	mp "github.com/carverauto/threadr/pkg/ports/messages"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 	"log"
@@ -54,10 +56,20 @@ func main() {
 		log.Fatalf("failed to create client, %s", err.Error())
 	}
 
+	var handler mp.MessageHandler
+	handler = messages.NewSimpleMessageHandler()
+
 	for {
-		if err := c.StartReceiver(ctx, receive); err != nil {
+		if err := c.StartReceiver(ctx, func(ctx context.Context, event cloudevents.Event) error {
+			return handler.Handle(ctx, event)
+		}); err != nil {
 			log.Printf("failed to start nats receiver, %s", err.Error())
 		}
+		/*
+			if err := c.StartReceiver(ctx, receive); err != nil {
+				log.Printf("failed to start nats receiver, %s", err.Error())
+			}
+		*/
 	}
 }
 
