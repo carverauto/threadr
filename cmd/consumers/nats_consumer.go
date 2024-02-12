@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/carverauto/threadr/pkg/adapters/broker"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 	"log"
@@ -73,15 +74,10 @@ func main() {
 	}
 }
 
-type Example struct {
-	Sequence int    `json:"id"`
-	Message  string `json:"message"`
-}
-
 func receive(ctx context.Context, event cloudevents.Event) error {
 	fmt.Printf("Got Event Context: %+v\n", event.Context)
 
-	data := &Example{}
+	data := &broker.Message{}
 	if err := event.DataAs(data); err != nil {
 		fmt.Printf("Got Data Error: %s\n", err.Error())
 	}

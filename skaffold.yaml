@@ -1,10 +1,10 @@
 apiVersion: skaffold/v4beta6
 kind: Config
 metadata:
-  name: threadnexus
+  name: threadr
 build:
   artifacts:
-    - image: ghcr.io/carverauto/threadnexus
+    - image: ghcr.io/carverauto/threadr
       buildpacks:
         builder: gcr.io/buildpacks/builder:v1
 manifests:

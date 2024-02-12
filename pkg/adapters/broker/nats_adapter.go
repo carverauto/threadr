@@ -60,8 +60,8 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string) (*CloudEventsNAT
 func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, message Message) error {
 	e := cloudevents.NewEvent()
 	e.SetID(uuid.New().String())
-	e.SetType("com.carverauto.threadnexus.irc.message")
-	e.SetSource("threadnexus-irc-bot")
+	e.SetType("com.carverauto.threadr.irc.message")
+	e.SetSource("threadr-irc-bot")
 	e.SetTime(time.Now())
 	if err := e.SetData(cloudevents.ApplicationJSON, message); err != nil {
 		return err
