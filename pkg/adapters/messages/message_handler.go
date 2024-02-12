@@ -33,7 +33,6 @@ func (h *SimpleMessageHandler) Handle(ctx context.Context, event cloudevents.Eve
 	if err := event.DataAs(data); err != nil {
 		return fmt.Errorf("failed to parse message data: %w", err)
 	}
-	// log.Printf("[%s] %s\n", data.Nick, data.Message)
 
 	// Attempt to extract TO: and FROM: information
 	to, err := extractRecipient(data.Message)
@@ -43,7 +42,7 @@ func (h *SimpleMessageHandler) Handle(ctx context.Context, event cloudevents.Eve
 	}
 
 	// Log the extracted information along with the message
-	log.Printf("FROM: [%s] TO: [%s] MSG: %s\n", data.Nick, to, data.Message)
+	log.Printf("FRIEND: [%s] TO: [%s] MSG: %s\n", data.Nick, to, data.Message)
 	return nil
 }
 
