@@ -75,7 +75,7 @@ func main() {
 }
 
 func receive(ctx context.Context, event cloudevents.Event) error {
-	fmt.Printf("Got Event Context: %+v\n", event.Context)
+	// fmt.Printf("Got Event Context: %+v\n", event.Context)
 
 	data := &broker.Message{}
 	if err := event.DataAs(data); err != nil {
