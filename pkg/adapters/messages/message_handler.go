@@ -11,6 +11,14 @@ import (
 	"strings"
 )
 
+var (
+	recipientPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`^\@?(\w+):`), // Matches "trillian:" or "@trillian:"
+		regexp.MustCompile(`^\@(\w+)`),   // Matches "@trillian"
+	}
+	urlPattern = regexp.MustCompile(`^\s*https?://[^\s]+`)
+)
+
 // SimpleMessageHandler implements the MessageHandler interface.
 type SimpleMessageHandler struct{}
 
@@ -39,37 +47,23 @@ func (h *SimpleMessageHandler) Handle(ctx context.Context, event cloudevents.Eve
 	return nil
 }
 
-// extractRecipient attempts to extract the recipient from a message.
+func isPrimarilyURL(message string) bool {
+	// Use the pre-compiled urlPattern
+	return urlPattern.MatchString(message) && !strings.Contains(message, " ")
+}
+
 func extractRecipient(message string) (string, error) {
 	// First, check if the message is primarily a URL.
 	if isPrimarilyURL(message) {
 		return "", fmt.Errorf("message is primarily a URL, so recipient extraction is not applicable")
 	}
 
-	// Define patterns for extracting the recipient.
-	patterns := []string{
-		`^\@?(\w+):`, // Matches "trillian:" or "@trillian:"
-		`^\@(\w+)`,   // Matches "@trillian"
-	}
-
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
+	for _, re := range recipientPatterns {
 		matches := re.FindStringSubmatch(message)
 		if len(matches) > 1 {
-			return matches[1], nil // The first captured group should be the recipient's name.
+			return matches[1], nil
 		}
 	}
 
 	return "", fmt.Errorf("recipient not found in message: %s", message)
-}
-
-// isPrimarilyURL checks if the message is primarily a URL.
-func isPrimarilyURL(message string) bool {
-	// This regex matches a message that starts with optional whitespace,
-	// followed by a URL, and optionally ends with whitespace.
-	urlPattern := regexp.MustCompile(`^\s*https?://[^\s]+`)
-
-	// Consider a message as primarily a URL if it matches the pattern
-	// and does not contain significant text after the URL.
-	return urlPattern.MatchString(message) && !strings.Contains(message, " ")
 }
