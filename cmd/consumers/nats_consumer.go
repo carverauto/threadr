@@ -1,8 +1,3 @@
-/*
- Copyright 2021 The CloudEvents Authors
- SPDX-License-Identifier: Apache-2.0
-*/
-
 package main
 
 import (
@@ -48,19 +43,11 @@ func main() {
 		}),
 	}
 
-	fmt.Println("Connecting to NATS")
-
-	fmt.Println("NATS URL: ", env.NatsURL)
-	fmt.Println("Stream: ", env.Stream)
-	fmt.Println("Subject: ", env.Subject)
-
 	p, err := cejsm.NewConsumer(env.NatsURL, env.Stream, env.Subject, natsOpts, nil, nil)
 	if err != nil {
 		log.Fatalf("failed to create nats protocol, %s", err.Error())
 	}
 	defer p.Close(ctx)
-
-	fmt.Println("Connected to NATS")
 
 	c, err := cloudevents.NewClient(p)
 	if err != nil {
