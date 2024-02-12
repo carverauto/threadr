@@ -48,8 +48,8 @@ func extractRecipient(message string) (string, error) {
 
 	// Define patterns for extracting the recipient.
 	patterns := []string{
-		`^\@?(\w+):`, // Matches "leku:" or "@leku:"
-		`^\@(\w+)`,   // Matches "@leku"
+		`^\@?(\w+):`, // Matches "trillian:" or "@trillian:"
+		`^\@(\w+)`,   // Matches "@trillian"
 	}
 
 	for _, pattern := range patterns {
