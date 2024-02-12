@@ -81,8 +81,6 @@ func receive(ctx context.Context, event cloudevents.Event) error {
 	if err := event.DataAs(data); err != nil {
 		fmt.Printf("Got Data Error: %s\n", err.Error())
 	}
-	fmt.Printf("Got Data: %+v\n", data)
-
-	fmt.Printf("----------------------------\n")
+	log.Printf("[%s] %s\n", data.Nick, data.Message)
 	return nil
 }
