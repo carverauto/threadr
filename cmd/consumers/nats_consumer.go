@@ -1,9 +1,8 @@
+// Package main ./cmd/consumers/nats_consumer.go
 package main
 
 import (
 	"context"
-	"fmt"
-	"github.com/carverauto/threadr/pkg/adapters/broker"
 	"github.com/carverauto/threadr/pkg/adapters/messages"
 	mp "github.com/carverauto/threadr/pkg/ports/messages"
 	"github.com/nats-io/nats.go"
@@ -65,21 +64,5 @@ func main() {
 		}); err != nil {
 			log.Printf("failed to start nats receiver, %s", err.Error())
 		}
-		/*
-			if err := c.StartReceiver(ctx, receive); err != nil {
-				log.Printf("failed to start nats receiver, %s", err.Error())
-			}
-		*/
 	}
-}
-
-func receive(ctx context.Context, event cloudevents.Event) error {
-	// fmt.Printf("Got Event Context: %+v\n", event.Context)
-
-	data := &broker.Message{}
-	if err := event.DataAs(data); err != nil {
-		fmt.Printf("Got Data Error: %s\n", err.Error())
-	}
-	log.Printf("[%s] %s\n", data.Nick, data.Message)
-	return nil
 }
