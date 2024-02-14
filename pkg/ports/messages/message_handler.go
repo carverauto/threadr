@@ -8,5 +8,5 @@ import (
 
 // MessageHandler defines the interface for handling messages.
 type MessageHandler interface {
-	Handle(ctx context.Context, msg cloudevents.Event) error
+	Handle(ctx context.Context, event cloudevents.Event) error
 }

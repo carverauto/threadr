@@ -55,13 +55,19 @@ func main() {
 		log.Fatalf("failed to create client, %s", err.Error())
 	}
 
-	var handler mp.MessageHandler
-	handler = messages.NewSimpleMessageHandler()
+	var simpleHandler mp.MessageHandler
+	simpleHandler = messages.NewSimpleMessageHandler()
+
+	compositeHandler := mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 
 	for {
-		if err := c.StartReceiver(ctx, func(ctx context.Context, event cloudevents.Event) error {
-			return handler.Handle(ctx, event)
-		}); err != nil {
+		if err := c.StartReceiver(ctx, compositeHandler.Handle); err != nil {
+			/*
+				if err := c.StartReceiver(ctx, func(ctx context.Context, event cloudevents.Event) error {
+					return compositeHandler.Handle(ctx, event)
+				}); err != nil {
+
+			*/
 			log.Printf("failed to start nats receiver, %s", err.Error())
 		}
 	}
