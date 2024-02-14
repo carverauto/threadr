@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadr-consumer-irc
+  namespace: threadr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: threadr-consumer-irc
+  template:
+    metadata:
+      labels:
+        app: threadr-consumer-irc
+    spec:
+      serviceAccountName: threadr-irc-account
+      imagePullSecrets:
+        - name: ghcr-io-cred
+      containers:
+        - name: threadr-consumer-irc
+          image: ghcr.io/carverauto/threadr-consumer-irc:v0.0.5
+          imagePullPolicy: Always
+          env:
+            - name: NATSURL
+              value: nats://nats.nats.svc.cluster.local:4222
+            - name: NKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-secret
+                  key: NKEY
+            - name: NKEYSEED
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-seed-secret
+                  key: NKEYSEED
