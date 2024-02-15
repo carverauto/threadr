@@ -58,17 +58,10 @@ func main() {
 	var simpleHandler mp.MessageHandler
 	simpleHandler = messages.NewSimpleMessageHandler()
 
-	mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 	compositeHandler := mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 
 	for {
 		if err := c.StartReceiver(ctx, compositeHandler.Handle); err != nil {
-			/*
-				if err := c.StartReceiver(ctx, func(ctx context.Context, event cloudevents.Event) error {
-					return compositeHandler.Handle(ctx, event)
-				}); err != nil {
-
-			*/
 			log.Printf("failed to start nats receiver, %s", err.Error())
 		}
 	}
