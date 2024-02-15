@@ -1,3 +1,4 @@
+// Package messages ./pkg/ports/messages/composite_message_handler.go
 package messages
 
 import (

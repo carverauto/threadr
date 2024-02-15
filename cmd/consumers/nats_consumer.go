@@ -58,6 +58,7 @@ func main() {
 	var simpleHandler mp.MessageHandler
 	simpleHandler = messages.NewSimpleMessageHandler()
 
+	mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 	compositeHandler := mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 
 	for {
