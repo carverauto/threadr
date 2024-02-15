@@ -1,0 +1,18 @@
+neo4j:
+  name: my-standalone
+  resources:
+    cpu: "0.5"
+    memory: "2Gi"
+
+  # Uncomment to set the initial password
+  #password: "my-initial-password"
+
+  # Uncomment to use enterprise edition
+  #edition: "enterprise"
+  #acceptLicenseAgreement: "yes"
+
+volumes:
+  data:
+    mode: "dynamic"
+    dynamic:
+      storageClassName: local-path
