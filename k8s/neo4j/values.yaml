@@ -1,5 +1,5 @@
 neo4j:
-  name: my-standalone
+  name: neo4j-threadr
   resources:
     cpu: "0.5"
     memory: "2Gi"
@@ -8,11 +8,22 @@ neo4j:
   #password: "my-initial-password"
 
   # Uncomment to use enterprise edition
-  #edition: "enterprise"
-  #acceptLicenseAgreement: "yes"
+  edition: "enterprise"
+  acceptLicenseAgreement: "yes"
 
 volumes:
   data:
     mode: "dynamic"
     dynamic:
       storageClassName: local-path
+  licenses:
+    disableSubPathExpr: true
+    mode: volume
+    volume:
+      secret:
+        secretName: gds-license
+        items:
+          - key: gds.license
+            path: gds.license
+config:
+  gds.enterprise.license_file: "/licenses/gds.license"

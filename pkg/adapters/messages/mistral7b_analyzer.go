@@ -29,9 +29,7 @@ func NewMistralMessageHandler() *MistralMessageHandler {
 }
 
 // Handle processes the received message by sending it to the Mistral service.
-func (h *MistralMessageHandler) Handle(ctx context.Context, events []cloudevents.Event) error {
-
-	// go through each event, we need to break up the conversation into 4096 token chunks
+func (h *MistralMessageHandler) Handle(ctx context.Context, event cloudevents.Event) error {
 	data := &broker.Message{}
 	if err := event.DataAs(data); err != nil {
 		return fmt.Errorf("failed to parse message data: %w", err)
