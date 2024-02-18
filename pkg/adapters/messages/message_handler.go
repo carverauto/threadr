@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/carverauto/threadr/pkg/adapters/broker"
+	"github.com/carverauto/threadr/pkg/ports"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"log"
 	"regexp"
@@ -20,11 +21,15 @@ var (
 )
 
 // SimpleMessageHandler implements the MessageHandler interface.
-type SimpleMessageHandler struct{}
+type SimpleMessageHandler struct {
+	GraphDB ports.GraphDatabasePort
+}
 
 // NewSimpleMessageHandler creates a new instance of SimpleMessageHandler.
-func NewSimpleMessageHandler() *SimpleMessageHandler {
-	return &SimpleMessageHandler{}
+func NewSimpleMessageHandler(graphDB ports.GraphDatabasePort) *SimpleMessageHandler {
+	return &SimpleMessageHandler{
+		GraphDB: graphDB,
+	}
 }
 
 // Handle processes the received message.

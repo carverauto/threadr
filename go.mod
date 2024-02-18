@@ -10,7 +10,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/nats-io/nats.go v1.33.0
 	github.com/nats-io/nkeys v0.4.7
-	github.com/robfig/cron/v3 v3.0.1
+	github.com/neo4j/neo4j-go-driver/v4 v4.4.7
 )
 
 require (

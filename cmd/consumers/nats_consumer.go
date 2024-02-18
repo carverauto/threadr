@@ -3,8 +3,9 @@ package main
 
 import (
 	"context"
+	"github.com/carverauto/threadr/pkg/adapters/graph"
 	"github.com/carverauto/threadr/pkg/adapters/messages"
-	mp "github.com/carverauto/threadr/pkg/ports/messages"
+	mp "github.com/carverauto/threadr/pkg/ports"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 	"log"
@@ -24,11 +25,23 @@ type natsConfig struct {
 	Stream   string `envconfig:"STREAM" default:"messages" required:"true"`
 }
 
+type graphConfig struct {
+	Neo4jURI string `envconfig:"NEO4J_URI" default:"bolt://neo4j:7687" required:"true"`
+	Username string `envconfig:"NEO4J_USERNAME" default:"neo4j" required:"true"`
+	Password string `envconfig:"NEO4J_PASSWORD" default:"password" required:"true"`
+}
+
 func main() {
 	var env natsConfig
 	if err := envconfig.Process("", &env); err != nil {
 		log.Fatalf("Failed to process env var: %s", err)
 	}
+
+	var graphEnv graphConfig
+	if err := envconfig.Process("", &graphEnv); err != nil {
+		log.Fatalf("Failed to process env var: %s", err)
+	}
+
 	ctx := context.Background()
 
 	natsOpts := []nats.Option{
@@ -55,8 +68,13 @@ func main() {
 		log.Fatalf("failed to create client, %s", err.Error())
 	}
 
+	neo4jAdapter, err := graph.NewNeo4jAdapter(graphEnv.Neo4jURI, graphEnv.Username, graphEnv.Password)
+	if err != nil {
+		log.Fatalf("Error creating Neo4j adapter: %v", err)
+	}
+
 	var simpleHandler mp.MessageHandler
-	simpleHandler = messages.NewSimpleMessageHandler()
+	simpleHandler = messages.NewSimpleMessageHandler(neo4jAdapter)
 
 	compositeHandler := mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 

@@ -1,5 +1,5 @@
-// Package messages ./pkg/ports/messages/messages.go
-package messages
+// Package ports ./pkg/ports/messages.go
+package ports
 
 import "github.com/carverauto/threadr/pkg/adapters/messages"
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/carverauto/threadr/pkg/adapters/broker"
 	messages "github.com/carverauto/threadr/pkg/adapters/messages"
-	pm "github.com/carverauto/threadr/pkg/ports/messages"
+	pm "github.com/carverauto/threadr/pkg/ports"
 	"log"
 	"time"
 )
