@@ -26,9 +26,9 @@ type natsConfig struct {
 }
 
 type graphConfig struct {
-	Neo4jURI string `envconfig:"NEO4J_URI" default:"bolt://neo4j:7687" required:"true"`
+	Neo4jURI string `envconfig:"NEO4J_URI" default:"bolt://neo4j.neo4j.svc.cluster.local:7687" required:"true"`
 	Username string `envconfig:"NEO4J_USERNAME" default:"neo4j" required:"true"`
-	Password string `envconfig:"NEO4J_PASSWORD" default:"password" required:"true"`
+	Password string `envconfig:"NEO4J_PASSWORD" default:""`
 }
 
 func main() {

@@ -34,21 +34,45 @@ func NewSimpleMessageHandler(graphDB ports.GraphDatabasePort) *SimpleMessageHand
 
 // Handle processes the received message.
 func (h *SimpleMessageHandler) Handle(ctx context.Context, event cloudevents.Event) error {
+	/*
+		data := &broker.Message{}
+		if err := event.DataAs(data); err != nil {
+			return fmt.Errorf("failed to parse message data: %w", err)
+		}
+
+		// Attempt to extract TO: and FROM: information
+		to, err := extractRecipient(data.Message)
+		if err != nil {
+			log.Printf("[%s] %s\n", data.Nick, data.Message)
+			return nil
+		}
+
+		// Log the extracted information along with the message
+		log.Printf("FRIEND: [%s] TO: [%s] MSG: %s\n", data.Nick, to, data.Message)
+		return nil
+	*/
 	data := &broker.Message{}
 	if err := event.DataAs(data); err != nil {
 		return fmt.Errorf("failed to parse message data: %w", err)
 	}
 
-	// Attempt to extract TO: and FROM: information
-	to, err := extractRecipient(data.Message)
-	if err != nil {
-		log.Printf("[%s] %s\n", data.Nick, data.Message)
-		return nil
+	// Example: Extracting and adding a relationship
+	fromUser, toUser, relationshipType := extractRelationshipData(data.Message)
+	if relationshipType != "" {
+		if err := h.GraphDB.AddRelationship(ctx, fromUser, toUser, relationshipType); err != nil {
+			log.Printf("Failed to add relationship to Neo4j: %v", err)
+			return err
+		}
+		log.Printf("Added relationship [%s] from [%s] to [%s]", relationshipType, fromUser, toUser)
 	}
 
-	// Log the extracted information along with the message
-	log.Printf("FRIEND: [%s] TO: [%s] MSG: %s\n", data.Nick, to, data.Message)
 	return nil
+}
+
+// Dummy function, replace with actual logic to extract relationship data
+func extractRelationshipData(message string) (fromUser, toUser, relationshipType string) {
+	// Implement logic based on your application's needs
+	return "Alice", "Bob", "FRIENDS"
 }
 
 func isPrimarilyURL(message string) bool {

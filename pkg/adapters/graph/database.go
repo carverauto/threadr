@@ -1,3 +1,4 @@
+// Package graph ./pkg/adapters/graph/graph.go
 package graph
 
 import (
@@ -20,10 +21,12 @@ func NewNeo4jAdapter(uri, username, password string) (*Neo4jAdapter, error) {
 
 func (adapter *Neo4jAdapter) AddRelationship(ctx context.Context, fromUser string, toUser string, relationshipType string) error {
 	// Implement the logic to add a relationship in Neo4j
+	return nil
 }
 
 func (adapter *Neo4jAdapter) QueryRelationships(ctx context.Context, user string) ([]ports.Relationship, error) {
 	// Implement the logic to query relationships in Neo4j
+	return nil, nil
 }
 
 // var _ ports.GraphDatabasePort = (*Neo4jAdapter)(nil)
