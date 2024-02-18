@@ -1,5 +1,5 @@
-// Package broker pkg/ports/broker/broker.go
-package broker
+// Package ports pkg/ports/broker.go
+package ports
 
 import "context"
 

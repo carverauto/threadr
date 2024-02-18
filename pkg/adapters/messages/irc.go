@@ -4,6 +4,7 @@ package messages
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/carverauto/threadr/pkg/common"
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 	"github.com/kelseyhightower/envconfig"
@@ -23,14 +24,6 @@ type IRCAdapterConfig struct {
 	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases" required:"true"`
 	BotSaslLogin    string `envconfig:"BOT_SASL_LOGIN"`
 	BotSaslPassword string `envconfig:"BOT_SASL_PASSWORD"`
-}
-
-type IRCMessage struct {
-	Nick     string
-	User     string
-	Channel  string
-	Message  string
-	FullUser string // To hold the entire user string
 }
 
 func NewIRCAdapter() *IRCAdapter {
@@ -85,7 +78,7 @@ func (irc *IRCAdapter) Connect() error {
 	return irc.Connection.Connect()
 }
 
-func (irc *IRCAdapter) Listen(onMessage func(message IRCMessage)) {
+func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {
 	// Add a callback for the 'PRIVMSG' event
 	irc.Connection.AddCallback("PRIVMSG", func(e ircmsg.Message) {
 		// The first parameter in a PRIVMSG is the full prefix: "nickname!username@host"
@@ -98,7 +91,7 @@ func (irc *IRCAdapter) Listen(onMessage func(message IRCMessage)) {
 
 		log.Println("Nickname:", nick, "User:", rest, "Message:", fullMessage)
 
-		ircMsg := IRCMessage{
+		ircMsg := common.IRCMessage{
 			Nick:     e.Nick(),
 			User:     rest,
 			Channel:  e.Params[0],

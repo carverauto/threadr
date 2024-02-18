@@ -1,5 +1,5 @@
-// Package messages ./pkg/ports/messages/message_handler.go
-package messages
+// Package ports ./pkg/ports/message_handler.go
+package ports
 
 import (
 	"context"
