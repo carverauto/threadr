@@ -1,11 +1,12 @@
 from .neo4j_adapter import Neo4jAdapter
+import os
 
 # Initialize your Neo4jAdapter with connection details
 neo4j_adapter = Neo4jAdapter(uri="bolt://localhost:7687", user="neo4j",
-                             password="your_password")
+                             password=os.environ.get("NEO4J_PASSWORD"))
 
 
-def process_cloudevent(data):
+async def process_cloudevent(data):
     """
     Process the received CloudEvent data.
     """
