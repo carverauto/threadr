@@ -6,3 +6,4 @@ tf/terraform.tfstate.backup
 .terraform*
 *.tfstate
 gds.license
+venv
