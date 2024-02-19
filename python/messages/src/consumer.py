@@ -9,7 +9,7 @@ from configs.settings import NATS_URL, NKEYSEED, USE_QUEUE_GROUP
 class NATSConsumer:
     def __init__(self, nats_url=NATS_URL, nkeyseed=NKEYSEED,
                  subjects=["irc"], durable_name="threadr-irc",
-                 stream_name="messages", use_queue_group=True):
+                 stream_name="messages", use_queue_group=USE_QUEUE_GROUP):
         self.nats_url = nats_url
         self.nkeyseed = nkeyseed
         self.subjects = subjects
@@ -50,12 +50,19 @@ class NATSConsumer:
     async def subscribe(self):
         await self.connect()
         if self.js:
+            print(f"Subscribing to subjects...")
+            print(f"Durable name: {self.durable_name}")
+            print(f"Stream name: {self.stream_name}")
+            print(f"Use queue group: {self.use_queue_group}")
+            print(f"Subjects: {self.subjects}")
+            print(f"JetStream context: {self.js}")
+
             # Ensure correct subscription for durable and possibly queue group
             # Note: Adjusted to explicitly handle queue groups if needed
             for subject in self.subjects:
                 await self.js.subscribe(subject=subject, 
                                         durable=self.durable_name, 
-                                        queue=self.durable_name if self.use_queue_group else None, 
+                                        queue=self.durable_name if self.use_queue_group else None,
                                         cb=self.message_handler)
             print("Subscribed to subjects...")
         else:
@@ -63,6 +70,8 @@ class NATSConsumer:
 
     async def run(self):
         await self.subscribe()
+        while True:
+            await asyncio.sleep(1)
 
 
 async def main():
