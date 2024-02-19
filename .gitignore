@@ -7,3 +7,4 @@ tf/terraform.tfstate.backup
 *.tfstate
 gds.license
 venv
+*__pycache__*

@@ -1,40 +1,49 @@
-from neo4j import AsyncSession, GraphDatabase
+from neo4j import AsyncGraphDatabase
 
 
 class Neo4jAdapter:
-    def __init__(self, uri, user, password):
-        self.driver = GraphDatabase.driver(uri, auth=(user, password), encrypted=False)
+    def __init__(self, uri, username, password):
+        self.uri = uri
+        self.username = username
+        self.password = password
+        self.driver = None
+
+    async def connect(self):
+        self.driver = AsyncGraphDatabase.driver(self.uri, auth=(self.username, self.password))
 
     async def close(self):
-        await self.driver.close()  # Make sure to close the driver asynchronously
+        await self.driver.close()
 
-    async def add_relationship(self, from_user, to_user, relationship_type):
-        async with self.driver.session() as session:  # Use an async session
-            await session.write_transaction(self._create_and_return_relationship,
-                                            from_user, to_user, relationship_type)
+    async def add_or_update_relationship(self, from_user, to_user, relationship_type):
+        async with self.driver.session() as session:
+            result = await session.write_transaction(self._add_or_update_relationship_tx, from_user, to_user, relationship_type)
+            return result
 
     @staticmethod
-    async def _create_and_return_relationship(tx, from_user, to_user, relationship_type):
-        query = (
-            "MERGE (a:User {name: $from_user}) "
-            "MERGE (b:User {name: $to_user}) "
-            "MERGE (a)-[r:{relationship_type}]->(b) "  # Use parameterized query for relationship type
-            "RETURN type(r)"
-        )
-        result = await tx.run(query, from_user=from_user, to_user=to_user, relationship_type=relationship_type)
-        return await result.single()[0]
+    async def _add_or_update_relationship_tx(tx, from_user, to_user, relationship_type):
+        cypher = """
+            MERGE (a:User {name: $from_user})
+            MERGE (b:User {name: $to_user})
+            MERGE (a)-[r:RELATIONSHIP {type: $relationshipType}]->(b)
+            ON CREATE SET r.weight = 1
+            ON MATCH SET r.weight = r.weight + 1
+            RETURN r.weight as weight
+        """
+        result = await tx.run(cypher, from_user=from_user, to_user=to_user, relationshipType=relationship_type)
+        record = await result.single()
+        return record["weight"] if record else None
 
     async def query_relationships(self, user):
-        async with self.driver.session() as session:  # Use an async session
-            result = await session.read_transaction(
-                self._find_and_return_relationships, user)
-        return result
+        async with self.driver.session() as session:
+            result = await session.read_transaction(self._query_relationships_tx, user)
+            return result
 
     @staticmethod
-    async def _find_and_return_relationships(tx, user):
-        query = (
-            "MATCH (a:User {name: $user})-[r]->(b) "
-            "RETURN b.name AS name, type(r) AS relationshipType"
-        )
-        result = await tx.run(query, user=user)
-        return [{"name": record["name"], "relationshipType": record["relationshipType"]} for record in await result.list()]
+    async def _query_relationships_tx(tx, user):
+        cypher = """
+            MATCH (a:User {name: $user})-[r]->(b)
+            RETURN b.name AS toUser, type(r) AS relationshipType
+        """
+        result = await tx.run(cypher, user=user)
+        relationships = [{"toUser": record["toUser"], "relationshipType": record["relationshipType"]} for record in await result.list()]
+        return relationships
