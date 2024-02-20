@@ -65,31 +65,37 @@ class Neo4jAdapter:
             await session.run(cypher, nick=nick, message=message, timestamp=timestamp, channel=channel, platform=platform)
             print(f"Message from '{nick}' added to the graph.")
 
-    async def add_interaction(self, from_user: str, to_user: str, message_content: str, timestamp: datetime, channel=None, platform="generic"):
+    async def add_interaction(self, from_user: str, to_user: Optional[str], message_content: str, timestamp: datetime, channel: Optional[str], platform: str = "generic"):
         async with self.driver.session() as session:
+            # Create/merge the user, message, and channel nodes
+            # Always link the message to the channel and sender
             cypher = """
             MERGE (from:User {name: $from_user})
-            MERGE (to:User {name: $to_user})
+            MERGE (chan:Channel {name: $channel})
             CREATE (msg:Message {content: $message_content, timestamp: $timestamp, platform: $platform})
-            MERGE (from)-[r:INTERACTED_WITH]->(to)
-                ON CREATE SET r.weight = 1
-                ON MATCH SET r.weight = r.weight + 1
-            CREATE (from)-[:SENT]->(msg)
-            CREATE (msg)-[:MENTIONED]->(to)
+            MERGE (from)-[:SENT]->(msg)
+            MERGE (msg)-[:POSTED_IN]->(chan)
             """
+            
             params = {
                 "from_user": from_user,
-                "to_user": to_user,
                 "message_content": message_content,
-                "timestamp": timestamp,
+                "timestamp": timestamp.isoformat(),
+                "channel": channel,
                 "platform": platform
             }
             
-            # If a specific channel is involved, add that detail to the message
-            if channel:
-                cypher += "SET msg.channel = $channel "
-                params["channel"] = channel
-
+            # If the message is directed at another user, add that relationship
+            if to_user:
+                cypher += """
+                MERGE (to:User {name: $to_user})
+                MERGE (msg)-[:MENTIONED]->(to)
+                MERGE (from)-[r:INTERACTED_WITH]->(to)
+                    ON CREATE SET r.weight = 1
+                    ON MATCH SET r.weight = r.weight + 1
+                """
+                params["to_user"] = to_user
+            
             await session.run(cypher, **params)
-            print(f"Interaction between '{from_user}' and '{to_user}' updated with a new message in {platform}.")
- 
+            print(f"Message from '{from_user}' added to the graph, directed to '{to_user}', in channel '{channel}'.")
+    

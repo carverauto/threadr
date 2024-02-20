@@ -80,8 +80,8 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
     if mentioned_nick and relationship_type:
         # If a specific user is mentioned, update the relationship and add the interaction
         try:
+            await neo4j_adapter.add_interaction(message_data.nick, mentioned_nick, message_data.message, timestamp, channel=message_data.channel, platform=message_data.platform)
             await neo4j_adapter.add_or_update_relationship(message_data.nick, mentioned_nick, relationship_type)
-            await neo4j_adapter.add_interaction(message_data.nick, mentioned_nick, message_data.message, timestamp)
             print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
         except Exception as e:
             print(f"Failed to update Neo4j: {e}")
