@@ -1,10 +1,10 @@
 import asyncio
-import json
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 from .cloudevents_processor import process_cloudevent
 from configs.settings import NATS_URL, NKEYSEED, USE_QUEUE_GROUP
 from .neo4j_adapter import Neo4jAdapter
+from .models import NATSMessage
 
 
 class NATSConsumer:
@@ -39,12 +39,13 @@ class NATSConsumer:
     async def message_handler(self, msg):
         subject = msg.subject
         data = msg.data.decode()
-        print(f"Received a message on '{subject}': {data}")
 
         try:
-            data_dict = json.loads(data)
+            message_data = NATSMessage.parse_raw(data)
+            print(f"Received a message on '{subject}': {message_data.message}")
+            # data_dict = json.loads(data)
             if self.neo4j_adapter is not None:
-                await process_cloudevent(data_dict, self.neo4j_adapter)
+                await process_cloudevent(message_data, self.neo4j_adapter)
             else:
                 print("Neo4j adapter not initialized.")
         except Exception as e:
