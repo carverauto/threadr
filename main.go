@@ -37,6 +37,7 @@ func main() {
 			Message:   ircMsg.Message,
 			Nick:      ircMsg.Nick,
 			Channel:   ircMsg.Channel,
+			Platform:  "IRC",
 			Timestamp: time.Now(),
 		}
 
