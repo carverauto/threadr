@@ -8,7 +8,7 @@ recipient_patterns = [
 ]
 
 # Define patterns to identify bot messages or unwanted content
-bot_nicknames = ['twatbot', 'linkexpanderbot']  # Example bot nicknames
+bot_nicknames = ['twatbot', 'ballsbot']
 url_pattern = re.compile(r'https?://[^\s]+')
 twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
 

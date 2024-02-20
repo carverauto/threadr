@@ -3,6 +3,7 @@ from src.neo4j_adapter import Neo4jAdapter
 from src.consumer import NATSConsumer
 from configs.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP
 
+
 async def main():
     neo4j_adapter = Neo4jAdapter(uri=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
 
