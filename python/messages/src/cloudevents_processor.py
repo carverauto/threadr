@@ -7,6 +7,11 @@ recipient_patterns = [
     re.compile(r'^@(\w+)'),    # Matches "@trillian"
 ]
 
+# Define patterns to identify bot messages or unwanted content
+bot_nicknames = ['twatbot', 'linkexpanderbot']  # Example bot nicknames
+url_pattern = re.compile(r'https?://[^\s]+')
+twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
+
 # Initialize your Neo4jAdapter with connection details
 neo4j_adapter = Neo4jAdapter(uri="bolt://localhost:7687", username="neo4j",
                              password=os.environ.get("NEO4J_PASSWORD"))
@@ -22,6 +27,11 @@ async def process_cloudevent(data, neo4j_adapter):
     # and contains 'from_user', 'to_user', and 'relationship_type'
     nick = data.get('nick')
     message = data.get('message')
+
+    # Check if the message is from a known bot or matches the unwanted patterns
+    if nick in bot_nicknames or url_pattern.search(message) or twitter_expansion_pattern.search(message):
+        print(f"Ignoring bot message or unwanted pattern from {nick}.")
+        return
 
     # to_user, relationship_type = extract_relationship_data(message)
     # Attempt to extract a mentioned user from the message
