@@ -10,9 +10,6 @@ async def main():
     # Connect to Neo4j
     await neo4j_adapter.connect()
 
-    # consumer = NATSConsumer()
-    # await consumer.run()
-    # Initialize and run the NATSConsumer
     consumer = NATSConsumer(
         nats_url=NATS_URL,
         nkeyseed=NKEYSEED,
@@ -20,7 +17,7 @@ async def main():
         durable_name="threadr-irc",
         stream_name="messages",
         use_queue_group=USE_QUEUE_GROUP,
-        neo4j_adapter=neo4j_adapter  # Pass the connected Neo4jAdapter to the consumer
+        neo4j_adapter=neo4j_adapter
     )
     await consumer.run()
 
