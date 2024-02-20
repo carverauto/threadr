@@ -10,8 +10,9 @@ CREATE (m:Message {
 })
 ```
 
-## Constraint
+## Ontology
 
 ```
 CREATE CONSTRAINT unique_user_name IF NOT EXISTS FOR (u:User) REQUIRE u.name IS UNIQUE
+CREATE CONSTRAINT channel_name_uniqueness ON (c:Channel) ASSERT c.name IS UNIQUE;
 ```

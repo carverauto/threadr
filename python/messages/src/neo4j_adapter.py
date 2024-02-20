@@ -65,7 +65,7 @@ class Neo4jAdapter:
             await session.run(cypher, nick=nick, message=message, timestamp=timestamp, channel=channel, platform=platform)
             print(f"Message from '{nick}' added to the graph.")
 
-    async def add_interaction(self, from_user, to_user, message_content, timestamp, channel=None, platform="generic"):
+    async def add_interaction(self, from_user: str, to_user: str, message_content: str, timestamp: datetime, channel=None, platform="generic"):
         async with self.driver.session() as session:
             cypher = """
             MERGE (from:User {name: $from_user})

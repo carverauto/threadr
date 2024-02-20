@@ -2,7 +2,6 @@ from .neo4j_adapter import Neo4jAdapter
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from dateutil import parser
 import os
 import re
 from .models import NATSMessage
@@ -62,7 +61,6 @@ def extract_commands(message):
     return command_pattern.findall(message)
 
 
-
 async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
     """
     Process the received CloudEvent data.
@@ -94,6 +92,7 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             print(f"Added message from {message_data.nick} to the graph.")
         except Exception as e:
             print(f"Failed to add message to Neo4j: {e}")
+
 
 def extract_relationship_data(message):
     """
