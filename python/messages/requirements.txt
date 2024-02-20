@@ -1,0 +1,4 @@
+nats-py
+nats-py[nkeys]
+cloudevents
+neo4j

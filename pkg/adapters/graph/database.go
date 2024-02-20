@@ -51,6 +51,50 @@ func (adapter *Neo4jAdapter) AddRelationship(ctx context.Context, fromUser strin
 	return err
 }
 
+func (adapter *Neo4jAdapter) AddOrUpdateRelationship(ctx context.Context, fromUser string, toUser string, relationshipType string) error {
+	session := adapter.Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer session.Close()
+
+	// Define the Cypher query with a placeholder for the relationship type
+	cypher := `
+        MERGE (a:User {name: $fromUser})
+        MERGE (b:User {name: $toUser})
+        MERGE (a)-[r:RELATIONSHIP {type: $relationshipType}]->(b)
+        ON CREATE SET r.weight = 1
+        ON MATCH SET r.weight = r.weight + 1
+        RETURN r.weight as weight
+    `
+
+	// Run the Cypher query with parameters, including the relationship type
+	_, err := session.WriteTransaction(func(transaction neo4j.Transaction) (interface{}, error) {
+		result, err := transaction.Run(cypher, map[string]interface{}{
+			"fromUser":         fromUser,
+			"toUser":           toUser,
+			"relationshipType": relationshipType,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Fetch and log the updated weight
+		if result.Next() {
+			if weight, ok := result.Record().Get("weight"); ok {
+				// Make sure the weight is an int64 before using it
+				if weightInt, ok := weight.(int64); ok {
+					fmt.Printf("Relationship '%s' between '%s' and '%s' now has weight %d\n", relationshipType, fromUser, toUser, weightInt)
+				} else {
+					return nil, fmt.Errorf("weight is not an int64")
+				}
+			} else {
+				return nil, fmt.Errorf("weight not found in the result")
+			}
+		}
+		return nil, result.Err()
+	})
+
+	return err
+}
+
 func (adapter *Neo4jAdapter) QueryRelationships(ctx context.Context, user string) ([]ports.Relationship, error) {
 	session := adapter.Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeRead})
 	defer session.Close()

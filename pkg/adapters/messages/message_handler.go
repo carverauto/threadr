@@ -34,23 +34,6 @@ func NewSimpleMessageHandler(graphDB ports.GraphDatabasePort) *SimpleMessageHand
 
 // Handle processes the received message.
 func (h *SimpleMessageHandler) Handle(ctx context.Context, event cloudevents.Event) error {
-	/*
-		data := &broker.Message{}
-		if err := event.DataAs(data); err != nil {
-			return fmt.Errorf("failed to parse message data: %w", err)
-		}
-
-		// Attempt to extract TO: and FROM: information
-		to, err := extractRecipient(data.Message)
-		if err != nil {
-			log.Printf("[%s] %s\n", data.Nick, data.Message)
-			return nil
-		}
-
-		// Log the extracted information along with the message
-		log.Printf("FRIEND: [%s] TO: [%s] MSG: %s\n", data.Nick, to, data.Message)
-		return nil
-	*/
 	data := &broker.Message{}
 	if err := event.DataAs(data); err != nil {
 		return fmt.Errorf("failed to parse message data: %w", err)
@@ -66,7 +49,7 @@ func (h *SimpleMessageHandler) Handle(ctx context.Context, event cloudevents.Eve
 		return err
 	}
 	if toUser != "" && relationshipType != "" {
-		if err := h.GraphDB.AddRelationship(ctx, fromUser, toUser, relationshipType); err != nil {
+		if err := h.GraphDB.AddOrUpdateRelationship(ctx, fromUser, toUser, relationshipType); err != nil {
 			log.Printf("Failed to add relationship to Neo4j: %v", err)
 			return err
 		}

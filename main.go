@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"github.com/carverauto/threadr/pkg/adapters/broker"
-	messages "github.com/carverauto/threadr/pkg/adapters/messages"
+	irc "github.com/carverauto/threadr/pkg/adapters/messages"
+	"github.com/carverauto/threadr/pkg/common"
 	pm "github.com/carverauto/threadr/pkg/ports"
 	"log"
 	"time"
@@ -19,14 +20,14 @@ func main() {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	var ircAdapter pm.MessageAdapter = messages.NewIRCAdapter()
+	var ircAdapter pm.MessageAdapter = irc.NewIRCAdapter()
 	if err := ircAdapter.Connect(); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
 	// start a counter for received messages
 	msgCounter := 0
-	ircAdapter.Listen(func(ircMsg messages.IRCMessage) {
+	ircAdapter.Listen(func(ircMsg common.IRCMessage) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
