@@ -18,6 +18,22 @@ ORDER BY time DESC
 LIMIT 25
 ```
 
+### Showing a complete graph
+
+```
+MATCH (chan:Channel)-[:POSTED_IN]-(msg:Message)-[:SENT]-(user:User)
+OPTIONAL MATCH (msg)-[:MENTIONED]->(mentioned:User)
+RETURN chan, user, msg, mentioned
+LIMIT 25
+```
+
+### Delete everything
+
+```
+MATCH (n)
+DETACH DELETE n
+```
+
 ## Ontology
 
 ```
