@@ -27,6 +27,23 @@ RETURN chan, user, msg, mentioned
 LIMIT 25
 ```
 
+### Show a more complete graph
+
+```
+MATCH (chan:Channel)-[:POSTED_IN]-(msg:Message)-[:SENT]-(user:User)
+OPTIONAL MATCH (msg)-[:MENTIONED]->(mentioned:User)
+
+// Order messages in the channel by timestamp (descending)
+WITH chan, user, msg, mentioned
+ORDER BY msg.timestamp DESC
+
+// Limit results, preserving the relationships
+WITH  chan,
+      collect({user: user, msg: msg, mentioned: mentioned})[..25] as recentChannelActivity
+UNWIND recentChannelActivity as result
+RETURN chan, result.user, result.msg, result.mentioned
+```
+
 ### Delete everything
 
 ```
