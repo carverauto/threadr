@@ -3,3 +3,4 @@ nats-py[nkeys]
 cloudevents
 neo4j
 pydantic
+python-dateutil

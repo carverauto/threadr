@@ -37,12 +37,10 @@ class NATSConsumer:
             print(f"An error occurred during NATS connection: {e}")
 
     async def message_handler(self, msg):
-        subject = msg.subject
         data = msg.data.decode()
 
         try:
             message_data = NATSMessage.parse_raw(data)
-            print(f"Received a message on '{subject}': {message_data.message}")
             # data_dict = json.loads(data)
             if self.neo4j_adapter is not None:
                 await process_cloudevent(message_data, self.neo4j_adapter)
