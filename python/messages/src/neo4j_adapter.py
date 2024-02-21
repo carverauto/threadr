@@ -11,18 +11,23 @@ class Neo4jAdapter:
         self.driver = None
 
     async def connect(self):
-        self.driver = AsyncGraphDatabase.driver(self.uri, auth=(self.username, self.password))
+        self.driver = AsyncGraphDatabase.driver(self.uri, auth=(self.username,
+                                                                self.password))
 
     async def close(self):
         await self.driver.close()
 
-    async def add_or_update_relationship(self, from_user, to_user, relationship_type):
+    async def add_or_update_relationship(self, from_user, to_user, 
+                                         relationship_type):
         async with self.driver.session() as session:
-            result = await session.write_transaction(self._add_or_update_relationship_tx, from_user, to_user, relationship_type)
+            result = await session.write_transaction(
+                self._add_or_update_relationship_tx, from_user, to_user,
+                relationship_type)
             return result
 
     @staticmethod
-    async def _add_or_update_relationship_tx(tx, from_user, to_user, relationship_type):
+    async def _add_or_update_relationship_tx(tx, from_user, to_user,
+                                             relationship_type):
         cypher = """
             MERGE (a:User {name: $from_user})
             MERGE (b:User {name: $to_user})
@@ -31,7 +36,8 @@ class Neo4jAdapter:
             ON MATCH SET r.weight = r.weight + 1
             RETURN r.weight as weight
         """
-        result = await tx.run(cypher, from_user=from_user, to_user=to_user, relationshipType=relationship_type)
+        result = await tx.run(cypher, from_user=from_user, to_user=to_user,
+                              relationshipType=relationship_type)
         record = await result.single()
         return record["weight"] if record else None
 
@@ -43,13 +49,27 @@ class Neo4jAdapter:
             RETURN b.name AS toUser, type(r) AS relationshipType
             """
             result = await session.run(cypher, user=user)
-            return [{"toUser": record["toUser"], "relationshipType": record["relationshipType"]} for record in result]     
+            return [{"toUser": record["toUser"], "relationshipType": 
+                     record["relationshipType"]} for record in result]     
 
-    async def add_message(self, nick: str, message: str, timestamp: datetime, channel: Optional[str] = None, platform: str = "generic"):
+    async def add_message(self, nick: str, message: str, timestamp: datetime,
+                          channel: Optional[str] = None,
+                          platform: str = "generic",
+                          embedding: Optional[list[float]] = None):
+
+        # Prepare the parameters for the Cypher query
+        params = {
+            'nick': nick,
+            'message': message,
+            'timestamp': timestamp.isoformat(),
+            'platform': platform,
+        }
+
         async with self.driver.session() as session:
             cypher = """
             MERGE (user:User {name: $nick})
-            CREATE (msg:Message {content: $message, timestamp: $timestamp, platform: $platform})
+            CREATE (msg:Message {content: $message, timestamp: $timestamp,
+            platform: $platform})
             MERGE (user)-[:SENT]->(msg)
             """
             if channel:
@@ -57,17 +77,28 @@ class Neo4jAdapter:
                 MERGE (chan:Channel {name: $channel})
                 MERGE (msg)-[:POSTED_IN]->(chan)
                 """
-            await session.run(cypher, nick=nick, message=message, timestamp=timestamp, channel=channel, platform=platform)
+                params['channel'] = channel
+            if embedding:
+                cypher += """
+                SET msg.embedding = $embedding
+                """
+                params['embedding'] = embedding
+
+            await session.run(cypher, **params)
             print(f"Message from '{nick}' added to the graph.")
 
-    async def add_interaction(self, from_user: str, to_user: Optional[str], message_content: str, timestamp: datetime, channel: Optional[str], platform: str = "generic"):
+    async def add_interaction(self, from_user: str, to_user: Optional[str],
+                              message_content: str, timestamp: datetime, 
+                              channel: Optional[str],
+                              platform: str = "generic"):
         async with self.driver.session() as session:
             # Create/merge the user, message, and channel nodes
             # Always link the message to the channel and sender
             cypher = """
             MERGE (from:User {name: $from_user})
             MERGE (chan:Channel {name: $channel})
-            CREATE (msg:Message {content: $message_content, timestamp: $timestamp, platform: $platform})
+            CREATE (msg:Message {content: $message_content,
+            timestamp: $timestamp, platform: $platform})
             MERGE (from)-[:SENT]->(msg)
             MERGE (msg)-[:POSTED_IN]->(chan)
             """
@@ -92,5 +123,7 @@ class Neo4jAdapter:
                 params["to_user"] = to_user
             
             await session.run(cypher, **params)
-            print(f"Message from '{from_user}' added to the graph, directed to '{to_user}', in channel '{channel}'.")
+            print("Message from '{}' added to the graph, directed to '{}',"
+                  .format(from_user, to_user),
+                  "in channel '{}'.".format(channel))
     

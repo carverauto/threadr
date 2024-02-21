@@ -4,7 +4,10 @@ from typing import Optional
 from datetime import datetime
 import os
 import re
+from langchain_openai import OpenAIEmbeddings
 from .models import NATSMessage
+
+openai = OpenAIEmbeddings(model="text-embedding-3-small")
 
 recipient_patterns = [
     re.compile(r'^@?(\w+):'),  # Matches "trillian:" or "@trillian:"
@@ -61,14 +64,16 @@ def extract_commands(message):
     return command_pattern.findall(message)
 
 
-async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
+async def process_cloudevent(message_data: NATSMessage,
+                             neo4j_adapter: Neo4jAdapter):
     """
     Process the received CloudEvent data.
     """
     print(f"Received a message on '{message_data.channel}': {message_data.message}")
 
     # Check if the message is from a known bot or matches the unwanted patterns
-    if message_data.nick in bot_nicknames or url_pattern.search(message_data.message) or twitter_expansion_pattern.search(message_data.message):
+    if message_data.nick in bot_nicknames or url_pattern.search(message_data.
+                                                                message) or twitter_expansion_pattern.search(message_data.message):
         print(f"Ignoring bot message or unwanted pattern from {message_data.nick}.")
         return
 
@@ -77,18 +82,34 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
 
     mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
 
+    query_result = openai.embed_query(message_data.message)
+    # print(f"Embedding for message from {message_data.nick}: {query_result}")
+
     if mentioned_nick and relationship_type:
-        # If a specific user is mentioned, update the relationship and add the interaction
+        # If a specific user is mentioned, update the relationship 
+        # and add the interaction
         try:
-            await neo4j_adapter.add_interaction(message_data.nick, mentioned_nick, message_data.message, timestamp, channel=message_data.channel, platform=message_data.platform)
-            await neo4j_adapter.add_or_update_relationship(message_data.nick, mentioned_nick, relationship_type)
+            await neo4j_adapter.add_interaction(message_data.nick,
+                                                mentioned_nick,
+                                                message_data.message,
+                                                timestamp,
+                                                channel=message_data.channel,
+                                                platform=message_data.platform)
+            await neo4j_adapter.add_or_update_relationship(message_data.nick,
+                                                           mentioned_nick,
+                                                           relationship_type)
             print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
         except Exception as e:
             print(f"Failed to update Neo4j: {e}")
     else:
         # If no specific user is mentioned, just add the message
         try:
-            await neo4j_adapter.add_message(nick=message_data.nick, message=message_data.message, timestamp=timestamp, channel=message_data.channel, platform=message_data.platform)
+            await neo4j_adapter.add_message(nick=message_data.nick,
+                                            message=message_data.message,
+                                            timestamp=timestamp,
+                                            channel=message_data.channel,
+                                            platform=message_data.platform,
+                                            embedding=query_result)
             print(f"Added message from {message_data.nick} to the graph.")
         except Exception as e:
             print(f"Failed to add message to Neo4j: {e}")
