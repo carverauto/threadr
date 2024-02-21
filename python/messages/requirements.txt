@@ -4,3 +4,5 @@ cloudevents
 neo4j
 pydantic
 python-dateutil
+FlagEmbedding
+openai

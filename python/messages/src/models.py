@@ -12,3 +12,4 @@ class NATSMessage(BaseModel):
     channel: Optional[str] = Field(None, description="Channel where the message was sent")
     timestamp: datetime = Field(..., description="Timestamp of the message")
     platform: Optional[str] = Field(None, description="Platform from which the message was sent")
+    embedding: Optional[list] = Field(None, description="Message embedding (e.g. BERT, GPT-3, etc.)")

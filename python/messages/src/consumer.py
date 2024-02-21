@@ -65,10 +65,10 @@ class NATSConsumer:
             # Ensure correct subscription for durable and possibly queue group
             # Note: Adjusted to explicitly handle queue groups if needed
             for subject in self.subjects:
-                await self.js.subscribe(subject=subject, 
-                                        durable=self.durable_name, 
-                                        queue=self.durable_name if self.use_queue_group else None,
-                                        cb=self.message_handler)
+                if self.use_queue_group:
+                    await self.js.subscribe(subject=subject, durable=self.durable_name, queue=self.durable_name, cb=self.message_handler)
+                else:
+                    await self.js.subscribe(subject=subject, durable=self.durable_name, cb=self.message_handler)
             print("Subscribed to subjects...")
         else:
             print("JetStream context not initialized. Subscription failed.")
