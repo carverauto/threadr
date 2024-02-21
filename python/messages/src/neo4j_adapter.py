@@ -37,19 +37,14 @@ class Neo4jAdapter:
 
     async def query_relationships(self, user):
         async with self.driver.session() as session:
-            result = await session.read_transaction(self._query_relationships_tx, user)
-            return result
-
-    @staticmethod
-    async def _query_relationships_tx(tx, user):
-        cypher = """
+            # Assuming you created an index on User.name
+            cypher = """
             MATCH (a:User {name: $user})-[r]->(b)
             RETURN b.name AS toUser, type(r) AS relationshipType
-        """
-        result = await tx.run(cypher, user=user)
-        relationships = [{"toUser": record["toUser"], "relationshipType": record["relationshipType"]} for record in await result.list()]
-        return relationships
-    
+            """
+            result = await session.run(cypher, user=user)
+            return [{"toUser": record["toUser"], "relationshipType": record["relationshipType"]} for record in result]     
+
     async def add_message(self, nick: str, message: str, timestamp: datetime, channel: Optional[str] = None, platform: str = "generic"):
         async with self.driver.session() as session:
             cypher = """
