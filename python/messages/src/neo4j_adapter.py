@@ -124,10 +124,14 @@ class Neo4jAdapter:
                     ON MATCH SET r.weight = r.weight + 1
                 """
                 params["to_user"] = to_user
+
+            # Add RETURN statement to get the ID of the created message node
+            cypher += " RETURN ID(msg) AS messageId"
             
-            await session.run(cypher, **params)
             result = await session.run(cypher, **params)
             record = await result.single()
+
+            print(f"Result: {result} Record: {record}")
             
             if record:
                 messageId = record["messageId"]
@@ -137,7 +141,7 @@ class Neo4jAdapter:
 
                 return messageId
             else:
-                print(f"Failed to add message from '{nick}' to the graph.")
+                print(f"Failed to add message from '{from_user}' to the graph.")
                 return None
 
                

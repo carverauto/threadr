@@ -80,7 +80,6 @@ async def process_cloudevent(message_data: NATSMessage,
         print(f"Ignoring bot message or unwanted pattern from {message_data.nick}.")
         return
 
-    
     # Parse the timestamp using dateutil.parser to handle ISO format with timezone
     timestamp = message_data.timestamp
 
@@ -90,7 +89,8 @@ async def process_cloudevent(message_data: NATSMessage,
         # If a specific user is mentioned, update the relationship 
         # and add the interaction
         try:
-            message_id = await neo4j_adapter.add_interaction(message_data.nick,
+            message_id = await neo4j_adapter.add_interaction(
+                                                message_data.nick,
                                                 mentioned_nick,
                                                 message_data.message,
                                                 timestamp,
@@ -118,7 +118,6 @@ async def process_cloudevent(message_data: NATSMessage,
                                             timestamp=timestamp,
                                             channel=message_data.channel,
                                             platform=message_data.platform)
-            print(f"Added message from {message_data.nick} to the graph.")
 
             # You would publish the message details to be processed asynchronously:
             await publish_message_to_jetstream(
