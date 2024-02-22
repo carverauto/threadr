@@ -80,27 +80,17 @@ async def process_cloudevent(message_data: NATSMessage,
         print(f"Ignoring bot message or unwanted pattern from {message_data.nick}.")
         return
 
+    
     # Parse the timestamp using dateutil.parser to handle ISO format with timezone
     timestamp = message_data.timestamp
 
     mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
 
-    # query_result = openai.embed_query(message_data.message)
-    # print(f"Embedding for message from {message_data.nick}: {query_result}")
-
-    # You would publish the message details to be processed asynchronously:
-    await publish_message_to_jetstream(
-        subject=NATS_EMBEDDING_SUBJECT,
-        stream=NATS_EMBEDDING_STREAM,
-        message_id=message_data.id,  # You'll need to ensure this is passed correctly
-        message_content=message_data.message
-    )
-
     if mentioned_nick and relationship_type:
         # If a specific user is mentioned, update the relationship 
         # and add the interaction
         try:
-            await neo4j_adapter.add_interaction(message_data.nick,
+            message_id = await neo4j_adapter.add_interaction(message_data.nick,
                                                 mentioned_nick,
                                                 message_data.message,
                                                 timestamp,
@@ -110,17 +100,34 @@ async def process_cloudevent(message_data: NATSMessage,
                                                            mentioned_nick,
                                                            relationship_type)
             print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
+            # You would publish the message details to be processed asynchronously:
+            await publish_message_to_jetstream(
+                subject=NATS_EMBEDDING_SUBJECT,
+                stream=NATS_EMBEDDING_STREAM,
+                message_id=message_id,  # You'll need to ensure this is passed correctly
+                message_content=message_data.message
+            )
+
         except Exception as e:
             print(f"Failed to update Neo4j: {e}")
     else:
         # If no specific user is mentioned, just add the message
         try:
-            await neo4j_adapter.add_message(nick=message_data.nick,
+            message_id = await neo4j_adapter.add_message(nick=message_data.nick,
                                             message=message_data.message,
                                             timestamp=timestamp,
                                             channel=message_data.channel,
                                             platform=message_data.platform)
             print(f"Added message from {message_data.nick} to the graph.")
+
+            # You would publish the message details to be processed asynchronously:
+            await publish_message_to_jetstream(
+                subject=NATS_EMBEDDING_SUBJECT,
+                stream=NATS_EMBEDDING_STREAM,
+                message_id=message_id,  # You'll need to ensure this is passed correctly
+                message_content=message_data.message
+            )
+
         except Exception as e:
             print(f"Failed to add message to Neo4j: {e}")
 

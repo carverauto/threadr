@@ -77,9 +77,18 @@ class Neo4jAdapter:
                 MERGE (msg)-[:POSTED_IN]->(chan)
                 """
                 params['channel'] = channel
-            
-            await session.run(cypher, **params)
-            print(f"Message from '{nick}' added to the graph.")
+            # Add RETURN id(msg) to return the Neo4j node ID of the created message
+            cypher += " RETURN id(msg) as messageId"
+
+            result = await session.run(cypher, **params)
+            record = await result.single()
+            if record:
+                messageId = record["messageId"]
+                print(f"Message from '{nick}' added to the graph with ID {messageId}.")
+                return messageId
+            else:
+                print(f"Failed to add message from '{nick}' to the graph.")
+                return None
 
     async def add_interaction(self, from_user: str, to_user: Optional[str],
                               message_content: str, timestamp: datetime, 
@@ -117,7 +126,18 @@ class Neo4jAdapter:
                 params["to_user"] = to_user
             
             await session.run(cypher, **params)
-            print("Message from '{}' added to the graph, directed to '{}',"
-                  .format(from_user, to_user),
-                  "in channel '{}'.".format(channel))
-    
+            result = await session.run(cypher, **params)
+            record = await result.single()
+            
+            if record:
+                messageId = record["messageId"]
+                print("Message from '{}' added to the graph, directed to '{}',"
+                      .format(from_user, to_user), "in channel '{}'."
+                      .format(channel))
+
+                return messageId
+            else:
+                print(f"Failed to add message from '{nick}' to the graph.")
+                return None
+
+               
