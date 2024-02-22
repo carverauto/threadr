@@ -131,8 +131,6 @@ class Neo4jAdapter:
             result = await session.run(cypher, **params)
             record = await result.single()
 
-            print(f"Result: {result} Record: {record}")
-            
             if record:
                 messageId = record["messageId"]
                 print("Message from '{}' added to the graph, directed to '{}',"
