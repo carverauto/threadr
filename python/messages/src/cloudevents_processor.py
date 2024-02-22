@@ -5,7 +5,10 @@ from datetime import datetime
 import os
 import re
 from langchain_openai import OpenAIEmbeddings
+from configs.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM
 from .models import NATSMessage
+from .publish_message import publish_message_to_jetstream
+
 
 openai = OpenAIEmbeddings(model="text-embedding-3-small")
 
@@ -82,8 +85,16 @@ async def process_cloudevent(message_data: NATSMessage,
 
     mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
 
-    query_result = openai.embed_query(message_data.message)
+    # query_result = openai.embed_query(message_data.message)
     # print(f"Embedding for message from {message_data.nick}: {query_result}")
+
+    # You would publish the message details to be processed asynchronously:
+    await publish_message_to_jetstream(
+        subject=NATS_EMBEDDING_SUBJECT,
+        stream=NATS_EMBEDDING_STREAM,
+        message_id=message_data.id,  # You'll need to ensure this is passed correctly
+        message_content=message_data.message
+    )
 
     if mentioned_nick and relationship_type:
         # If a specific user is mentioned, update the relationship 
@@ -108,8 +119,7 @@ async def process_cloudevent(message_data: NATSMessage,
                                             message=message_data.message,
                                             timestamp=timestamp,
                                             channel=message_data.channel,
-                                            platform=message_data.platform,
-                                            embedding=query_result)
+                                            platform=message_data.platform)
             print(f"Added message from {message_data.nick} to the graph.")
         except Exception as e:
             print(f"Failed to add message to Neo4j: {e}")

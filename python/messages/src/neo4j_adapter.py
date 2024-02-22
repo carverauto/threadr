@@ -49,13 +49,12 @@ class Neo4jAdapter:
             RETURN b.name AS toUser, type(r) AS relationshipType
             """
             result = await session.run(cypher, user=user)
-            return [{"toUser": record["toUser"], "relationshipType": 
-                     record["relationshipType"]} for record in result]     
+            return [{"toUser": record["toUser"], "relationshipType":
+                     record["relationshipType"]} for record in result]
 
     async def add_message(self, nick: str, message: str, timestamp: datetime,
                           channel: Optional[str] = None,
-                          platform: str = "generic",
-                          embedding: Optional[list[float]] = None):
+                          platform: str = "generic"):
 
         # Prepare the parameters for the Cypher query
         params = {
@@ -78,12 +77,7 @@ class Neo4jAdapter:
                 MERGE (msg)-[:POSTED_IN]->(chan)
                 """
                 params['channel'] = channel
-            if embedding:
-                cypher += """
-                SET msg.embedding = $embedding
-                """
-                params['embedding'] = embedding
-
+            
             await session.run(cypher, **params)
             print(f"Message from '{nick}' added to the graph.")
 
