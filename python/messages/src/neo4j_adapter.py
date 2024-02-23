@@ -78,13 +78,15 @@ class Neo4jAdapter:
                 """
                 params['channel'] = channel
             # Add RETURN id(msg) to return the Neo4j node ID of the created message
-            cypher += " RETURN id(msg) as messageId"
+            cypher += " RETURN id(msg) as messageId, msg"
 
             result = await session.run(cypher, **params)
             record = await result.single()
             if record:
                 messageId = record["messageId"]
                 print(f"Message from '{nick}' added to the graph with ID {messageId}.")
+                print(f"Message from '{nick}' added to the graph', "
+                      f"in channel '{channel}'. Full Result: {result}")  # Print the full result
                 return messageId
             else:
                 print(f"Failed to add message from '{nick}' to the graph.")
@@ -126,7 +128,7 @@ class Neo4jAdapter:
                 params["to_user"] = to_user
 
             # Add RETURN statement to get the ID of the created message node
-            cypher += " RETURN ID(msg) AS messageId"
+            cypher += " RETURN id(msg) AS messageId"
             
             result = await session.run(cypher, **params)
             record = await result.single()

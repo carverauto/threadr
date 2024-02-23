@@ -1,12 +1,12 @@
 # publish_message.py
 
-import asyncio
 from nats.aio.client import Client as NATS
-from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
-from configs.settings import NATS_URL, NATS_NKEY, NATS_NKEYSEED
+from configs.settings import NATS_URL, NATS_NKEYSEED
+import json
 
 
-async def publish_message_to_jetstream(subject, stream, message_id, message_content):
+async def publish_message_to_jetstream(subject, stream, message_id, 
+                                       message_content):
     """
     Publishes message details to a NATS Jetstream queue for asynchronous processing.
 
@@ -38,7 +38,9 @@ async def publish_message_to_jetstream(subject, stream, message_id, message_cont
         "content": message_content
     }
 
-    await js.publish(subject, str(message_data).encode())
+    message_json = json.dumps(message_data)  # Serialize to JSON string
+
+    await js.publish(subject, message_json.encode())
 
     print(f"Published message ID {message_id} to Jetstream subject '{subject}'.")
 

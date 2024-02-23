@@ -1,5 +1,5 @@
 from .models import NATSMessage
-from .cloudevents_processor import process_cloudevent
+from .cloudevents_handler import process_cloudevent
 
 
 class MessageProcessor:
