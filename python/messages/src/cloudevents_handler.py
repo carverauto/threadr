@@ -1,9 +1,9 @@
-from .neo4j_adapter import Neo4jAdapter
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import re
 from configs.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, NEO4J_PASSWORD, NEO4J_URI
+from .neo4j_adapter import Neo4jAdapter
 from .models import NATSMessage
 from .publish_message import publish_message_to_jetstream
 
@@ -109,10 +109,10 @@ async def process_cloudevent(message_data: NATSMessage,
         # If no specific user is mentioned, just add the message
         try:
             message_id = await neo4j_adapter.add_message(nick=message_data.nick,
-                                            message=message_data.message,
-                                            timestamp=timestamp,
-                                            channel=message_data.channel,
-                                            platform=message_data.platform)
+                                                         message=message_data.message,
+                                                         timestamp=timestamp,
+                                                         channel=message_data.channel,
+                                                         platform=message_data.platform)
 
             # You would publish the message details to be processed asynchronously:
             await publish_message_to_jetstream(

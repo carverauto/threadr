@@ -5,7 +5,7 @@ from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 
 
 def create_embeddings(texts):
-    max_length = 4096
+    max_length = 2048
     # Tokenize texts
     batch_dict = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)
     # Compute model outputs
