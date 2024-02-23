@@ -5,7 +5,7 @@ from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 
 
 def create_embeddings(texts):
-    max_length = 4096
+    max_length = 2048
     # Tokenize texts
     batch_dict = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)
     # Compute model outputs
@@ -16,6 +16,7 @@ def create_embeddings(texts):
     return embeddings
 
 
+# Use BitsAndBytesConfig to enable 4-bit quantization
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_use_double_quant=True,

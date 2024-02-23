@@ -1,5 +1,16 @@
 # Neo4j Setup
 
+## Creating a Vector Index
+
+```cypher
+CREATE VECTOR INDEX `message-embeddings`
+FOR (n: Message) ON (n.embedding)
+OPTIONS {indexConfig: {
+ `vector.dimensions`: 2048,
+ `vector.similarity_function`: 'cosine'
+}}
+```
+
 ## Message
 
 ```cypher
