@@ -28,7 +28,9 @@ async def main():
             s, lambda s=s: asyncio.create_task(shutdown(s, loop))
         )
 
-    embedding_model = SentenceTransformerEmbedding(model_name="sentence-transformers/all-mpnet-base-v2")
+    embedding_model = SentenceTransformerEmbedding(model_name="sentence-transformers/all-mpnet-base-v2", 
+                                                   model_args={}, 
+                                                   quantization_config=None)
     embeddings_processor = EmbeddingsProcessor(neo4j_adapter=neo4j_adapter,
                                                embedding_model=embedding_model)
 
