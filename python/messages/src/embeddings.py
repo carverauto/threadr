@@ -3,10 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 import torch
-from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
-
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
+from transformers import AutoTokenizer, AutoModel
 
 
 class EmbeddingInterface(ABC):
@@ -22,20 +19,30 @@ class EmbeddingInterface(ABC):
 
 
 class SentenceTransformerEmbedding(EmbeddingInterface):
-    def __init__(self):
-        # Load model and tokenizer only once for efficiency
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained('Salesforce/SFR-Embedding-Mistral')
-        self.model = AutoModel.from_pretrained('Salesforce/SFR-Embedding-Mistral',
-                                               trust_remote_code=True,
-                                               device_map='auto',
-                                               torch_dtype=torch.bfloat16,
-                                               quantization_config=bnb_config)
+    def __init__(self, model_name: str = 'sentence-transformers/all-mpnet-base-v2',
+                 model_args: dict = None,
+                 quantization_config: dict = None
+                 ):
+        # import BitsAndBytesConfig from transformers if quantization is enabled
+        if quantization_config is not None:
+            from transformers import BitsAndBytesConfig
+            # Load model and tokenizer only once for efficiency
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+
+        # 4bit quantization (disable if not needed)
+        if model_args.pop('enable_mem_efficient_sdp', True):
+            torch.backends.cuda.enable_mem_efficient_sdp(True)
+        if model_args.pop('enable_flash_sdp', True):
+            torch.backends.cuda.enable_flash_sdp(True)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name, **model_args,
+                                               quantization_config=quantization_config)
 
     def create_embeddings(self, texts: List[str]) -> List[List[float]]:
         max_length = 2048
