@@ -3,6 +3,9 @@ import json
 import torch
 from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_flash_sdp(False)
+
 
 def create_embeddings(texts):
     max_length = 2048
