@@ -5,9 +5,6 @@ from typing import List
 import torch
 from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
-
 
 class EmbeddingInterface(ABC):
     @abstractmethod
@@ -22,7 +19,11 @@ class EmbeddingInterface(ABC):
 
 
 class SentenceTransformerEmbedding(EmbeddingInterface):
-    def __init__(self):
+    def __init__(self, model_name: str = 'sentence-transformers/all-mpnet-base-v2'):
+        # 4bit quantization
+        torch.backends.cuda.enable_mem_efficient_sdp(False)
+        torch.backends.cuda.enable_flash_sdp(False)
+
         # Load model and tokenizer only once for efficiency
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -30,8 +31,8 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16
         )
-        self.tokenizer = AutoTokenizer.from_pretrained('Salesforce/SFR-Embedding-Mistral')
-        self.model = AutoModel.from_pretrained('Salesforce/SFR-Embedding-Mistral',
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name,
                                                trust_remote_code=True,
                                                device_map='auto',
                                                torch_dtype=torch.bfloat16,

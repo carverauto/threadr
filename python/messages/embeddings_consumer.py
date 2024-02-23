@@ -29,7 +29,7 @@ async def main():
         )
 
     embedding_model = SentenceTransformerEmbedding()  # Initialize your model
-    embeddings_processor = EmbeddingsProcessor(neo4j_adapter=neo4j_adapter, 
+    embeddings_processor = EmbeddingsProcessor(neo4j_adapter=neo4j_adapter,
                                                embedding_model=embedding_model)
 
     consumer = NATSConsumer(
