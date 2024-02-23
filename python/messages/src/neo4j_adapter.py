@@ -85,8 +85,6 @@ class Neo4jAdapter:
             if record:
                 messageId = record["messageId"]
                 print(f"Message from '{nick}' added to the graph with ID {messageId}.")
-                print(f"Message from '{nick}' added to the graph', "
-                      f"in channel '{channel}'. Full Result: {result}")  # Print the full result
                 return messageId
             else:
                 print(f"Failed to add message from '{nick}' to the graph.")
