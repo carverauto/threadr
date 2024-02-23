@@ -13,3 +13,9 @@ class NATSMessage(BaseModel):
     timestamp: datetime = Field(..., description="Timestamp of the message")
     platform: Optional[str] = Field(None, description="Platform from which the message was sent")
     embedding: Optional[list] = Field(None, description="Message embedding (e.g. BERT, GPT-3, etc.)")
+
+
+# Vector Embedding Messages class
+class VectorEmbeddingMessage(BaseModel):
+    message_id: int = Field(None, description="Message ID")
+    content: str = Field(..., description="Message content")
