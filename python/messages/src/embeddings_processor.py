@@ -16,6 +16,7 @@ def create_embeddings(texts):
     return embeddings
 
 
+# Use BitsAndBytesConfig to enable 4-bit quantization
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_use_double_quant=True,
