@@ -17,7 +17,7 @@ async def main():
 
     async def shutdown(signal, loop):
         print(f"Received exit signal {signal.name}...")
-        consumer.stop()  # Assuming your NATSConsumer has a stop method
+        await consumer.stop()
         await neo4j_adapter.close()
         loop.stop()
 
