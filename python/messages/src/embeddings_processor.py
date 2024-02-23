@@ -62,7 +62,6 @@ class EmbeddingsProcessor:
             # Assuming 'embeddings' is a tensor with shape [1, embedding_size]
             await self.save_embedding(embeddings[0], message_data.message_id)
             print("Embedding saved for message:", message_data.message_id)
-            await msg.ack()
 
         except Exception as e:
             print(f"Error processing message: {e}")
