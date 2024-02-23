@@ -1,7 +1,7 @@
 from .models import VectorEmbeddingMessage
 import json
 import torch
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 
 
 def create_embeddings(texts):
@@ -16,9 +16,20 @@ def create_embeddings(texts):
     return embeddings
 
 
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
+
 # Load model and tokenizer
 tokenizer = AutoTokenizer.from_pretrained('Salesforce/SFR-Embedding-Mistral')
-model = AutoModel.from_pretrained('Salesforce/SFR-Embedding-Mistral')
+model = AutoModel.from_pretrained('Salesforce/SFR-Embedding-Mistral',
+                                  trust_remote_code=True,
+                                  device_map='auto',
+                                  torch_dtype=torch.bfloat16,
+                                  quantization_config=bnb_config)
 
 
 class EmbeddingsProcessor:
