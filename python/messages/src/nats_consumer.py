@@ -36,6 +36,16 @@ class NATSConsumer:
         except Exception as e:
             print(f"An error occurred during NATS connection: {e}")
 
+    async def stop(self):
+        # Close the JetStream context (if available)
+        # if self.js:
+        #    await self.js.delete_stream(self.stream_name)  # Consider error handling
+        #    print(f"Deleted JetStream stream: {self.stream_name}")
+
+        # Close the NATS connection
+        await self.nc.close()
+        print("NATS connection closed.")
+
     async def message_handler(self, msg):
         if self.message_processor:
             await self.message_processor(msg)

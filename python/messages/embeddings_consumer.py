@@ -1,8 +1,12 @@
+# embeddings_consumer.py
+
 import asyncio
+import signal
 from src.neo4j_adapter import Neo4jAdapter
 from src.nats_consumer import NATSConsumer
 from configs.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP
 from src.embeddings_processor import EmbeddingsProcessor
+from src.embeddings import SentenceTransformerEmbedding
 
 
 async def main():
@@ -11,7 +15,22 @@ async def main():
     # Connect to Neo4j
     await neo4j_adapter.connect()
 
-    embeddings_processor = EmbeddingsProcessor(neo4j_adapter=neo4j_adapter)
+    async def shutdown(signal, loop):
+        print(f"Received exit signal {signal.name}...")
+        consumer.stop()  # Assuming your NATSConsumer has a stop method
+        await neo4j_adapter.close()
+        loop.stop()
+
+    loop = asyncio.get_event_loop()
+    signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
+    for s in signals:
+        loop.add_signal_handler(
+            s, lambda s=s: asyncio.create_task(shutdown(s, loop))
+        )
+
+    embedding_model = SentenceTransformerEmbedding()  # Initialize your model
+    embeddings_processor = EmbeddingsProcessor(neo4j_adapter=neo4j_adapter, 
+                                               embedding_model=embedding_model)
 
     consumer = NATSConsumer(
         nats_url=NATS_URL,
