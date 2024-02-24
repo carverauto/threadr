@@ -7,3 +7,5 @@ python-dateutil
 FlagEmbedding
 openai
 bitsandbytes
+langchain
+langchain-community

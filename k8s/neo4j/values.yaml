@@ -2,7 +2,7 @@ neo4j:
   name: neo4j-threadr
   resources:
     cpu: "0.5"
-    memory: "2Gi"
+    memory: "4Gi"
 
   # Uncomment to set the initial password
   #password: "my-initial-password"
@@ -10,12 +10,25 @@ neo4j:
   # Uncomment to use enterprise edition
   edition: "enterprise"
   acceptLicenseAgreement: "yes"
-
+  env: 
+    - name: NEO4J_apoc_export_file_enabled
+      value: "true"
+    - name: NEO4J_apoc_import_file_enabled
+      value: "true" 
+    - name: NEO4J_apoc_import_file_use__neo4j__config
+      value: "true" 
+    - name: NEO4J_PLUGINS
+      value: [\"apoc-extended\"]
 volumes:
   data:
     mode: "dynamic"
     dynamic:
       storageClassName: local-path
+    NEO4J_PLUGINS: ["apoc"]
+  plugins:
+    mode: "share"
+    share:
+      name: "data"
   licenses:
     disableSubPathExpr: true
     mode: volume
@@ -26,4 +39,10 @@ volumes:
           - key: gds.license
             path: gds.license
 config:
-  gds.enterprise.license_file: "/licenses/gds.license"
+  server.directories.plugins: "/plugins"
+  dbms.security.procedures.unrestricted: "apoc.*"
+  dbms.security.procedures.allowlist: "apoc.*"
+  server.config.strict_validation.enabled: "false"
+apoc_config:
+  apoc.trigger.enabled: "true"
+  apoc.import.file.enabled: "true"
