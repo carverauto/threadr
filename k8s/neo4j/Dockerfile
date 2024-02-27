@@ -1,5 +1,5 @@
-ARG  NEO4J_VERSION
-FROM neo4j:{NEO4J_VERSION}
+ARG NEO4J_VERSION
+FROM --platform=linux/amd64 neo4j:${NEO4J_VERSION}
 
 # copy my-plugins into the Docker image
 COPY my-plugins/ /var/lib/neo4j/plugins

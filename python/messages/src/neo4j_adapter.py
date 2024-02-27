@@ -31,7 +31,7 @@ class Neo4jAdapter:
         cypher = """
             MERGE (a:User {name: $from_user})
             MERGE (b:User {name: $to_user})
-            MERGE (a)-[r:RELATIONSHIP {type: $relationshipType}]->(b)
+            MERGE (a)-[r:CONNECTION {type: $relationshipType}]->(b)
             ON CREATE SET r.weight = 1
             ON MATCH SET r.weight = r.weight + 1
             RETURN r.weight as weight

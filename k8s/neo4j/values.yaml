@@ -18,7 +18,12 @@ neo4j:
     - name: NEO4J_apoc_import_file_use__neo4j__config
       value: "true" 
     - name: NEO4J_PLUGINS
-      value: [\"apoc-extended\"]
+      value: [\"apoc\"]
+image:
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets:
+    - "ghcr-secret"
+  customImage: "ghcr.io/carverauto/threadr/my-neo4j:5.17.0-enterprise"
 volumes:
   data:
     mode: "dynamic"
