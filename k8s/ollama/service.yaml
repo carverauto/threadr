@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-service
+  namespace: ollama
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: ollama
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 11434
+

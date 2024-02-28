@@ -1,0 +1,152 @@
+apiVersion: apps.nebula-graph.io/v1alpha1
+kind: NebulaCluster
+metadata:
+  name: nebula
+  namespace: nebula 
+spec:
+  # Control the Pod scheduling strategy.
+  topologySpreadConstraints:
+  - topologyKey: "kubernetes.io/hostname"
+    whenUnsatisfiable: "ScheduleAnyway"
+  # Enable PV recycling.
+  enablePVReclaim: false
+  # Enable monitoring.
+  exporter:
+    image: vesoft/nebula-stats-exporter
+    version: v3.3.0
+    replicas: 1
+    maxRequests: 20
+  # Custom Agent image for cluster backup and restore, and log cleanup.
+  agent:
+    image: vesoft/nebula-agent
+    version: latest
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"  
+  # Configure the image pull policy.
+  imagePullPolicy: Always
+  # Select the nodes for Pod scheduling.
+  nodeSelector:
+    nebula: cloud
+  # Dependent controller name.
+  reference:
+    name: statefulsets.apps
+    version: v1
+  # Scheduler name.
+  schedulerName: default-scheduler   
+  # Start NebulaGraph Console service for connecting to the Graph service.
+  console:
+    image: vesoft/nebula-console
+    version: nightly
+    username: "demo"
+    password: "test"                 
+  # Graph service configuration. 
+  graphd:
+  # Used to check if the Graph service is running normally.
+  #  readinessProbe:
+  #    failureThreshold: 3
+  #    httpGet:
+  #      path: /status
+  #      port: 19669
+  #      scheme: HTTP
+  #    initialDelaySeconds: 40
+  #    periodSeconds: 10
+  #    successThreshold: 1
+  #    timeoutSeconds: 10
+    # Container image for the Graph service.
+    image: vesoft/nebula-graphd
+    logVolumeClaim:
+      resources:
+        requests:
+          storage: 2Gi
+      # Storage class name for storing Graph service logs.
+      storageClassName: local-sc
+    # Number of replicas for the Graph service Pod.
+    replicas: 1
+    # Resource configuration for the Graph service.
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 500Mi
+    # Version of the Graph service.
+    version: v3.6.0
+    # Custom flags configuration for the Graph service.
+    config: {}
+  # Meta service configuration.
+  metad:
+  #  readinessProbe:
+  #    failureThreshold: 3
+  #    httpGet:
+  #      path: /status
+  #      port: 19559
+  #      scheme: HTTP
+  #    initialDelaySeconds: 5
+  #    periodSeconds: 5
+  #    successThreshold: 1
+  #    timeoutSeconds: 5
+    # Container image for the Meta service.
+    image: vesoft/nebula-metad
+    logVolumeClaim:
+      resources:
+        requests:
+          storage: 2Gi
+      storageClassName: local-sc
+    dataVolumeClaim:
+      resources:
+        requests:
+          storage: 2Gi
+      storageClassName: local-sc
+    replicas: 1
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 500Mi
+    version: v3.6.0
+    # Custom flags configuration for the Meta service.
+    config: {}          
+  # Storage service configuration.
+  storaged:
+  #  readinessProbe:
+  #    failureThreshold: 3
+  #    httpGet:
+  #      path: /status
+  #      port: 19779
+  #      scheme: HTTP
+  #    initialDelaySeconds: 40
+  #    periodSeconds: 10
+  #    successThreshold: 1
+  #    timeoutSeconds: 5
+    # Container image for the Storage service.
+    image: vesoft/nebula-graphd
+    logVolumeClaim:
+      resources:
+        requests:
+          storage: 2Gi
+      storageClassName: local-path
+    dataVolumeClaims:
+    - resources:
+        requests:
+          storage: 2Gi
+      storageClassName: local-path
+    replicas: 1
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 500Mi
+    version: v3.6.0
+    # Custom flags configuration for the Storage service.
+    config: {} 
+

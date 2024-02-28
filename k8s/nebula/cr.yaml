@@ -1,0 +1,7 @@
+apiVersion: apps.nebula-graph.io/v1
+kind: NebulaCluster
+metadata:
+  name: my-nebula-cluster
+spec:
+  replicas: 3
+  version: v3.6.0

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebula-nodeport-service
+  namespace: nebula
+spec:
+  type: NodePort
+  ports:
+    - port: 9699  # The port that Nebula Graph listens on; adjust if necessary
+      targetPort: 9699
+      nodePort: 32069  # The port to access Nebula Graph from outside; choose a port in the allowed range (30000-32767)
+      protocol: TCP
+  selector:
+    app: nebula  # Adjust the selector to match the labels of your Nebula Graph pods
+

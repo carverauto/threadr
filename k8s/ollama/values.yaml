@@ -1,0 +1,147 @@
+ollama:
+  gpu:
+    enabled: true
+    number: 2
+  defaultModel: "gemma"
+service:
+
+  # -- Service type
+  type: ClusterIP
+
+  # -- Service port
+  port: 11434
+
+# Configure the ingress resource that allows you to access the
+ingress:
+  # -- Enable ingress controller resource
+  enabled: true
+
+  # -- IngressClass that will be used to implement the Ingress (Kubernetes 1.18+)
+  className: ""
+
+  # -- Additional annotations for the Ingress resource.
+  annotations: 
+    kubernetes.io/ingress.class: traefik
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+
+  # The list of hostnames to be covered with this ingress record.
+  hosts:
+    - host: ollama.thefarm.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+  # --  The tls configuration for hostnames to be covered with this ingress record.
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+# Configure resource requests and limits
+# ref: http://kubernetes.io/docs/user-guide/compute-resources/
+resources:
+  # Pod requests
+  requests:
+    # -- Memory request
+    memory: 4096Mi
+
+    # -- CPU request
+    cpu: 2000m
+
+  # Pod limit
+  limits:
+    # -- Memory limit
+    memory: 8192Mi
+
+    # -- CPU limit
+    cpu: 4000m
+
+# Configure extra options for liveness probe
+# ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+livenessProbe:
+  # -- Enable livenessProbe
+  enabled: true
+
+  # -- Request path for livenessProbe
+  path: /
+
+  # -- Initial delay seconds for livenessProbe
+  initialDelaySeconds: 60
+
+  # -- Period seconds for livenessProbe
+  periodSeconds: 10
+
+  # -- Timeout seconds for livenessProbe
+  timeoutSeconds: 5
+
+  # -- Failure threshold for livenessProbe
+  failureThreshold: 6
+
+  # -- Success threshold for livenessProbe
+  successThreshold: 1
+
+# Configure extra options for readiness probe
+# ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+readinessProbe:
+  # -- Enable readinessProbe
+  enabled: true
+
+  # -- Request path for readinessProbe
+  path: /
+
+  # -- Initial delay seconds for readinessProbe
+  initialDelaySeconds: 30
+
+  # -- Period seconds for readinessProbe
+  periodSeconds: 5
+
+  # -- Timeout seconds for readinessProbe
+  timeoutSeconds: 3
+
+  # -- Failure threshold for readinessProbe
+  failureThreshold: 6
+
+  # -- Success threshold for readinessProbe
+  successThreshold: 1
+
+# Configure autoscaling
+autoscaling:
+  # -- Enable autoscaling
+  enabled: false
+
+  # -- Number of minimum replicas
+  minReplicas: 1
+
+  # -- Number of maximum replicas
+  maxReplicas: 100
+
+  # -- CPU usage to target replica
+  targetCPUUtilizationPercentage: 80
+
+  # -- targetMemoryUtilizationPercentage: 80
+
+# -- Additional volumes on the output Deployment definition.
+volumes: []
+# -- - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# -- Additional volumeMounts on the output Deployment definition.
+volumeMounts: []
+# -- - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+# -- Additional arguments on the output Deployment definition.
+extraArgs: []
+
+persistentVolume:
+  # -- Enable persistence using PVC
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  existingClaim: ""
+  size: 30Gi
+  storageClass: "local-path"

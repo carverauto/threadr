@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nebula-nodeport-service
+  namespace: nebula
+spec:
+  type: NodePort
+  ports:
+    - name: graphd
+      port: 9669
+      targetPort: 9669
+      nodePort: 32069
+      protocol: TCP
+    - name: http
+      port: 19669
+      targetPort: 19669
+      nodePort: 32669
+      protocol: TCP
+    - name: studio
+      port: 30070
+      nodePort: 32070
+      protocol: TCP
+  selector:
+    app.kubernetes.io/component: graphd
+    app.kubernetes.io/name: nebula-graph
+
