@@ -1,27 +1,38 @@
-from langchain.chat_models import ChatOllama
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores.neo4j_vector import Neo4jVector
+from configs.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
 
 
-chat_llm = ChatOllama(
-    model="llama2:chat",
-    base_url="http://192.168.1.80:11434"
-)
+# Your Sentence Transformer Configuration
+embedding_model = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2")
 
-prompt = PromptTemplate(
-    template="""You are a surfer dude, having a conversation about the surf conditions on the beach.
-Respond using surfer slang.
+try:
+    threadr_chat_vector = Neo4jVector.from_existing_index(
+        embedding_model, 
+        url=NEO4J_URI,
+        username=NEO4J_USERNAME,
+        password=NEO4J_PASSWORD,
+        index_name="message-embeddings", 
+        embedding_node_property="embedding",
+        text_node_property="content"  # Use 'content' based on your schema
+    )
+except Exception as e:
+    print("Error connecting to vectorStore:", e)
 
-Question: {question}
-""",
-    input_variables=["question"],
-)
+# Your search query
+try: 
+    result = threadr_chat_vector.similarity_search(
+        "leku",
+        top_k=5
+    )
+except Exception as e:
+    print("Error searching for similar documents:", e)
 
-chat_chain = LLMChain(
-    llm=chat_llm,
-    prompt=prompt,
-)
-
-response = chat_chain.invoke({"question": "What is the weather like?"})
-
-print(response)
+# Display results
+for doc in result:
+    try:
+        print(doc.page_content)
+    except Exception as e:
+        print(f"Error displaying document: {e}")
+        print(doc)
