@@ -11,7 +11,6 @@ result = graph.query("""
 MATCH (user:User)-[:SENT]->(msg:Message)
 RETURN user.name AS userName, max(msg.timestamp) AS lastMessageTimestamp
 ORDER BY lastMessageTimestamp DESC
-LIMIT 25
 """)
 
 print(result)
