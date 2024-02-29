@@ -37,9 +37,15 @@ try:
         verbose=True
     )
     """
+    # prompt should be a dict
+    prompt = {
+        "text": "who is john galt?",
+        "context": "John Galt is a character in Ayn Rand's novel Atlas Shrugged (1957). Although he is not identified by name until the last third of the novel, he is the object of its often-repeated question 'Who is John Galt?' and of the quest to discover the answer."
+    }
     qa_chain = RetrievalQA.from_chain_type(chat_llm, 
-                                           retriever=threadr_chat_vector.as_retriever(), 
-                                           chain_type_kwargs={"prompt": "who is john galt?"})
+                                           retriever=threadr_chat_vector.as_retriever(),
+                                           chain_type_kwargs={"prompt": prompt}
+                                           )
 
     print(qa_chain)
 
