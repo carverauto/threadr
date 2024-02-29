@@ -1,6 +1,9 @@
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from configs.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
+import tracemalloc
+
+tracemalloc.start()
 
 model_name = "sentence-transformers/all-mpnet-base-v2"
 model_kwargs = {"device": "cuda"}
