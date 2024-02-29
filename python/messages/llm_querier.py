@@ -30,20 +30,7 @@ try:
         text_node_property="content"
     )
     print(threadr_chat_vector.embedding_dimension)
-    """
-    chat_retriever = RetrievalQA.from_llm(
-        llm=chat_llm,
-        retriever=threadr_chat_vector.as_retriever(),
-        verbose=True
-    )
-    """
-    # prompt should be a dict
-    prompt = {
-        "text": "who is john galt?",
-        "context": "John Galt is a character in Ayn Rand's novel Atlas Shrugged (1957). Although he is not identified by name until the last third of the novel, he is the object of its often-repeated question 'Who is John Galt?' and of the quest to discover the answer."
-    }
     retriever = threadr_chat_vector.as_retriever()
-
     qa_chain = RetrievalQA.from_chain_type(chat_llm, 
                                            retriever=retriever,
                                            chain_type="stuff",
