@@ -25,11 +25,12 @@ except Exception as e:
     print("Error connecting to vectorStore:", e)
 
 # Your search query
-try: 
+try:
     result = threadr_chat_vector.similarity_search(
         "leku",
         top_k=5
     )
+    threadr_chat_vector.close()
 except Exception as e:
     print("Error searching for similar documents:", e)
 
