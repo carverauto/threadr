@@ -44,10 +44,10 @@ try:
     }
     qa_chain = RetrievalQA.from_chain_type(chat_llm, 
                                            retriever=threadr_chat_vector.as_retriever(),
-                                           chain_type_kwargs={"prompt": prompt}
+                                           chain_type="stuff",
                                            )
 
-    print(qa_chain)
+    qa_chain({"question": "who is john leku?"}, return_only_outputs=True)
 
 
 except Exception as e:
