@@ -57,7 +57,8 @@ def store_data_in_neo4j(documents, credentials):
     # Instantiate Neo4j vector from documents
     Neo4jVector.from_documents(
         documents,
-        OpenAIEmbeddings(openai_api_key=openai_api_secret_key),
+        #OpenAIEmbeddings(openai_api_key=openai_api_secret_key), url=url, username=username, password=password,)
+        SentenceTransformerEmbedding(),
         url=url,
         username=username,
         password=password,
