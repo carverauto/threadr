@@ -14,7 +14,7 @@ def initialize_neo4j_vector(credentials, index_name):
     password = credentials["password"]
 
     # OpenAI credentials
-    openai_api_secret_key = credentials["openai_api_secret_key"]
+    # openai_api_secret_key = credentials["openai_api_secret_key"]
 
     # Instantiate Neo4j vector from an existing vector
     # CYPHER - "SHOW INDEXES;" will show we have an index type Vector named "vector"

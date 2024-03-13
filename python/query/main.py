@@ -1,3 +1,6 @@
+import sys
+print("sys.path:", sys.path)
+
 from modules.environment.env_utils import (
     load_environment_variables,
     verify_environment_variables,
@@ -8,6 +11,7 @@ from modules.neo4j.vector import (
     initialize_neo4j_vector,
     perform_similarity_search,
 )
+
 
 
 def query_against_an_existing_neo4j_vector(index_name, query):

@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from langchain.schema import BaseMemory
-from langchain.docstore import InMemoryDocstore
+from langchain_community.docstore import InMemoryDocstore
 #from langchain.embeddings import OpenAIEmbeddings
-from modules.embeddings.embeddings import SentenceTransformerEmbedding
+from embed.embeddings import SentenceTransformerEmbedding
 from langchain_community.vectorstores import Neo4jVector
 
 
