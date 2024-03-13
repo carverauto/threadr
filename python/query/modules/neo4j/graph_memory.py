@@ -6,12 +6,11 @@ from pydantic import BaseModel, Field
 
 from langchain.schema import BaseMemory
 from langchain_community.docstore import InMemoryDocstore
-#from langchain.embeddings import OpenAIEmbeddings
-from embed.embeddings import SentenceTransformerEmbedding
+from modules.embeddings.embeddings import SentenceTransformerEmbedding
 from langchain_community.vectorstores import Neo4jVector
 
 
-class GraphMemory(BaseMemory, BaseModel, ABC):
+class GraphMemory(ABC):
     """Memory class for storing conversation memory in a Neo4j graph."""
 
     neo4j_url: str = ""
