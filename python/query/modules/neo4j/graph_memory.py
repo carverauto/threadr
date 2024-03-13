@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 
 from langchain.schema import BaseMemory
 from langchain_community.docstore import InMemoryDocstore
-from modules.embeddings.embeddings import SentenceTransformerEmbedding
+#from modules.embeddings.embeddings import SentenceTransformerEmbedding
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Neo4jVector
 
 
@@ -26,7 +27,8 @@ class GraphMemory(ABC):
         super().__init__(**kwargs)
         self.docstore = InMemoryDocstore()
         #self.embedding_function = OpenAIEmbeddings()
-        self.embedding_function = SentenceTransformerEmbedding()
+        #self.embedding_function = SentenceTransformerEmbedding()
+        self.embedding_function = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
         self.vectorstore = Neo4jVector.from_existing_index(
             self.embedding_function,
             url=self.neo4j_url,
