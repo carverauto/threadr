@@ -18,6 +18,8 @@ def query_against_an_existing_neo4j_vector(index_name, query):
         # Instantiate Neo4j vector from an existing vector
         neo4j_vector = initialize_neo4j_vector(neo4j_credentials, index_name)
 
+        print(f"\nneo4jVector: {neo4j_vector}\n")
+
         # Perform the similarity search and display results
         results = perform_similarity_search(neo4j_vector, query)
 
