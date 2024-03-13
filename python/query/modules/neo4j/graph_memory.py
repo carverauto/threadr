@@ -1,10 +1,13 @@
+# ./query/modules/neo4j/graph_memory.py
+
 from abc import ABC
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from langchain.schema import BaseMemory
 from langchain.docstore import InMemoryDocstore
-from langchain.embeddings import OpenAIEmbeddings
+#from langchain.embeddings import OpenAIEmbeddings
+from modules.embeddings.embeddings import SentenceTransformerEmbedding
 from langchain_community.vectorstores import Neo4jVector
 
 
@@ -23,7 +26,8 @@ class GraphMemory(BaseMemory, BaseModel, ABC):
     def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
         self.docstore = InMemoryDocstore()
-        self.embedding_function = OpenAIEmbeddings()
+        #self.embedding_function = OpenAIEmbeddings()
+        self.embedding_function = SentenceTransformerEmbedding()
         self.vectorstore = Neo4jVector.from_existing_index(
             self.embedding_function,
             url=self.neo4j_url,

@@ -1,5 +1,6 @@
 from langchain.vectorstores.neo4j_vector import Neo4jVector
-from langchain.embeddings.openai import OpenAIEmbeddings
+#from langchain.embeddings.openai import OpenAIEmbeddings
+from modules.embeddings.embeddings import SentenceTransformerEmbedding
 
 
 def initialize_neo4j_vector(credentials, index_name):
@@ -18,7 +19,8 @@ def initialize_neo4j_vector(credentials, index_name):
     # Instantiate Neo4j vector from an existing vector
     # CYPHER - "SHOW INDEXES;" will show we have an index type Vector named "vector"
     neo4j_vector = Neo4jVector.from_existing_index(
-        OpenAIEmbeddings(openai_api_key=openai_api_secret_key),
+        #OpenAIEmbeddings(openai_api_key=openai_api_secret_key),
+        SentenceTransformerEmbedding(),
         url=url,
         username=username,
         password=password,

@@ -5,7 +5,6 @@ from modules.environment.env_utils import (
 from modules.langchain.langchain import initialize_qa_workflow, execute_qa_workflow
 from modules.neo4j.credentials import neo4j_credentials
 from modules.neo4j.vector import (
-    store_data_in_neo4j,
     initialize_neo4j_vector,
     perform_similarity_search,
 )
@@ -38,13 +37,11 @@ def question_answer_workflow_with_langchain(index_name, query):
         neo4j_vector = initialize_neo4j_vector(neo4j_credentials, index_name)
 
         # Initialize and execute the QA workflow
-        qa_workflow = initialize_qa_workflow(
-            neo4j_vector, neo4j_credentials["openai_api_secret_key"]
-        )
+        qa_workflow = initialize_qa_workflow(neo4j_vector, neo4j_credentials["openai_api_secret_key"])
 
-        qa_results = execute_qa_workflow(
-            neo4j_vector, qa_workflow, query, neo4j_credentials["openai_api_secret_key"]
-        )
+        qa_results = execute_qa_workflow(neo4j_vector, qa_workflow, query, neo4j_credentials["openai_api_secret_key"],
+                                         neo4j_credentials)
+
         print(qa_results["answer"])
 
         # Close the Neo4j connection
