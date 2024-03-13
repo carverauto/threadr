@@ -22,7 +22,12 @@ func NewNeo4jAdapter(uri, username, password string) (*Neo4jAdapter, error) {
 
 func (adapter *Neo4jAdapter) AddRelationship(ctx context.Context, fromUser string, toUser string, relationshipType string) error {
 	session := adapter.Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-	defer session.Close()
+	defer func(session neo4j.Session) {
+		err := session.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(session)
 
 	// Cypher query to create a relationship between two nodes
 	cypher := `MERGE (a:User {name: $fromUser})
@@ -53,7 +58,12 @@ func (adapter *Neo4jAdapter) AddRelationship(ctx context.Context, fromUser strin
 
 func (adapter *Neo4jAdapter) AddOrUpdateRelationship(ctx context.Context, fromUser string, toUser string, relationshipType string) error {
 	session := adapter.Driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
-	defer session.Close()
+	defer func(session neo4j.Session) {
+		err := session.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(session)
 
 	// Define the Cypher query with a placeholder for the relationship type
 	cypher := `
