@@ -4,7 +4,7 @@ package messages
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/carverauto/threadr/pkg/common"
+	"github.com/carverauto/threadr/bots/IRC/pkg/common"
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 	"github.com/kelseyhightower/envconfig"
