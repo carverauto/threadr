@@ -1,11 +1,13 @@
+# cloudevents_handler.py
+
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import re
-from configs.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, NEO4J_PASSWORD, NEO4J_URI
-from .neo4j_adapter import Neo4jAdapter
-from .models import NATSMessage
-from .publish_message import publish_message_to_jetstream
+from modules.environment.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, NEO4J_PASSWORD, NEO4J_URI
+from modules.neo4j.neo4j_adapter import Neo4jAdapter
+from modules.messages.models import NATSMessage
+from modules.nats.publish_message import publish_message_to_jetstream
 
 
 recipient_patterns = [

@@ -1,7 +1,7 @@
 # publish_message.py
 
 from nats.aio.client import Client as NATS
-from configs.settings import NATS_URL, NATS_NKEYSEED
+from modules.environment.settings import NATS_URL, NATS_NKEYSEED
 import json
 
 

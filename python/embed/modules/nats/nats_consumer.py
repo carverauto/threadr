@@ -1,7 +1,7 @@
 import asyncio
 from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
-from configs.settings import NATS_URL, NKEYSEED, USE_QUEUE_GROUP
+from modules.environment.settings import NATS_URL, NKEYSEED, USE_QUEUE_GROUP
 from typing import Callable
 
 
@@ -73,6 +73,10 @@ class NATSConsumer:
             print("JetStream context not initialized. Subscription failed.")
 
     async def run(self):
-        await self.subscribe()
-        while True:
-            await asyncio.sleep(1)
+        try:
+            await self.subscribe()
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("Keyboard interrupt received. Shutting down gracefully.")
+            await self.stop()

@@ -1,5 +1,5 @@
-from .models import NATSMessage
-from .cloudevents_handler import process_cloudevent
+from modules.messages.models import NATSMessage
+from modules.cloudevents.cloudevents_handler import process_cloudevent
 
 
 class MessageProcessor:
@@ -10,7 +10,8 @@ class MessageProcessor:
         print(f"Received a message: {msg.data.decode()}")
         try:
             # Parse the raw message data into a NATSMessage object
-            message_data = NATSMessage.parse_raw(msg.data.decode())
+            # message_data = NATSMessage.parse_raw(msg.data.decode())
+            message_data = NATSMessage.model_validate_json(msg.data.decode())
             if self.neo4j_adapter is not None:
                 await process_cloudevent(message_data, self.neo4j_adapter)
             else:

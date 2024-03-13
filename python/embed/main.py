@@ -1,8 +1,10 @@
+# main.py
+
 import asyncio
-from src.neo4j_adapter import Neo4jAdapter
-from src.nats_consumer import NATSConsumer
-from configs.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP
-from src.message_processor import MessageProcessor
+from modules.neo4j.neo4j_adapter import Neo4jAdapter
+from modules.nats.nats_consumer import NATSConsumer
+from modules.environment.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP
+from modules.messages.message_processor import MessageProcessor
 
 
 async def main():

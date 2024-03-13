@@ -2,8 +2,8 @@
 
 import json
 import torch
-from .models import VectorEmbeddingMessage
-from .embeddings import EmbeddingInterface
+from modules.messages.models import VectorEmbeddingMessage
+from modules.embeddings import EmbeddingInterface
 
 
 class EmbeddingsProcessor:
