@@ -9,3 +9,13 @@ hub:
         secretKeyRef:
           name: jupyterhub-secrets
           key: NEO4J_PASSWORD
+singleuser:
+  storage:
+    type: dynamic
+    capacity: 20Gi
+    homeMountPath: /home/mfreeman
+    dynamic:
+      storageClass:  # You might want to specify a storageClass if needed
+      pvcNameTemplate: claim-{username}{servername}
+      volumeNameTemplate: volume-{username}{servername}
+      storageAccessModes: [ReadWriteOnce]
