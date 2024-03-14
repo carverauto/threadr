@@ -3,7 +3,7 @@
 import json
 import torch
 from modules.messages.models import VectorEmbeddingMessage
-from modules.embeddings import EmbeddingInterface
+from .embeddings import EmbeddingInterface
 
 
 class EmbeddingsProcessor:

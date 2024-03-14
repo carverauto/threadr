@@ -23,7 +23,7 @@ image:
   imagePullPolicy: IfNotPresent
   imagePullSecrets:
     - "ghcr-secret"
-  customImage: "ghcr.io/carverauto/threadr/my-neo4j:5.17.0-enterprise"
+  customImage: "ghcr.io/carverauto/threadr/my-neo4j:5.18.0-enterprise"
 volumes:
   data:
     mode: "dynamic"

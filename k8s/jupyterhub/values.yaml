@@ -1,0 +1,21 @@
+hub:
+  extraEnv:
+    NEO4J_URI: "neo4j://neo4j.neo4j.cluster.local:4343"
+    NEO4J_USERNAME: "neo4j"
+    NEO4J_DATABASE: "neo4j"
+    OPENAI_BASE_URL: "http://platform.openai.com"
+    NEO4J_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: jupyterhub-secrets
+          key: NEO4J_PASSWORD
+singleuser:
+  storage:
+    type: dynamic
+    capacity: 20Gi
+    homeMountPath: /home/mfreeman
+    dynamic:
+      storageClass:  # You might want to specify a storageClass if needed
+      pvcNameTemplate: claim-{username}{servername}
+      volumeNameTemplate: volume-{username}{servername}
+      storageAccessModes: [ReadWriteOnce]

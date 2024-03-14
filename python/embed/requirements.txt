@@ -8,6 +8,8 @@ beautifulsoup4==4.12.2
 certifi==2023.7.22
 charset-normalizer==3.2.0
 dataclasses-json==0.5.14
+ed25519==1.5
+-e git+ssh://git@github.com/carverauto/threadr.git@a53613b410a0fbc4b4bf4dfacc98d46e07a55005#egg=embed&subdirectory=python/embed
 environs==9.5.0
 filelock==3.13.1
 frozenlist==1.4.0
@@ -27,8 +29,10 @@ marshmallow==3.20.1
 mpmath==1.3.0
 multidict==6.0.4
 mypy-extensions==1.0.0
+nats-py==2.7.2
 neo4j==5.12.0
 networkx==3.2.1
+nkeys==0.1.0
 numexpr==2.8.6
 numpy==1.25.2
 openai==0.28.0

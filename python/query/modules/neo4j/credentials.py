@@ -1,4 +1,4 @@
-from modules.environment.environment_utilities import (
+from modules.environment.env_utils import (
     load_environment_variables,
     verify_environment_variables,
 )

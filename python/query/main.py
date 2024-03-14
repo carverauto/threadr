@@ -1,13 +1,13 @@
-from modules.environment.env_utils import (
-    load_environment_variables,
-    verify_environment_variables,
-)
+# ./query/main.py
 from modules.langchain.langchain import initialize_qa_workflow, execute_qa_workflow
 from modules.neo4j.credentials import neo4j_credentials
 from modules.neo4j.vector import (
-    store_data_in_neo4j,
     initialize_neo4j_vector,
     perform_similarity_search,
+)
+from modules.environment.env_utils import (
+    load_environment_variables,
+    verify_environment_variables,
 )
 
 
@@ -17,6 +17,8 @@ def query_against_an_existing_neo4j_vector(index_name, query):
 
         # Instantiate Neo4j vector from an existing vector
         neo4j_vector = initialize_neo4j_vector(neo4j_credentials, index_name)
+
+        print(f"\nneo4jVector: {neo4j_vector}\n")
 
         # Perform the similarity search and display results
         results = perform_similarity_search(neo4j_vector, query)
@@ -38,13 +40,11 @@ def question_answer_workflow_with_langchain(index_name, query):
         neo4j_vector = initialize_neo4j_vector(neo4j_credentials, index_name)
 
         # Initialize and execute the QA workflow
-        qa_workflow = initialize_qa_workflow(
-            neo4j_vector, neo4j_credentials["openai_api_secret_key"]
-        )
+        qa_workflow = initialize_qa_workflow(neo4j_vector, neo4j_credentials["openai_api_secret_key"])
 
-        qa_results = execute_qa_workflow(
-            neo4j_vector, qa_workflow, query, neo4j_credentials["openai_api_secret_key"]
-        )
+        qa_results = execute_qa_workflow(neo4j_vector, qa_workflow, query, neo4j_credentials["openai_api_secret_key"],
+                                         neo4j_credentials)
+
         print(qa_results["answer"])
 
         # Close the Neo4j connection
