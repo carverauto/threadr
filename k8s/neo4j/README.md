@@ -18,3 +18,9 @@ RUN cp /var/lib/neo4j/labs/apoc-* /var/lib/neo4j/plugins
 ❯ export IMAGE_NAME="my-neo4j"
 ❯ docker build --build-arg NEO4J_VERSION=$NEO4J_VERSION --tag ${CONTAINER_REPOSITORY}/${IMAGE_NAME}:${NEO4J_VERSION} .
 ```
+
+Pushing docker image:
+
+```bash
+docker push ${CONTAINER_REPOSITORY}/${IMAGE_NAME}:${NEO4J_VERSION}`
+```
