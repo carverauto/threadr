@@ -1,6 +1,7 @@
 # ./query/modules/langchain/langchain.py
 
 from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQAWithSourcesChain, ConversationalRetrievalChain
 from modules.neo4j.graph_memory import GraphMemory
 
