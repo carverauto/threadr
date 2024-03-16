@@ -20,7 +20,7 @@ neo4j:
     - name: NEO4J_PLUGINS
       value: [\"apoc\"]
 image:
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   imagePullSecrets:
     - "ghcr-secret"
   customImage: "ghcr.io/carverauto/threadr/my-neo4j:5.18.0-enterprise"
@@ -44,7 +44,7 @@ volumes:
           - key: gds.license
             path: gds.license
 config:
-  server.directories.plugins: "/plugins"
+  server.directories.plugins: "/var/lib/neo4j/plugins"
   dbms.security.procedures.unrestricted: "apoc.*"
   dbms.security.procedures.allowlist: "apoc.*"
   server.config.strict_validation.enabled: "false"

@@ -1,8 +1,19 @@
 # Building a custom neo4j image that includes our APOC plugin
 
+## Setup secrets
+
 ```bash
 kubectl create secret  generic --from-file=/tmp/gds.license gds-license -n neo4j
 ```
+
+```bash
+kubectl create secret docker-registry ghcr-secret \
+    --docker-server=ghcr.io \
+    --docker-username=mfreeman451 \
+    --docker-password=$GITHUB_PAT \
+    --docker-email=mfreeman451@gmail.com -n neo4j
+```
+
 
 ```docker
 ARG NEO4J_VERSION
