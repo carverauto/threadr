@@ -28,7 +28,8 @@ async def main():
             s, lambda s=s: asyncio.create_task(shutdown(s, loop))
         )
 
-    embedding_model = OpenAIEmbedding(model="text-embedding-3-small")
+    # embedding_model = OpenAIEmbedding(model="text-embedding-3-small", dimensions=1536)
+    embedding_model = OpenAIEmbedding()
 
     embeddings_processor = EmbeddingsProcessor(neo4j_adapter=neo4j_adapter,
                                                embedding_model=embedding_model)

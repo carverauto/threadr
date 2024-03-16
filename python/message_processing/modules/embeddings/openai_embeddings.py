@@ -7,12 +7,12 @@ from .embedding_interface import EmbeddingInterface
 
 
 class OpenAIEmbedding(EmbeddingInterface):
-    def __init__(self, model: str = 'text-embedding-3-small'):
+    # def __init__(self, model: str = 'text-embedding-3-small', dimensions: int = 1536):
+    def __init__(self):
         """
         Initializes the OpenAI model for generating embeddings.
         :param model: The model ID to use for generating embeddings.
         """
-        self.model = model
         client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
         self.client = client
 
@@ -21,7 +21,7 @@ class OpenAIEmbedding(EmbeddingInterface):
         for text in texts:
             try:
                 response = self.client.embeddings.create(
-                    model=self.model,
+                    model="text-embedding-3-small",
                     input=text
                 )
                 # Assuming each response item is an instance of openai.types.embedding.Embedding
@@ -31,6 +31,7 @@ class OpenAIEmbedding(EmbeddingInterface):
                     for item in response.data:
                         if hasattr(item, 'embedding'):
                             embeddings.append(item.embedding)
+                            print("Length of embeddings:", len(embeddings))
                         else:
                             print(f"No embedding found for text: {text}")
                             embeddings.append([])

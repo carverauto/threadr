@@ -42,6 +42,7 @@ class EmbeddingsProcessor:
                 return
 
             embeddings = self.embedding_model.create_embeddings([message_data.content])
+            print("Length of embeddings:", len(embeddings[0]))
             await self.save_embedding(embeddings[0], message_data.message_id)
         except Exception as e:
             print(f"Error processing message: {e}")
