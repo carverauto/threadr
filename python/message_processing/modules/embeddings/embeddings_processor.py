@@ -41,12 +41,8 @@ class EmbeddingsProcessor:
                 print("Neo4j adapter not initialized.")
                 return
 
-            print("Message data:", message_data)
             embeddings = self.embedding_model.create_embeddings([message_data.content])
-            print("Embeddings:", embeddings)
             await self.save_embedding(embeddings[0], message_data.message_id)
-            print("Embedding saved for message:", message_data.message_id)
-
         except Exception as e:
             print(f"Error processing message: {e}")
         finally:

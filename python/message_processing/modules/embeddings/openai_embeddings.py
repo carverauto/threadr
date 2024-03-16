@@ -7,7 +7,7 @@ from .embedding_interface import EmbeddingInterface
 
 
 class OpenAIEmbedding(EmbeddingInterface):
-    def __init__(self, model: str = 'text-embedding-ada-002'):
+    def __init__(self, model: str = 'text-embedding-3-small'):
         """
         Initializes the OpenAI model for generating embeddings.
         :param model: The model ID to use for generating embeddings.

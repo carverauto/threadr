@@ -1,5 +1,9 @@
 # Building a custom neo4j image that includes our APOC plugin
 
+```bash
+kubectl create secret  generic --from-file=/tmp/gds.license gds-license -n neo4j
+```
+
 ```docker
 ARG NEO4J_VERSION
 FROM --platform=linux/amd64 neo4j:${NEO4J_VERSION}
