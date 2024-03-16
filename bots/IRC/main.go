@@ -13,7 +13,7 @@ import (
 func main() {
 	natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	subject := "irc"
-	stream := "embed"
+	stream := "message_processing"
 
 	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject, stream)
 	if err != nil {
@@ -25,7 +25,7 @@ func main() {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
-	// start a counter for received embed
+	// start a counter for received message_processing
 	msgCounter := 0
 	ircAdapter.Listen(func(ircMsg common.IRCMessage) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

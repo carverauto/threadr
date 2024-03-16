@@ -1,12 +1,12 @@
-# embeddings_consumer.py
+# create_embeddings.py
 
 import asyncio
 import signal
-from src.neo4j_adapter import Neo4jAdapter
-from src.nats_consumer import NATSConsumer
-from configs.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP
-from src.embeddings_processor import EmbeddingsProcessor
-from src.embeddings import SentenceTransformerEmbedding
+from modules.neo4j.neo4j_adapter import Neo4jAdapter
+from modules.nats.nats_consumer import NATSConsumer
+from modules.environment.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP
+from modules.embeddings.embeddings_processor import EmbeddingsProcessor
+from modules.embeddings import SentenceTransformerEmbedding
 
 
 async def main():

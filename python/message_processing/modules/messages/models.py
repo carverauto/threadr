@@ -1,4 +1,4 @@
-# src/models.py
+# modules/messages/models.py
 
 from pydantic import BaseModel, Field
 from typing import Optional

@@ -2,7 +2,7 @@ from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
 
 # 1. load model
-model = SentenceTransformer("mixedbread-ai/mxbai-embed-large-v1")
+model = SentenceTransformer("mixedbread-ai/mxbai-message_processing-large-v1")
 
 # For retrieval you need to pass this prompt.
 query = 'Represent this sentence for searching relevant passages: A man is eating a piece of bread'

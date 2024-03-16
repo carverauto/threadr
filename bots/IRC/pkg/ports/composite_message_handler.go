@@ -6,7 +6,7 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 )
 
-// CompositeMessageHandler holds multiple MessageHandlers and delegates embed to them.
+// CompositeMessageHandler holds multiple MessageHandlers and delegates message_processing to them.
 type CompositeMessageHandler struct {
 	handlers []MessageHandler
 }

@@ -1,17 +1,16 @@
-# src/embeddings_processor.py
-
 import json
 import torch
 from modules.messages.models import VectorEmbeddingMessage
-from .embeddings import EmbeddingInterface
+from .embeddings import EmbeddingInterface, get_embedding_model
 
 
 class EmbeddingsProcessor:
     def __init__(self, neo4j_adapter, embedding_model: EmbeddingInterface):
         self.neo4j_adapter = neo4j_adapter
-        self.embedding_model = embedding_model
+        self.embedding_model = embedding_model if embedding_model else get_embedding_model()
 
     async def save_embedding(self, vector, message_id):
+        print("Saving embedding for message:", message_id)
         # Ensure vector is in a format that Neo4j can store (e.g., list of floats)
         embedding_vector = vector.tolist() if torch.is_tensor(vector) else vector
 
@@ -44,6 +43,7 @@ class EmbeddingsProcessor:
 
             print("Message data:", message_data)
             embeddings = self.embedding_model.create_embeddings([message_data.content])
+            print("Embeddings:", embeddings)
             await self.save_embedding(embeddings[0], message_data.message_id)
             print("Embedding saved for message:", message_data.message_id)
 

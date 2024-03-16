@@ -22,7 +22,7 @@ type natsConfig struct {
 	NKey     string `envconfig:"NKEY" required:"true"`
 	NkeySeed string `envconfig:"NKEYSEED" required:"true"`
 	Subject  string `envconfig:"SUBJECT" default:"irc" required:"true"`
-	Stream   string `envconfig:"STREAM" default:"embed" required:"true"`
+	Stream   string `envconfig:"STREAM" default:"message_processing" required:"true"`
 }
 
 type graphConfig struct {

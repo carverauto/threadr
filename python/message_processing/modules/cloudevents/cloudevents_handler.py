@@ -15,7 +15,7 @@ recipient_patterns = [
     re.compile(r'^@(\w+)'),    # Matches "@trillian"
 ]
 
-# Define patterns to identify bot embed or unwanted content
+# Define patterns to identify bot message_processing or unwanted content
 bot_nicknames = ['twatbot', 'ballsbot', 'thufir']
 url_pattern = re.compile(r'https?://[^\s]+')
 twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
@@ -29,7 +29,7 @@ class GenericMessage(BaseModel):
     id: Optional[int]  # Some platforms might not have an explicit message ID
     message: str
     nick: str  # The user identifier, might be a username or display name
-    channel: Optional[str]  # Not all embed are sent in a channel context
+    channel: Optional[str]  # Not all message_processing are sent in a channel context
     timestamp: datetime
     platform: str  # Could be 'irc', 'discord', 'slack', 'telegram', etc.
 

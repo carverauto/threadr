@@ -1,4 +1,4 @@
-// Package messages ./bots/IRC/pkg/adapters/embed/batch_processor.go
+// Package messages ./bots/IRC/pkg/adapters/message_processing/batch_processor.go
 package messages
 
 import (
@@ -102,9 +102,9 @@ func (bp *BatchProcessor) processBatch(ctx context.Context) {
 		return
 	}
 
-	// TODO: send embed to Mistral in chunks and handle the response
-	// Implement logic for breaking embed into chunks and sending them to Mistral.
+	// TODO: send message_processing to Mistral in chunks and handle the response
+	// Implement logic for breaking message_processing into chunks and sending them to Mistral.
 
-	log.Printf("Processing batch of %d embed", len(messages))
+	log.Printf("Processing batch of %d message_processing", len(messages))
 	// Reset the batch after processing
 }

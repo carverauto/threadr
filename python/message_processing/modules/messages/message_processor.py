@@ -1,3 +1,5 @@
+# modules/messages/message_processor.py
+
 from modules.messages.models import NATSMessage
 from modules.cloudevents.cloudevents_handler import process_cloudevent
 
@@ -17,7 +19,7 @@ class MessageProcessor:
             else:
                 print("Neo4j adapter not initialized.")
         except Exception as e:
-            print(f"Error processing message: {e}")
+            print(f"messageProcessor: Error processing message: {e}")
             # Optionally, handle or log the error appropriately
         finally:
             # Correctly acknowledge the message in JetStream context

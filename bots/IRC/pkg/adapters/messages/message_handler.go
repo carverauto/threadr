@@ -1,4 +1,4 @@
-// Package messages ./bots/IRC/pkg/adapters/embed/message_handler.go
+// Package messages ./bots/IRC/pkg/adapters/message_processing/message_handler.go
 package messages
 
 import (

@@ -1,4 +1,4 @@
-# main.py
+# process_messages.py
 
 import asyncio
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
@@ -20,7 +20,7 @@ async def main():
         nkeyseed=NKEYSEED,
         subjects=["irc"],
         durable_name="threadr-irc",
-        stream_name="embed",
+        stream_name="message_processing",
         use_queue_group=USE_QUEUE_GROUP,
         neo4j_adapter=neo4j_adapter,
         message_processor=message_processor.process_message

@@ -1,17 +1,20 @@
-# src/embeddings.py
+# modules/embeddings/embeddings.py
 
 from typing import List
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from .openai_embeddings import OpenAIEmbedding
+from .embedding_interface import EmbeddingInterface
+from modules.environment.settings import EMBEDDING_SERVICE
 
 
-class EmbeddingInterface:
-    def create_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """
-        Abstract method to create embeddings for a list of texts.
-        :param texts: A list of texts to embed.
-        :return: A list of embeddings, each embedding is a list of floats.
-        """
-        pass
+def get_embedding_model():
+    embedding_service = EMBEDDING_SERVICE
+    if embedding_service == 'huggingface':
+        return SentenceTransformerEmbedding()
+    elif embedding_service == 'openai':
+        return OpenAIEmbedding()
+    else:
+        raise ValueError(f"Unsupported embedding service: {embedding_service}")
 
 
 class SentenceTransformerEmbedding(EmbeddingInterface):
@@ -25,7 +28,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
     def create_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
         Creates embeddings for a list of texts using the specified HuggingFace model.
-        :param texts: A list of texts to embed.
+        :param texts: A list of texts to message_processing.
         :return: A list of embeddings, each embedding is a list of floats.
         """
         # Generate embeddings using the HuggingFaceEmbeddings class

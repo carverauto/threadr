@@ -2,11 +2,13 @@
 
 ## Creating a Vector Index
 
+
+OpenAI embeddings are 1536 dimensions, huggingface/mpnet is 2048.
 ```cypher
 CREATE VECTOR INDEX `message-embeddings`
 FOR (n: Message) ON (n.embedding)
 OPTIONS {indexConfig: {
- `vector.dimensions`: 2048,
+ `vector.dimensions`: 1536,
  `vector.similarity_function`: 'cosine'
 }}
 ```

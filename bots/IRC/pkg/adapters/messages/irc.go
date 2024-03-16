@@ -1,4 +1,4 @@
-// Package messages ./bots/IRC/pkg/adapters/embed/irc.go
+// Package messages ./bots/IRC/pkg/adapters/message_processing/irc.go
 package messages
 
 import (
@@ -104,6 +104,6 @@ func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {
 	})
 
 	// Start processing events
-	log.Println("Listening for embed..")
+	log.Println("Listening for message_processing..")
 	irc.Connection.Loop()
 }

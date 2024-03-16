@@ -1,4 +1,4 @@
-# ./query/main.py
+# ./query/process_messages.py
 from modules.langchain.langchain import initialize_qa_workflow, execute_qa_workflow
 from modules.neo4j.credentials import neo4j_credentials
 from modules.neo4j.vector import (
