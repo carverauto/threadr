@@ -31,7 +31,6 @@ class OpenAIEmbedding(EmbeddingInterface):
                     for item in response.data:
                         if hasattr(item, 'embedding'):
                             embeddings.append(item.embedding)
-                            print("Length of embeddings:", len(embeddings))
                         else:
                             print(f"No embedding found for text: {text}")
                             embeddings.append([])
