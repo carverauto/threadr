@@ -8,3 +8,4 @@ tf/terraform.tfstate.backup
 gds.license
 venv
 *__pycache__*
+.ipynb_checkpoints
