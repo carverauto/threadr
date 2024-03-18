@@ -17,6 +17,10 @@ of relationships Actor-to-Actor or Actor-to-Cluster.
 * Automatic Dossier Creation
 * Query LLM/RAG
 
+## Community
+
+Join us on our https://discord.gg/YnzMAJvb
+
 ## Embeddings
 
 Chat messages will be run through an embedder or sentence transformer to create vectorizations
