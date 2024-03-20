@@ -10,18 +10,33 @@ import (
 	"time"
 )
 
+// MessageBroker is a type that holds information about the message broker
+type MessageBroker struct {
+	URL       string
+	Subject   string
+	Stream    string
+	CmdStream string
+}
+
 func main() {
 	natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	subject := "irc"
 	stream := "message_processing"
+	cmds_subject := "commands"
+	cmds_stream := "commands_processing"
 
 	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject, stream)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
+	commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmds_subject, cmds_stream)
+	if err != nil {
+		log.Fatalf("Failed to create CloudEvents handler: %s", err)
+	}
+
 	var ircAdapter pm.MessageAdapter = irc.NewIRCAdapter()
-	if err := ircAdapter.Connect(); err != nil {
+	if err := ircAdapter.Connect(commandsHandler); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
