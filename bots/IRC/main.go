@@ -21,16 +21,16 @@ type MessageBroker struct {
 func main() {
 	natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	subject := "irc"
-	stream := "message_processing"
-	cmds_subject := "commands"
-	cmds_stream := "commands_processing"
+	stream := "messages"
+	cmdsSubject := "incoming"
+	cmdsStream := "commands"
 
 	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject, stream)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmds_subject, cmds_stream)
+	commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
