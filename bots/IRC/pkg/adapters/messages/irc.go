@@ -2,8 +2,9 @@
 package messages
 
 import (
+	"context"
 	"crypto/tls"
-	"fmt"
+	"github.com/carverauto/threadr/bots/IRC/pkg/adapters/broker"
 	"github.com/carverauto/threadr/bots/IRC/pkg/common"
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
@@ -11,7 +12,20 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
+
+/*
+type BrokerConfig struct {
+	URL       string
+	Subject   string
+	Stream    string
+}
+
+type Broker interface {
+	PublishEvent(ce common.Message) error
+}
+*/
 
 type IRCAdapter struct {
 	Connection *ircevent.Connection
@@ -56,7 +70,7 @@ func NewIRCAdapter() *IRCAdapter {
 	return adapter
 }
 
-func (irc *IRCAdapter) Connect() error {
+func (irc *IRCAdapter) Connect(commandEventsHandler *broker.CloudEventsNATSHandler) error {
 	// Set up connection callbacks and handlers
 	irc.Connection.AddConnectCallback(func(e ircmsg.Message) {
 		for _, channel := range irc.channels {
@@ -66,12 +80,29 @@ func (irc *IRCAdapter) Connect() error {
 	})
 
 	irc.Connection.AddCallback("PRIVMSG", func(e ircmsg.Message) {
-		fmt.Println("E:", e)
-		fmt.Println("Source:", e.Source)
 		target, message := e.Params[0], e.Params[1]
 		log.Println("PRIVMSG", target, message)
-		if strings.HasPrefix(message, irc.Connection.Nick) {
-			irc.Connection.Privmsg(target, "I'm a simple IRC bot.")
+		if strings.HasPrefix(message, irc.Connection.Nick+":") {
+			// irc.Connection.Privmsg(target, "I'm a simple IRC bot.")
+			command := strings.TrimSpace(strings.TrimPrefix(message, irc.Connection.Nick+":"))
+			log.Println("Command:", command)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			ce := broker.Message{
+				Message:   command,
+				Nick:      e.Nick(),
+				Channel:   target,
+				Platform:  "IRC",
+				Timestamp: time.Now(),
+			}
+
+			err := commandEventsHandler.PublishEvent(ctx, ce)
+			if err != nil {
+				log.Printf("Failed to send CloudEvent: %v", err)
+			} else {
+				log.Printf("Sent CloudEvent for message [%d]", ce)
+			}
 		}
 	})
 
