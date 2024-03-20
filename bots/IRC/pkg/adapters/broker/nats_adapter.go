@@ -17,12 +17,16 @@ import (
 
 type CloudEventsNATSHandler struct {
 	client cloudevents.Client
+	jsm    nats.JetStreamContext
+	config natsConfig
 }
 
 type natsConfig struct {
-	NatsURL  string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
-	NKey     string `envconfig:"NKEY" required:"true"`
-	NkeySeed string `envconfig:"NKEYSEED" required:"true"`
+	NatsURL     string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
+	NKey        string `envconfig:"NKEY" required:"true"`
+	NkeySeed    string `envconfig:"NKEYSEED" required:"true"`
+	DurableName string `envconfig:"DURABLE_NAME" default:"durable-results"`
+	QueueGroup  string `envconfig:"QUEUE_GROUP" default:"results-queue-group"`
 }
 
 func NewCloudEventsNATSHandler(natsURL, subject, stream string) (*CloudEventsNATSHandler, error) {
@@ -44,6 +48,13 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string) (*CloudEventsNAT
 		}),
 	}
 
+	// if you want to use a durable queue, you can set the durable name and queue group
+	if env.DurableName != "" && env.QueueGroup != "" {
+		consumerOpts := []cejsm.Option{
+			cejsm.WithConsumerOptions(nats.Durable(env.DurableName), nats.DeliverAll()),
+			cejsm.WithQueueSubscriber(env.QueueGroup),
+		}
+	}
 	p, err := cejsm.NewSender(natsURL, stream, subject, natsOpts, nil)
 	if err != nil {
 		return nil, err
@@ -57,6 +68,12 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string) (*CloudEventsNAT
 	return &CloudEventsNATSHandler{client: c}, nil
 }
 
+// Subscribe to a subject and stream
+func (h *CloudEventsNATSHandler) Subscribe(ctx context.Context, onMessage func(Message) error) error {
+	return h.client.StartReceiver(ctx, onMessage)
+}
+
+// PublishEvent sends a message_processing to the broker
 func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, message Message) error {
 	e := cloudevents.NewEvent()
 	e.SetID(uuid.New().String())

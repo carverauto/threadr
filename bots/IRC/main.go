@@ -24,6 +24,8 @@ func main() {
 	stream := "messages"
 	cmdsSubject := "incoming"
 	cmdsStream := "commands"
+	resultsSubject := "outgoing"
+	resultsStream := "results"
 
 	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject, stream)
 	if err != nil {
@@ -35,9 +37,19 @@ func main() {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
+	resultsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, resultsSubject, resultsStream)
+	if err != nil {
+		log.Fatalf("Failed to create CloudEvents handler: %s", err)
+	}
+
 	var ircAdapter pm.MessageAdapter = irc.NewIRCAdapter()
 	if err := ircAdapter.Connect(commandsHandler); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
+	}
+
+	err := resultsHandler.Subscribe(context.Background(), func(ce broker.Message) error {
+		log.Printf("Received CloudEvent: %v", ce)
+		return nil
 	}
 
 	// start a counter for received message_processing
