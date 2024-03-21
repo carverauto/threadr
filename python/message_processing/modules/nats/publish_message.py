@@ -5,7 +5,7 @@ from modules.environment.settings import NATS_URL, NATS_NKEYSEED
 import json
 
 
-async def publish_message_to_jetstream(subject, stream, message_id, 
+async def publish_message_to_jetstream(subject, stream, message_id,
                                        message_content):
     """
     Publishes message details to a NATS Jetstream queue for asynchronous processing.
@@ -27,6 +27,10 @@ async def publish_message_to_jetstream(subject, stream, message_id,
                      reconnect_time_wait=10)
     
     # error_cb, closed_cb, and disconnected_cb are optional callbacks to handle errors, closed connections, and disconnections
+
+    # error_cb
+    async def error_cb(e):
+        print(f"Error: {e}")
 
     # Assuming the JetStream context is already set up and the stream exists
     js = nc.jetstream()

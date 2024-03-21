@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/carverauto/threadr/bots/IRC/pkg/adapters/broker"
 	irc "github.com/carverauto/threadr/bots/IRC/pkg/adapters/messages"
 	"github.com/carverauto/threadr/bots/IRC/pkg/common"
 	pm "github.com/carverauto/threadr/bots/IRC/pkg/ports"
-	cloudevents "github.com/cloudevents/sdk-go/v2"
+	"github.com/nats-io/nats.go"
 	"log"
 	"time"
 )
@@ -20,40 +21,52 @@ func main() {
 	resultsSubject := "outgoing"
 	resultsStream := "results"
 
-	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, sendSubject, stream)
+	// create a context
+	ctx := context.Background()
+
+	// Create a CloudEvents handler, which will be used to send messages
+	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, sendSubject, stream, false)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream)
+	// Create a CloudEvents handler, which will be used to publish requests (commands)
+	commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	resultsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, resultsSubject, resultsStream)
+	// Create a Results handler, which will be used to subscribe to results
+	resultsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, resultsSubject, resultsStream, true)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
 	var ircAdapter pm.MessageAdapter = irc.NewIRCAdapter()
-	if err := ircAdapter.Connect(commandsHandler); err != nil {
+	if err := ircAdapter.Connect(ctx, commandsHandler); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
-	// Listen for command results and handle them
 	go func() {
-		if err := resultsHandler.StartReceiver(context.Background(), func(ctx context.Context, event cloudevents.Event) error {
-			// Handle the received event
+		log.Println("main.go - Subscribing to results")
+		resultsHandler.Listen(resultsSubject, "results-durable", func(msg *nats.Msg) {
+			log.Printf("main.go - Received result: %s", string(msg.Data))
 			var result common.CommandResult
-			if err := event.DataAs(&result); err != nil {
-				log.Printf("Failed to decode CloudEvent data: %v", err)
-				return err
+			if err := json.Unmarshal(msg.Data, &result); err != nil {
+				log.Printf("main.go - Failed to unmarshal result: %s", err)
+				return
 			}
-			log.Printf("Received command result: %+v", result)
-			return nil
-		}); err != nil {
-			log.Fatalf("Failed to start receiving results: %s", err)
-		}
+
+			log.Printf("main.go - Received result: %s", result)
+			err := msg.Ack()
+			if err != nil {
+				log.Printf("main.go - Failed to ack message: %s", err)
+				return
+			}
+
+			// send the results to the IRC channel
+			ircAdapter.Send(result.Content.Channel, result.Content.Response)
+		})
 	}()
 
 	// start a counter for received message_processing
@@ -64,7 +77,6 @@ func main() {
 
 		// Create a CloudEvent
 		ce := broker.Message{
-			Sequence:  msgCounter,
 			Message:   ircMsg.Message,
 			Nick:      ircMsg.Nick,
 			Channel:   ircMsg.Channel,
@@ -72,7 +84,8 @@ func main() {
 			Timestamp: time.Now(),
 		}
 
-		err := cloudEventsHandler.PublishEvent(ctx, ce)
+		log.Printf("main.go - Publishing CloudEvent for message [%d]", msgCounter)
+		err := cloudEventsHandler.PublishEvent(ctx, "irc", ce)
 		if err != nil {
 			log.Printf("Failed to send CloudEvent: %v", err)
 		} else {

@@ -1,7 +1,5 @@
 package common
 
-import "time"
-
 type IRCMessage struct {
 	Nick     string
 	User     string
@@ -10,9 +8,12 @@ type IRCMessage struct {
 	FullUser string
 }
 
+type ResultContent struct {
+	Response  string `json:"response"`
+	Channel   string `json:"channel"`
+	Timestamp string `json:"timestamp"`
+}
 type CommandResult struct {
-	Sequence  int
-	Result    string
-	Success   bool
-	Timestamp time.Time
+	MessageID int           `json:"message_id"`
+	Content   ResultContent `json:"content"`
 }

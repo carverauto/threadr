@@ -4,15 +4,35 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import re
-from modules.environment.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, NEO4J_PASSWORD, NEO4J_URI
+from modules.environment.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, \
+    NEO4J_PASSWORD, NEO4J_URI, BOT_NAME
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.messages.models import NATSMessage
 from modules.nats.publish_message import publish_message_to_jetstream
+import os
+import textwrap
 
+# Langchain
+
+from langchain_community.graphs import Neo4jGraph
+from langchain_community.vectorstores import Neo4jVector
+from langchain_openai import OpenAIEmbeddings
+# from langchain.chains import RetrievalQAWithSourcesChain
+from langchain.prompts.prompt import PromptTemplate
+from langchain.chains import GraphCypherQAChain
+from langchain_openai import ChatOpenAI
+from .cypher_templates import CYPHER_GENERATION_TEMPLATE
+
+# Warning control
+import warnings
+
+from modules.environment.settings import OPENAI_API_KEY
+
+warnings.filterwarnings("ignore")
 
 recipient_patterns = [
     re.compile(r'^@?(\w+):'),  # Matches "trillian:" or "@trillian:"
-    re.compile(r'^@(\w+)'),    # Matches "@trillian"
+    re.compile(r'^@(\w+)'),  # Matches "@trillian"
 ]
 
 # Define patterns to identify bot message_processing or unwanted content
@@ -23,6 +43,13 @@ twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
 # Initialize your Neo4jAdapter with connection details
 neo4j_adapter = Neo4jAdapter(uri=NEO4J_URI, username="neo4j",
                              password=NEO4J_PASSWORD)
+
+graph = Neo4jGraph(url=NEO4J_URI, username="neo4j", password=NEO4J_PASSWORD,
+                   database="neo4j")
+
+
+def generate_cypher_query(schema, question):
+    return CYPHER_GENERATION_TEMPLATE.format(schema=schema, question=question)
 
 
 class GenericMessage(BaseModel):
@@ -65,6 +92,70 @@ def extract_commands(message):
     return command_pattern.findall(message)
 
 
+async def process_command(message: NATSMessage, message_id: str):
+    # refresh the graph
+    graph.refresh_schema()
+    print(textwrap.fill(graph.schema, 60))
+
+    vector_index = Neo4jVector.from_existing_graph(
+        OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            dimensions=1536,
+        ),
+        url=NEO4J_URI,
+        username="neo4j",
+        password=NEO4J_PASSWORD,
+        index_name="message-embeddings",
+        node_label="Message",
+        text_node_properties=['content', 'platform', 'timestamp'],
+        embedding_node_property="embedding",
+    )
+
+    # response = vector_index.similarity_search(
+    #    query=message.message,
+    # )
+    # print(response)
+
+    CYPHER_GENERATION_PROMPT = PromptTemplate(
+        input_variables=["schema", "question"],
+        template=CYPHER_GENERATION_TEMPLATE,
+    )
+    cypherChain = GraphCypherQAChain.from_llm(
+        ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY),
+        graph=graph,
+        verbose=True,
+        cypher_prompt=CYPHER_GENERATION_PROMPT,
+    )
+
+    response = cypherChain.run(message.message)
+    print(textwrap.fill(response, 60))
+    response_subject = "outgoing"
+    response_stream = "results"
+
+    response_message = {
+        "response": response,
+        "channel": message.channel,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    return response_message
+
+
+def is_command(message: str, bot_name: str) -> bool:
+    """
+    Determines if a given message is a command based on whether it is directed at the bot.
+
+    Parameters:
+    - message: The message content as a string.
+    - bot_name: The name of the bot.
+
+    Returns:
+    - True if the message is directed at the bot, False otherwise.
+    """
+    # Check if the message starts with the bot's name followed by a colon
+    return message.strip().startswith(f"{bot_name}:")
+
+
 async def process_cloudevent(message_data: NATSMessage,
                              neo4j_adapter: Neo4jAdapter):
     """
@@ -72,8 +163,9 @@ async def process_cloudevent(message_data: NATSMessage,
     """
 
     # Check if the message is from a known bot or matches the unwanted patterns
-    if message_data.nick in bot_nicknames or url_pattern.search(message_data.
-                                                                message) or twitter_expansion_pattern.search(message_data.message):
+    if (message_data.nick in bot_nicknames or
+            url_pattern.search(message_data.message) or twitter_expansion_pattern.search(
+        message_data.message)):
         print(f"Ignoring bot message or unwanted pattern from {message_data.nick}.")
         return
 
@@ -87,12 +179,12 @@ async def process_cloudevent(message_data: NATSMessage,
         # and add the interaction
         try:
             message_id = await neo4j_adapter.add_interaction(
-                                                message_data.nick,
-                                                mentioned_nick,
-                                                message_data.message,
-                                                timestamp,
-                                                channel=message_data.channel,
-                                                platform=message_data.platform)
+                message_data.nick,
+                mentioned_nick,
+                message_data.message,
+                timestamp,
+                channel=message_data.channel,
+                platform=message_data.platform)
             await neo4j_adapter.add_or_update_relationship(message_data.nick,
                                                            mentioned_nick,
                                                            relationship_type)
@@ -104,6 +196,15 @@ async def process_cloudevent(message_data: NATSMessage,
                 message_id=message_id,  # You'll need to ensure this is passed correctly
                 message_content=message_data.message
             )
+
+            if is_command(message_data.message, BOT_NAME):
+                response = await process_command(message_data, message_id)
+                await publish_message_to_jetstream(
+                    subject="outgoing",
+                    stream="results",
+                    message_id=message_id,
+                    message_content=response,
+                )
 
         except Exception as e:
             print(f"Failed to update Neo4j: {e}")
