@@ -1,13 +1,20 @@
 {
-"name": "ThreadR",
-"logo": {
-"light": "/logo/light.svg",
-"dark": "/logo/dark.svg",
-"href": "https://staging.threadr.ai"
-},
-"favicon": "/favicon.svg",
-"colors": {
-  "primary": "#2AB673",
-  "light": "#55D799",
-  "dark": "#117866"
-},
+  "name": "ThreadR",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "https://staging.threadr.ai"
+  },
+  "favicon": "/favicon.jpeg",
+  "colors": {
+    "primary": "#2AB673",
+    "light": "#55D799",
+    "dark": "#117866"
+  },
+  "navigation": [
+    {
+      "group": "Introduction",
+      "pages": ["overview"]
+    }
+  ]
+}
