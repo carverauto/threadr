@@ -1,7 +1,7 @@
 # modules/messages/message_processor.py
 
 from modules.messages.models import NATSMessage
-from modules.cloudevents.cloudevents_handler import process_cloudevent
+from modules.cloudevents.cloudevents_handler import process_cloudevent, process_command
 
 
 class MessageProcessor:

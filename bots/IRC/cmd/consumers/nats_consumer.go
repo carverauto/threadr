@@ -21,8 +21,10 @@ type natsConfig struct {
 	NatsURL  string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
 	NKey     string `envconfig:"NKEY" required:"true"`
 	NkeySeed string `envconfig:"NKEYSEED" required:"true"`
-	Subject  string `envconfig:"SUBJECT" default:"irc" required:"true"`
-	Stream   string `envconfig:"STREAM" default:"message_processing" required:"true"`
+	// Subject  string `envconfig:"SUBJECT" default:"irc" required:"true"`
+	Subject string `envconfig:"SUBJECT" default:"outgoing" required:"true"`
+	// Stream   string `envconfig:"STREAM" default:"message_processing" required:"true"`
+	Stream string `envconfig:"STREAM" default:"results" required:"true"`
 }
 
 type graphConfig struct {
@@ -57,11 +59,19 @@ func main() {
 		}),
 	}
 
+	log.Printf("Connecting to NATS at %s", env.NatsURL)
+	log.Println("Stream and subject:", env.Stream, env.Subject)
+
 	p, err := cejsm.NewConsumer(env.NatsURL, env.Stream, env.Subject, natsOpts, nil, nil)
 	if err != nil {
 		log.Fatalf("failed to create nats protocol, %s", err.Error())
 	}
-	defer p.Close(ctx)
+	defer func(p *cejsm.Consumer, ctx context.Context) {
+		err := p.Close(ctx)
+		if err != nil {
+			log.Fatalf("failed to close nats protocol, %s", err.Error())
+		}
+	}(p, ctx)
 
 	c, err := cloudevents.NewClient(p)
 	if err != nil {
@@ -79,6 +89,7 @@ func main() {
 	compositeHandler := mp.NewCompositeMessageHandler(simpleHandler /*, anotherHandler*/)
 
 	for {
+		log.Printf("main.go - Listening for command results")
 		if err := c.StartReceiver(ctx, compositeHandler.Handle); err != nil {
 			log.Printf("failed to start nats receiver, %s", err.Error())
 		}

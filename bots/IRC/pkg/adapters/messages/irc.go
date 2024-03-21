@@ -23,7 +23,7 @@ type IRCAdapter struct {
 type IRCAdapterConfig struct {
 	Nick            string `envconfig:"BOT_NICK" default:"threadr" required:"true"`
 	Server          string `envconfig:"BOT_SERVER" default:"irc.choopa.net:6667" required:"true"`
-	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases" required:"true"`
+	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases,#singularity" required:"true"`
 	BotSaslLogin    string `envconfig:"BOT_SASL_LOGIN"`
 	BotSaslPassword string `envconfig:"BOT_SASL_PASSWORD"`
 }
@@ -58,11 +58,15 @@ func NewIRCAdapter() *IRCAdapter {
 	return adapter
 }
 
-func (irc *IRCAdapter) Connect(commandEventsHandler *broker.CloudEventsNATSHandler) error {
+func (irc *IRCAdapter) Connect(ctx context.Context, commandEventsHandler *broker.CloudEventsNATSHandler) error {
 	// Set up connection callbacks and handlers
 	irc.Connection.AddConnectCallback(func(e ircmsg.Message) {
 		for _, channel := range irc.channels {
-			irc.Connection.Join(strings.TrimSpace(channel))
+			err := irc.Connection.Join(strings.TrimSpace(channel))
+			if err != nil {
+				log.Println("Failed to join", channel, err)
+				return
+			}
 			log.Println("Joined", channel)
 		}
 	})
@@ -74,8 +78,8 @@ func (irc *IRCAdapter) Connect(commandEventsHandler *broker.CloudEventsNATSHandl
 			// irc.Connection.Privmsg(target, "I'm a simple IRC bot.")
 			command := strings.TrimSpace(strings.TrimPrefix(message, irc.Connection.Nick+":"))
 			log.Println("Command:", command)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			// defer cancel()
 
 			ce := broker.Message{
 				Message:   command,
@@ -85,16 +89,29 @@ func (irc *IRCAdapter) Connect(commandEventsHandler *broker.CloudEventsNATSHandl
 				Timestamp: time.Now(),
 			}
 
-			err := commandEventsHandler.PublishEvent(ctx, ce)
+			log.Printf("command - Publishing CloudEvent for message [%v]", ce)
+			err := commandEventsHandler.PublishEvent(ctx, "commands", ce)
 			if err != nil {
 				log.Printf("Failed to send CloudEvent: %v", err)
 			} else {
-				log.Printf("Sent CloudEvent for message [%d]", ce)
+				log.Printf("Sent CloudEvent for message [%v]", ce)
 			}
 		}
 	})
 
 	return irc.Connection.Connect()
+}
+
+// Send sends a message to the specified channel.
+func (irc *IRCAdapter) Send(channel string, message string) {
+	err := irc.Connection.Privmsg(channel, message)
+	if err != nil {
+		log.Println("Failed to send message to", channel, ":", err)
+		return
+	}
+
+	// Log the message
+	log.Println("Sent message to", channel, ":", message)
 }
 
 func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {
