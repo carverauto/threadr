@@ -1,18 +1,17 @@
-// Package broker pkg/adapters/broker/nats_adapter.go
 package broker
 
 import (
 	"context"
 	"fmt"
-	"github.com/kelseyhightower/envconfig"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nkeys"
 	"log"
 	"time"
 
 	cejsm "github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/uuid"
+	"github.com/kelseyhightower/envconfig"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nkeys"
 )
 
 type CloudEventsNATSHandler struct {
@@ -48,32 +47,35 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string) (*CloudEventsNAT
 		}),
 	}
 
-	// if you want to use a durable queue, you can set the durable name and queue group
-	if env.DurableName != "" && env.QueueGroup != "" {
-		consumerOpts := []cejsm.Option{
-			cejsm.WithConsumerOptions(nats.Durable(env.DurableName), nats.DeliverAll()),
-			cejsm.WithQueueSubscriber(env.QueueGroup),
-		}
-	}
-	p, err := cejsm.NewSender(natsURL, stream, subject, natsOpts, nil)
+	nc, err := nats.Connect(env.NatsURL, natsOpts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
 	}
 
-	c, err := cloudevents.NewClient(p)
+	jsm, err := nc.JetStream()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create JetStream context: %v", err)
 	}
 
-	return &CloudEventsNATSHandler{client: c}, nil
+	// Initialize CloudEvents protocol for both sending and receiving
+	p, err := cejsm.NewProtocol(natsURL, stream, subject, subject, natsOpts, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CloudEvents protocol: %v", err)
+	}
+
+	client, err := cloudevents.NewClient(p)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CloudEvents client: %v", err)
+	}
+
+	return &CloudEventsNATSHandler{
+		client: client,
+		jsm:    jsm,
+		config: env,
+	}, nil
 }
 
-// Subscribe to a subject and stream
-func (h *CloudEventsNATSHandler) Subscribe(ctx context.Context, onMessage func(Message) error) error {
-	return h.client.StartReceiver(ctx, onMessage)
-}
-
-// PublishEvent sends a message_processing to the broker
+// PublishEvent sends a message to the broker
 func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, message Message) error {
 	e := cloudevents.NewEvent()
 	e.SetID(uuid.New().String())
@@ -84,11 +86,15 @@ func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, message Messa
 		return err
 	}
 
-	// return h.client.Send(ctx, e)
 	result := h.client.Send(ctx, e)
 	if cloudevents.IsUndelivered(result) {
 		return fmt.Errorf("failed to send: %v", result)
 	}
 
 	return nil
+}
+
+// StartReceiver starts receiving messages using the CloudEvents client
+func (h *CloudEventsNATSHandler) StartReceiver(ctx context.Context, handlerFunc func(context.Context, cloudevents.Event) error) error {
+	return h.client.StartReceiver(ctx, handlerFunc)
 }

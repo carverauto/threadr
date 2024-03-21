@@ -15,18 +15,6 @@ import (
 	"time"
 )
 
-/*
-type BrokerConfig struct {
-	URL       string
-	Subject   string
-	Stream    string
-}
-
-type Broker interface {
-	PublishEvent(ce common.Message) error
-}
-*/
-
 type IRCAdapter struct {
 	Connection *ircevent.Connection
 	channels   []string

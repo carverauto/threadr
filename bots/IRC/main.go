@@ -6,28 +6,21 @@ import (
 	irc "github.com/carverauto/threadr/bots/IRC/pkg/adapters/messages"
 	"github.com/carverauto/threadr/bots/IRC/pkg/common"
 	pm "github.com/carverauto/threadr/bots/IRC/pkg/ports"
+	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"log"
 	"time"
 )
 
-// MessageBroker is a type that holds information about the message broker
-type MessageBroker struct {
-	URL       string
-	Subject   string
-	Stream    string
-	CmdStream string
-}
-
 func main() {
 	natsURL := "nats://nats.nats.svc.cluster.local:4222"
-	subject := "irc"
+	sendSubject := "irc"
 	stream := "messages"
 	cmdsSubject := "incoming"
 	cmdsStream := "commands"
 	resultsSubject := "outgoing"
 	resultsStream := "results"
 
-	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, subject, stream)
+	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, sendSubject, stream)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
@@ -47,10 +40,21 @@ func main() {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
-	err := resultsHandler.Subscribe(context.Background(), func(ce broker.Message) error {
-		log.Printf("Received CloudEvent: %v", ce)
-		return nil
-	}
+	// Listen for command results and handle them
+	go func() {
+		if err := resultsHandler.StartReceiver(context.Background(), func(ctx context.Context, event cloudevents.Event) error {
+			// Handle the received event
+			var result common.CommandResult
+			if err := event.DataAs(&result); err != nil {
+				log.Printf("Failed to decode CloudEvent data: %v", err)
+				return err
+			}
+			log.Printf("Received command result: %+v", result)
+			return nil
+		}); err != nil {
+			log.Fatalf("Failed to start receiving results: %s", err)
+		}
+	}()
 
 	// start a counter for received message_processing
 	msgCounter := 0
