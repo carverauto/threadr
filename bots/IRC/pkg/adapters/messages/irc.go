@@ -23,7 +23,7 @@ type IRCAdapter struct {
 type IRCAdapterConfig struct {
 	Nick            string `envconfig:"BOT_NICK" default:"threadr" required:"true"`
 	Server          string `envconfig:"BOT_SERVER" default:"irc.choopa.net:6667" required:"true"`
-	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases,#singularity" required:"true"`
+	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases,#chases,#𝓉𝓌𝑒𝓇𝓀𝒾𝓃,#singularity" required:"true"`
 	BotSaslLogin    string `envconfig:"BOT_SASL_LOGIN"`
 	BotSaslPassword string `envconfig:"BOT_SASL_PASSWORD"`
 }
@@ -104,6 +104,18 @@ func (irc *IRCAdapter) Connect(ctx context.Context, commandEventsHandler *broker
 
 // Send sends a message to the specified channel.
 func (irc *IRCAdapter) Send(channel string, message string) {
+	// if the message is too many characters, split it up
+	if len(message) > 400 {
+		for i := 0; i < len(message); i += 400 {
+			end := i + 400
+			if end > len(message) {
+				end = len(message)
+			}
+			irc.Send(channel, message[i:end])
+		}
+		return
+	}
+
 	err := irc.Connection.Privmsg(channel, message)
 	if err != nil {
 		log.Println("Failed to send message to", channel, ":", err)

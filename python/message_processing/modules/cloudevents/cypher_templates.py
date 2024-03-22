@@ -13,10 +13,17 @@ Do not include any text except the generated Cypher statement.
 Examples: Here are a few examples of generated Cypher 
 statements for particular questions:
 
+# What channels does kongfuzi talk in?
+# or "what channel do you know kongfuzi from?"
+```
+MATCH (u:User {{name: 'kongfuzi'}})-[:SENT]->(m:Message)-[:POSTED_IN]->(c:Channel)
+RETURN DISTINCT c.name AS channel
+```
+
 ### Looking at all messages related to a particular user,
 ### Can be used to answer questions like: "What does Alice talk about?
 ```
-MATCH (u:User {{name: 'bysin'}})-[:SENT]->(m:Message)
+MATCH (u:User {{name: 'alice'}})-[:SENT]->(m:Message)
 RETURN m.content AS message
 ```
 

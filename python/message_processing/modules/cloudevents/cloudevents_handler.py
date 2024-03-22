@@ -94,7 +94,7 @@ def extract_commands(message):
 
 async def process_command(message: NATSMessage, message_id: str):
     # refresh the graph
-    graph.refresh_schema()
+    #graph.refresh_schema()
     print(textwrap.fill(graph.schema, 60))
 
     vector_index = Neo4jVector.from_existing_graph(
@@ -120,20 +120,32 @@ async def process_command(message: NATSMessage, message_id: str):
         input_variables=["schema", "question"],
         template=CYPHER_GENERATION_TEMPLATE,
     )
+
     cypherChain = GraphCypherQAChain.from_llm(
-        ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY),
+        cypher_llm=ChatOpenAI(model="gpt-3.5-turbo", temperature=0, openai_api_key=OPENAI_API_KEY),
+        qa_llm=ChatOpenAI(temperature=0, model="gpt-4-0125-preview"),
         graph=graph,
         verbose=True,
         cypher_prompt=CYPHER_GENERATION_PROMPT,
+        validate_cypher=True,
+        top_k=1000,
     )
 
-    response = cypherChain.run(message.message)
-    print(textwrap.fill(response, 60))
+    # threadr: what does leku talk about mostly?
+    # need to strip out the bots name before passing it to the chain
+
+    bot_name_pattern = re.compile(r'^threadr:\s*',
+                                  re.IGNORECASE)
+    cleaned_message = re.sub(bot_name_pattern, '',
+                             message.message).strip()  # Remove the bot's name and strip whitespace
+    print("Question:", cleaned_message)
+    response = cypherChain(cleaned_message)
+    print(textwrap.fill(response['result'], 60))
     response_subject = "outgoing"
     response_stream = "results"
 
     response_message = {
-        "response": response,
+        "response": response['result'],
         "channel": message.channel,
         "timestamp": datetime.now().isoformat(),
     }
