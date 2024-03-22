@@ -102,28 +102,53 @@ func (irc *IRCAdapter) Connect(ctx context.Context, commandEventsHandler *broker
 	return irc.Connection.Connect()
 }
 
-// Send sends a message to the specified channel.
 func (irc *IRCAdapter) Send(channel string, message string) {
-	// if the message is too many characters, split it up
-	if len(message) > 400 {
-		for i := 0; i < len(message); i += 400 {
-			end := i + 400
+	// Define the maximum message length
+	const maxMessageLength = 400
+
+	// Check if the message exceeds the maximum length
+	if len(message) > maxMessageLength {
+		// Split the message into chunks without cutting words in half
+		start := 0
+		for start < len(message) {
+			// Find the last space within the maximum message length
+			end := start + maxMessageLength
 			if end > len(message) {
 				end = len(message)
+			} else {
+				// Look for the last space before the end of the current chunk
+				if spaceIndex := strings.LastIndex(message[start:end], " "); spaceIndex != -1 {
+					end = start + spaceIndex
+				}
 			}
-			irc.Send(channel, message[i:end])
+
+			// Send the current chunk
+			chunk := message[start:end]
+			if err := irc.Connection.Privmsg(channel, chunk); err != nil {
+				log.Println("Failed to send message chunk to", channel, ":", err)
+				return
+			}
+
+			// Log the chunk
+			log.Println("Sent message chunk to", channel, ":", chunk)
+
+			// Move to the next chunk, skipping the space if it's the last character in the chunk
+			if end < len(message) && message[end] == ' ' {
+				start = end + 1
+			} else {
+				start = end
+			}
 		}
-		return
-	}
+	} else {
+		// If the message does not exceed the maximum length, send it as is
+		if err := irc.Connection.Privmsg(channel, message); err != nil {
+			log.Println("Failed to send message to", channel, ":", err)
+			return
+		}
 
-	err := irc.Connection.Privmsg(channel, message)
-	if err != nil {
-		log.Println("Failed to send message to", channel, ":", err)
-		return
+		// Log the message
+		log.Println("Sent message to", channel, ":", message)
 	}
-
-	// Log the message
-	log.Println("Sent message to", channel, ":", message)
 }
 
 func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {

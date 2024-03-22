@@ -1,12 +1,13 @@
 # modules/messages/message_processor.py
 
 from modules.messages.models import NATSMessage
-from modules.cloudevents.cloudevents_handler import process_cloudevent, process_command
+from modules.cloudevents.cloudevents_handler import process_cloudevent, process_command, is_command
 
 
 class MessageProcessor:
-    def __init__(self, neo4j_adapter):
+    def __init__(self, neo4j_adapter, agent):
         self.neo4j_adapter = neo4j_adapter
+        self.agent = agent
 
     async def process_message(self, msg):
         print(f"Received a message: {msg.data.decode()}")
@@ -16,6 +17,8 @@ class MessageProcessor:
             message_data = NATSMessage.model_validate_json(msg.data.decode())
             if self.neo4j_adapter is not None:
                 await process_cloudevent(message_data, self.neo4j_adapter)
+                if is_command(message_data.message, "threadr"):
+                    await process_command(message_data, self.agent)
             else:
                 print("Neo4j adapter not initialized.")
         except Exception as e:

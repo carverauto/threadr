@@ -1,33 +1,27 @@
 # cloudevents_handler.py
+import json
 
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import re
 from modules.environment.settings import NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, \
-    NEO4J_PASSWORD, NEO4J_URI, BOT_NAME
+    NEO4J_PASSWORD, NEO4J_URI, BOT_NAME, OPENAI_API_KEY
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.messages.models import NATSMessage
 from modules.nats.publish_message import publish_message_to_jetstream
-import os
-import textwrap
 
 # Langchain
 
 from langchain_community.graphs import Neo4jGraph
-from langchain_community.vectorstores import Neo4jVector
-from langchain_openai import OpenAIEmbeddings
-# from langchain.chains import RetrievalQAWithSourcesChain
-from langchain.prompts.prompt import PromptTemplate
-from langchain.chains import GraphCypherQAChain
+from langchain.chains.conversation.memory import ConversationBufferMemory
+from langchain.agents import AgentType, initialize_agent
+from modules.langchain.tools import create_tools
 from langchain_openai import ChatOpenAI
 from .cypher_templates import CYPHER_GENERATION_TEMPLATE
 
 # Warning control
 import warnings
-
-from modules.environment.settings import OPENAI_API_KEY
-
 warnings.filterwarnings("ignore")
 
 recipient_patterns = [
@@ -46,6 +40,8 @@ neo4j_adapter = Neo4jAdapter(uri=NEO4J_URI, username="neo4j",
 
 graph = Neo4jGraph(url=NEO4J_URI, username="neo4j", password=NEO4J_PASSWORD,
                    database="neo4j")
+
+memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
 
 def generate_cypher_query(schema, question):
@@ -92,65 +88,28 @@ def extract_commands(message):
     return command_pattern.findall(message)
 
 
-async def process_command(message: NATSMessage, message_id: str):
-    # refresh the graph
-    #graph.refresh_schema()
-    print(textwrap.fill(graph.schema, 60))
-
-    vector_index = Neo4jVector.from_existing_graph(
-        OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            dimensions=1536,
-        ),
-        url=NEO4J_URI,
-        username="neo4j",
-        password=NEO4J_PASSWORD,
-        index_name="message-embeddings",
-        node_label="Message",
-        text_node_properties=['content', 'platform', 'timestamp'],
-        embedding_node_property="embedding",
-    )
-
-    # response = vector_index.similarity_search(
-    #    query=message.message,
-    # )
-    # print(response)
-
-    CYPHER_GENERATION_PROMPT = PromptTemplate(
-        input_variables=["schema", "question"],
-        template=CYPHER_GENERATION_TEMPLATE,
-    )
-
-    cypherChain = GraphCypherQAChain.from_llm(
-        cypher_llm=ChatOpenAI(model="gpt-3.5-turbo", temperature=0, openai_api_key=OPENAI_API_KEY),
-        qa_llm=ChatOpenAI(temperature=0, model="gpt-4-0125-preview"),
-        graph=graph,
-        verbose=True,
-        cypher_prompt=CYPHER_GENERATION_PROMPT,
-        validate_cypher=True,
-        top_k=1000,
-    )
-
-    # threadr: what does leku talk about mostly?
+async def process_command(message: NATSMessage, agent):
     # need to strip out the bots name before passing it to the chain
-
     bot_name_pattern = re.compile(r'^threadr:\s*',
                                   re.IGNORECASE)
     cleaned_message = re.sub(bot_name_pattern, '',
-                             message.message).strip()  # Remove the bot's name and strip whitespace
+                             message.message).strip()  # Remove the bot name and strip whitespace
     print("Question:", cleaned_message)
-    response = cypherChain(cleaned_message)
-    print(textwrap.fill(response['result'], 60))
-    response_subject = "outgoing"
-    response_stream = "results"
+    try:
+        # response = cypherChain(cleaned_message)
+        response = await agent.arun(input=cleaned_message)
+        print(f"process_command - Response: {response}")
 
-    response_message = {
-        "response": response['result'],
-        "channel": message.channel,
-        "timestamp": datetime.now().isoformat(),
-    }
+        response_message = {
+            "response": response,
+            "channel": message.channel,
+            "timestamp": datetime.now().isoformat(),
+        }
 
-    return response_message
+        return response_message
+    except Exception as e:
+        print(f"Failed to process command: {e}")
+        return
 
 
 def is_command(message: str, bot_name: str) -> bool:
@@ -210,13 +169,30 @@ async def process_cloudevent(message_data: NATSMessage,
             )
 
             if is_command(message_data.message, BOT_NAME):
-                response = await process_command(message_data, message_id)
-                await publish_message_to_jetstream(
-                    subject="outgoing",
-                    stream="results",
-                    message_id=message_id,
-                    message_content=response,
+                # Initialize the LLM
+                llm = ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY)
+
+                # Create tools
+                tools = create_tools(neo4j_adapter)
+
+                # Initialize the agent
+                agent = initialize_agent(
+                    tools,
+                    llm,
+                    memory=memory,
+                    agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
+                    #agent=AgentType.CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+                    verbose=True,
                 )
+
+                response = await process_command(message_data, agent)
+                if response:
+                    await publish_message_to_jetstream(
+                        subject="outgoing",
+                        stream="results",
+                        message_id=message_id,
+                        message_content=json.dumps(response),
+                    )
 
         except Exception as e:
             print(f"Failed to update Neo4j: {e}")
