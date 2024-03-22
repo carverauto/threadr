@@ -114,6 +114,8 @@ async def process_command(message: NATSMessage, agent):
                 "timestamp": datetime.now().isoformat(),
             }
 
+        print(f"pr0cess_command/Response: {response_message}")
+
         return response_message
     except Exception as e:
         print(f"Failed to process command: {e}")
@@ -194,13 +196,14 @@ async def process_cloudevent(message_data: NATSMessage,
                 )
 
                 response = await process_command(message_data, agent)
+                print(f"Response2: {response}")
                 if response:
                     print("Publishing response to Jetstream")
                     await publish_message_to_jetstream(
                         subject="outgoing",
                         stream="results",
                         message_id=message_id,
-                        message_content=json.dumps(response),
+                        message_content=response,
                     )
 
         except Exception as e:
