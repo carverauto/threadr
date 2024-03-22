@@ -5,9 +5,9 @@ from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import GraphCypherQAChain
 from langchain_openai import ChatOpenAI
 from modules.environment.settings import NEO4J_URI, NEO4J_PASSWORD
-import textwrap
 from modules.cloudevents.cypher_templates import CYPHER_GENERATION_TEMPLATE
 from langchain_community.graphs import Neo4jGraph
+from langchain_community.tools.tavily_search import TavilySearchResults
 
 
 def create_tools(neo4j_adapter):
@@ -20,7 +20,6 @@ def create_tools(neo4j_adapter):
         # Implement the logic to run a Cypher query using neo4j_adapter
         # refresh the graph
         graph.refresh_schema()
-        print(textwrap.fill(graph.schema, 60))
 
         CYPHER_GENERATION_PROMPT = PromptTemplate(
             input_variables=["schema", "question"],
@@ -62,6 +61,12 @@ def create_tools(neo4j_adapter):
         print(response)
         return response
 
+    def perform_tavily_search(query):
+        tavily_search = TavilySearchResults()
+
+        response = tavily_search(query)
+        return response
+
     tools = [
         Tool(
             name="CypherQuery",
@@ -73,7 +78,11 @@ def create_tools(neo4j_adapter):
             func=perform_vector_similarity_search,
             description="Perform vector similarity search on the Neo4j database",
         ),
-        # Add more custom tools as needed
+        Tool(
+            name="TavilySearch",
+            func=perform_tavily_search,
+            description="Perform a search using Tavily",
+        ),
     ]
 
     return tools

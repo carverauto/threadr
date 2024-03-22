@@ -100,11 +100,19 @@ async def process_command(message: NATSMessage, agent):
         response = await agent.arun(input=cleaned_message)
         print(f"process_command - Response: {response}")
 
-        response_message = {
-            "response": response,
-            "channel": message.channel,
-            "timestamp": datetime.now().isoformat(),
-        }
+        # Check if the response is a string
+        if isinstance(response, str):
+            response_message = {
+                "response": response,
+                "channel": message.channel,
+                "timestamp": datetime.now().isoformat(),
+            }
+        else:
+            response_message = {
+                "response": "I'm not sure how to answer that.",
+                "channel": message.channel,
+                "timestamp": datetime.now().isoformat(),
+            }
 
         return response_message
     except Exception as e:
@@ -187,6 +195,7 @@ async def process_cloudevent(message_data: NATSMessage,
 
                 response = await process_command(message_data, agent)
                 if response:
+                    print("Publishing response to Jetstream")
                     await publish_message_to_jetstream(
                         subject="outgoing",
                         stream="results",
