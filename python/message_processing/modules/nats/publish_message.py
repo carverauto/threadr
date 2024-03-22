@@ -1,4 +1,4 @@
-# publish_message.py
+# modules/nats/publish_message.py
 
 from nats.aio.client import Client as NATS
 from modules.environment.settings import NATS_URL, NATS_NKEYSEED

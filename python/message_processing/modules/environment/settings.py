@@ -15,3 +15,7 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 EMBEDDING_SERVICE = os.getenv("EMBEDDING_SERVICE", "openai")
 BOT_NAME = os.getenv("BOT_NAME", "threadr")
+LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
+LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "True").lower() in ["true", "yes", "1"]
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
