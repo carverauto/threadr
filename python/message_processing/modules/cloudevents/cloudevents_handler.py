@@ -1,6 +1,4 @@
 # cloudevents_handler.py
-import json
-
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -15,9 +13,6 @@ from modules.nats.publish_message import publish_message_to_jetstream
 
 from langchain_community.graphs import Neo4jGraph
 from langchain.chains.conversation.memory import ConversationBufferMemory
-from langchain.agents import AgentType, initialize_agent
-from modules.langchain.tools import create_tools
-from langchain_openai import ChatOpenAI
 from .cypher_templates import CYPHER_GENERATION_TEMPLATE
 
 # Warning control
