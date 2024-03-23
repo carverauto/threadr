@@ -32,7 +32,7 @@ def create_tools(neo4j_adapter):
             graph=graph,
             verbose=True,
             cypher_prompt=CYPHER_GENERATION_PROMPT,
-            # validate_cypher=True,
+            validate_cypher=True,
             top_k=2000,
         )
 
@@ -51,6 +51,7 @@ def create_tools(neo4j_adapter):
             password=NEO4J_PASSWORD,
             index_name="message-embeddings",
             node_label="Message",
+            # search_type="hybrid",
             text_node_properties=['content', 'platform', 'timestamp'],
             embedding_node_property="embedding",
         )
@@ -73,16 +74,17 @@ def create_tools(neo4j_adapter):
             func=run_cypher_query,
             description="Run a custom Cypher query on the Neo4j database",
         ),
-        Tool(
-            name="VectorSimilaritySearch",
-            func=perform_vector_similarity_search,
-            description="Perform vector similarity search on the Neo4j database",
-        ),
-        Tool(
-            name="TavilySearch",
-            func=perform_tavily_search,
-            description="Perform a search using Tavily",
-        ),
+        #Tool(
+        #    name="VectorSimilaritySearch",
+        #    func=perform_vector_similarity_search,
+        #    description="Perform vector similarity search on the Neo4j database",
+        #),
+        #Tool(
+        #    name="TavilySearch",
+        #    func=perform_tavily_search,
+        #    description="Perform a search using Tavily",
+        #),
+
     ]
 
     return tools
