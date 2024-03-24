@@ -13,7 +13,7 @@ singleuser:
   storage:
     type: dynamic
     capacity: 20Gi
-    homeMountPath: /home/mfreeman
+    homeMountPath: /home/jovyan
     dynamic:
       storageClass:  # You might want to specify a storageClass if needed
       pvcNameTemplate: claim-{username}{servername}
