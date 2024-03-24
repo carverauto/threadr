@@ -13,12 +13,12 @@ spec:
       labels:
         app: threadr-messages
     spec:
-      serviceAccountName: threadr-messages-account
+      serviceAccountName: threadr-irc-account
       imagePullSecrets:
         - name: ghcr-io-cred
       containers:
         - name: threadr-messages
-          image: ghcr.io/carverauto/threadr-messages:latest
+          image: ghcr.io/carverauto/threadr/threadr-messages:v0.0.1
           imagePullPolicy: Always
           env:
             - name: NEO4J_PASSWORD
@@ -34,8 +34,8 @@ spec:
             - name: NKEYSEED
               valueFrom:
                 secretKeyRef:
-                  name: threadr-secrets
-                  key: nkey-seed-secret
+                  name: nkey-seed-secret
+                  key: NKEYSEED
             - name: NEO4J_URI
               value: "bolt://neo4j.neo4j.svc.cluster.local:7687"
             - name: NEO4J_USERNAME

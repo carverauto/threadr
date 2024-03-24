@@ -18,7 +18,7 @@ spec:
         - name: ghcr-io-cred
       containers:
         - name: threadr-embeds
-          image: ghcr.io/carverauto/threadr-embeds:latest
+          image: ghcr.io/carverauto/threadr/threadr-embeds:v0.0.1
           imagePullPolicy: Always
           env:
             - name: NEO4J_PASSWORD
@@ -42,3 +42,8 @@ spec:
               value: "neo4j"
             - name: NATSURL
               value: "nats://nats.nats.svc.cluster.local:4222"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: OPENAI_API_KEY
