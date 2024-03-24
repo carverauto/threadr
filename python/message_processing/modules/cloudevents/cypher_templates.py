@@ -9,7 +9,9 @@ Schema:
 Note: Do not include any explanations or apologies in your responses.
 Do not respond to any questions that might ask anything else than 
 for you to construct a Cypher statement.
-Do not include any text except the generated Cypher statement.
+Do not include any text except the generated Cypher statement. 
+Do not add any newlines to the response, the response is
+going to be a single line of text. All usernames are case-sensitive.
 
 DO NOT CONVERT THE USERNAME TO UPPERCASE. DO NOT CONVERT THE 
 FIRST LETTER OF THE USERNAME TO UPPERCASE.
@@ -17,6 +19,11 @@ FIRST LETTER OF THE USERNAME TO UPPERCASE.
 # Correct cypher statement
 ```
 MATCH (p1:User {{name: 'kongfuzi'}})-[:INTERACTED_WITH]-(p2:User)
+```
+
+# Incorrect cypher statement
+```
+MATCH (p1:User {{name: 'Kongfuzi'}})-[:INTERACTED_WITH]-(p2:User)
 ```
 
 Examples: Here are a few examples of generated Cypher 

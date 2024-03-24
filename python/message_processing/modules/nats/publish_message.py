@@ -26,27 +26,25 @@ async def publish_message_to_jetstream(subject, stream, message_id,
                      error_cb=error_cb,
                      reconnect_time_wait=10)
     
-    # error_cb, closed_cb, and disconnected_cb are optional callbacks to handle errors, closed connections, and disconnections
-
-    # error_cb
-    async def error_cb(e):
-        print(f"Error: {e}")
-
-    # Assuming the JetStream context is already set up and the stream exists
     js = nc.jetstream()
 
     await js.add_stream(name=stream, subjects=[subject])
 
+    # Ensure message_content is a dict that can be directly serialized
+    #if isinstance(message_content, str):
+    #    # Attempt to parse the string as JSON; this assumes message_content is a JSON string
+    #    try:
+    #        message_content = json.loads(message_content)
+    #    except json.JSONDecodeError:
+    #        # Handle cases where message_content is not a valid JSON string
+    #        print("message_content is not valid JSON. Publishing as a plain string.")
+    #        # Optionally, you could choose to not publish at all or handle differently
+
     message_data = {
         "message_id": message_id,
-        "content": message_content
+        "content": message_content  # This is now a dict or the original string if not JSON
     }
 
-    message_json = json.dumps(message_data)  # Serialize to JSON string
-
-    await js.publish(subject, message_json.encode())
-
+    await js.publish(subject, json.dumps(message_data).encode())
     print(f"Published message ID {message_id} to Jetstream subject '{subject}'.")
-
-    # Gracefully close the connection.
     await nc.close()

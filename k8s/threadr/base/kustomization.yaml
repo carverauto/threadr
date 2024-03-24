@@ -1,2 +1,4 @@
 resources:
-  - deployment.yaml
+  - threadr-irc.yaml
+  - threadr-embeds.yaml
+  - threadr-messages.yaml

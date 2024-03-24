@@ -4,7 +4,7 @@ import asyncio
 #from langchain.agents import initialize_agent, AgentType
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_community.chat_models import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
+# from langchain.memory import ConversationBufferMemory
 from langchain import hub
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.nats.nats_consumer import NATSConsumer
@@ -22,10 +22,10 @@ async def main():
     prompt = hub.pull("hwchase17/openai-tools-agent")
 
     # Initialize the LLM
-    llm = ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY)
+    llm = ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY, model_name="gpt-4-0125-preview")
 
     # Initialize conversation memory
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    # memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
     # Create tools
     tools = create_tools(neo4j_adapter)

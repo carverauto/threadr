@@ -36,10 +36,16 @@ def create_tools(neo4j_adapter):
             top_k=2000,
         )
 
+        print("Schema: ", graph.schema)
+        print("Query: ", query)
+
         response = cypherChain(query)
         return response['result']
 
-    def perform_vector_similarity_search(query, message):
+    def perform_vector_similarity_search(message):
+        # print the message
+        print("Message: ", message)
+
         # Implement the logic to perform vector similarity search using neo4j_adapter
         vector_index = Neo4jVector.from_existing_graph(
             OpenAIEmbeddings(
@@ -57,7 +63,8 @@ def create_tools(neo4j_adapter):
         )
 
         response = vector_index.similarity_search(
-            query=message.message,
+            query=message,
+            top_k=2000,
         )
         print(response)
         return response

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadr-messages
+  namespace: threadr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: threadr-messages
+  template:
+    metadata:
+      labels:
+        app: threadr-messages
+    spec:
+      serviceAccountName: threadr-messages-account
+      imagePullSecrets:
+        - name: ghcr-io-cred
+      containers:
+        - name: threadr-messages
+          image: ghcr.io/carverauto/threadr-messages:latest
+          imagePullPolicy: Always
+          env:
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: NEO4J_PASSWORD
+            - name: NKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-secret
+                  key: NKEY
+            - name: NKEYSEED
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: nkey-seed-secret
+            - name: NEO4J_URI
+              value: "bolt://neo4j.neo4j.svc.cluster.local:7687"
+            - name: NEO4J_USERNAME
+              value: "neo4j"
+            - name: NATSURL
+              value: "nats://nats.nats.svc.cluster.local:4222"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: OPENAI_API_KEY
+            - name: LANGCHAIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: LANGCHAIN_API_KEY
+            - name: TAVILY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: TAVILY_API_KEY
