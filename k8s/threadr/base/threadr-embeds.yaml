@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadr-embeds
+  namespace: threadr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: threadr-embeds
+  template:
+    metadata:
+      labels:
+        app: threadr-embeds
+    spec:
+      serviceAccountName: threadr-irc-account
+      imagePullSecrets:
+        - name: ghcr-io-cred
+      containers:
+        - name: threadr-embeds
+          image: ghcr.io/carverauto/threadr/threadr-embeds:v0.0.1
+          imagePullPolicy: Always
+          env:
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: NEO4J_PASSWORD
+            - name: NKEY
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-secret
+                  key: NKEY
+            - name: NKEYSEED
+              valueFrom:
+                secretKeyRef:
+                  name: nkey-seed-secret
+                  key: NKEYSEED
+            - name: NEO4J_URI
+              value: "bolt://neo4j.neo4j.svc.cluster.local:7687"
+            - name: NEO4J_USERNAME
+              value: "neo4j"
+            - name: NATSURL
+              value: "nats://nats.nats.svc.cluster.local:4222"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-secrets
+                  key: OPENAI_API_KEY

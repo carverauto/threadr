@@ -32,14 +32,20 @@ def create_tools(neo4j_adapter):
             graph=graph,
             verbose=True,
             cypher_prompt=CYPHER_GENERATION_PROMPT,
-            # validate_cypher=True,
+            validate_cypher=True,
             top_k=2000,
         )
+
+        print("Schema: ", graph.schema)
+        print("Query: ", query)
 
         response = cypherChain(query)
         return response['result']
 
-    def perform_vector_similarity_search(query, message):
+    def perform_vector_similarity_search(message):
+        # print the message
+        print("Message: ", message)
+
         # Implement the logic to perform vector similarity search using neo4j_adapter
         vector_index = Neo4jVector.from_existing_graph(
             OpenAIEmbeddings(
@@ -51,12 +57,14 @@ def create_tools(neo4j_adapter):
             password=NEO4J_PASSWORD,
             index_name="message-embeddings",
             node_label="Message",
+            # search_type="hybrid",
             text_node_properties=['content', 'platform', 'timestamp'],
             embedding_node_property="embedding",
         )
 
         response = vector_index.similarity_search(
-            query=message.message,
+            query=message,
+            top_k=2000,
         )
         print(response)
         return response
@@ -78,11 +86,12 @@ def create_tools(neo4j_adapter):
             func=perform_vector_similarity_search,
             description="Perform vector similarity search on the Neo4j database",
         ),
-        Tool(
-            name="TavilySearch",
-            func=perform_tavily_search,
-            description="Perform a search using Tavily",
-        ),
+        #Tool(
+        #    name="TavilySearch",
+        #    func=perform_tavily_search,
+        #    description="Perform a search using Tavily",
+        #),
+
     ]
 
     return tools

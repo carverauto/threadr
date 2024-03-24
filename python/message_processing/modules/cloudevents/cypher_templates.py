@@ -9,8 +9,22 @@ Schema:
 Note: Do not include any explanations or apologies in your responses.
 Do not respond to any questions that might ask anything else than 
 for you to construct a Cypher statement.
-Do not include any text except the generated Cypher statement.
-Do not change the case of the user's name.
+Do not include any text except the generated Cypher statement. 
+Do not add any newlines to the response, the response is
+going to be a single line of text. All usernames are case-sensitive.
+
+DO NOT CONVERT THE USERNAME TO UPPERCASE. DO NOT CONVERT THE 
+FIRST LETTER OF THE USERNAME TO UPPERCASE.
+
+# Correct cypher statement
+```
+MATCH (p1:User {{name: 'kongfuzi'}})-[:INTERACTED_WITH]-(p2:User)
+```
+
+# Incorrect cypher statement
+```
+MATCH (p1:User {{name: 'Kongfuzi'}})-[:INTERACTED_WITH]-(p2:User)
+```
 
 Examples: Here are a few examples of generated Cypher 
 statements for particular questions:
@@ -23,7 +37,7 @@ RETURN DISTINCT c.name AS channel
 ```
 
 ### Looking at all messages related to a particular user,
-### Can be used to answer questions like: "What does Alice talk about?
+### Can be used to answer questions like: "What does alice talk about?
 ```
 MATCH (u:User {{name: 'alice'}})-[:SENT]->(m:Message)
 RETURN m.content AS message
@@ -38,22 +52,23 @@ ORDER BY time DESC
 
 ### Indirect Connection Through Shared Channels
 ```
-MATCH (a:User {{name: 'Alice'}})-[:SENT|POSTED_IN]->(m:Message)-[:POSTED_IN]->(chan:Channel)<-[:POSTED_IN]-(m2:Message)<-[:SENT|POSTED_IN]-(b:User {{name: 'Bob'}})
+MATCH (a:User {{name: 'alice'}})-[:SENT|POSTED_IN]->(m:Message)-[:POSTED_IN]->(chan:Channel)<-[:POSTED_IN]-(m2:Message)<-[:SENT|POSTED_IN]-(b:User {{name: 'bob'}})
 RETURN DISTINCT chan.name AS SharedChannel
 ```
 
 ### Indirect Connection Through Mutual Connections
 ```
-MATCH (a:User {{name: 'Alice'}})-[:INTERACTED_WITH]->(mutual:User)<-[:INTERACTED_WITH]-(b:User {{name: 'Bob'}})
+MATCH (a:User {{name: 'alice'}})-[:INTERACTED_WITH]->(mutual:User)<-[:INTERACTED_WITH]-(b:User {{name: 'bob'}})
 RETURN DISTINCT mutual.name AS MutualFriend
 ```
 
-### Is Alice friends with Bob?
-MATCH (a:User {{name: 'Alice'}})-[:INTERACTED_WITH]-(b:User {{name: 'Bob'}})
+### Is alice friends with bob?
+```
+MATCH (a:User {{name: 'alice'}})-[:INTERACTED_WITH]-(b:User {{name: 'bob'}})
 RETURN a, b
+```
 
 ### Showing a complete graph
-
 ```
 MATCH (chan:Channel)-[:POSTED_IN]-(msg:Message)-[:SENT]-(user:User)
 OPTIONAL MATCH (msg)-[:MENTIONED]->(mentioned:User)
@@ -61,20 +76,24 @@ RETURN chan, user, msg, mentioned
 ```
 
 ### Show a more complete graph
-
 ```
 MATCH (chan:Channel)-[:POSTED_IN]-(msg:Message)-[:SENT]-(user:User)
 OPTIONAL MATCH (msg)-[:MENTIONED]->(mentioned:User)
+```
 
-// Order messages in the channel by timestamp (descending)
+# Order messages in the channel by timestamp (descending)
+```
 WITH chan, user, msg, mentioned
 ORDER BY msg.timestamp DESC
+```
 
-// Limit results, preserving the relationships
+# Limit results, preserving the relationships
+```
 WITH  chan,
       collect({{user: user, msg: msg, mentioned: mentioned}})[..25] as recentChannelActivity
 UNWIND recentChannelActivity as result
 RETURN chan, result.user, result.msg, result.mentioned
+```
 ```
 The question is:
 {question}"""

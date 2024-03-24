@@ -1,6 +1,4 @@
 # cloudevents_handler.py
-import json
-
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -15,9 +13,6 @@ from modules.nats.publish_message import publish_message_to_jetstream
 
 from langchain_community.graphs import Neo4jGraph
 from langchain.chains.conversation.memory import ConversationBufferMemory
-from langchain.agents import AgentType, initialize_agent
-from modules.langchain.tools import create_tools
-from langchain_openai import ChatOpenAI
 from .cypher_templates import CYPHER_GENERATION_TEMPLATE
 
 # Warning control
@@ -88,7 +83,7 @@ def extract_commands(message):
     return command_pattern.findall(message)
 
 
-async def process_command(message: NATSMessage, agent):
+async def process_command(message: NATSMessage, agent_executor):
     # need to strip out the bots name before passing it to the chain
     bot_name_pattern = re.compile(r'^threadr:\s*',
                                   re.IGNORECASE)
@@ -97,24 +92,15 @@ async def process_command(message: NATSMessage, agent):
     print("Question:", cleaned_message)
     try:
         # response = cypherChain(cleaned_message)
-        response = await agent.arun(input=cleaned_message)
+        # response = await agent_executor.arun(input=cleaned_message)
+        response = agent_executor.invoke({"input": cleaned_message})
         print(f"process_command - Response: {response}")
 
-        # Check if the response is a string
-        if isinstance(response, str):
-            response_message = {
-                "response": response,
-                "channel": message.channel,
-                "timestamp": datetime.now().isoformat(),
-            }
-        else:
-            response_message = {
-                "response": "I'm not sure how to answer that.",
-                "channel": message.channel,
-                "timestamp": datetime.now().isoformat(),
-            }
-
-        print(f"pr0cess_command/Response: {response_message}")
+        response_message = {
+            "response": response['output'],
+            "channel": message.channel,
+            "timestamp": datetime.now().isoformat(),
+        }
 
         return response_message
     except Exception as e:
@@ -138,7 +124,8 @@ def is_command(message: str, bot_name: str) -> bool:
 
 
 async def process_cloudevent(message_data: NATSMessage,
-                             neo4j_adapter: Neo4jAdapter):
+                             neo4j_adapter: Neo4jAdapter,
+                             agent_executor):
     """
     Process the received CloudEvent data.
     """
@@ -179,23 +166,7 @@ async def process_cloudevent(message_data: NATSMessage,
             )
 
             if is_command(message_data.message, BOT_NAME):
-                # Initialize the LLM
-                llm = ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY)
-
-                # Create tools
-                tools = create_tools(neo4j_adapter)
-
-                # Initialize the agent
-                agent = initialize_agent(
-                    tools,
-                    llm,
-                    memory=memory,
-                    agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
-                    #agent=AgentType.CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-                    verbose=True,
-                )
-
-                response = await process_command(message_data, agent)
+                response = await process_command(message_data, agent_executor)
                 print(f"Response2: {response}")
                 if response:
                     print("Publishing response to Jetstream")
