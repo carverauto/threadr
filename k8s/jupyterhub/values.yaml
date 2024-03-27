@@ -15,7 +15,7 @@ singleuser:
     capacity: 20Gi
     homeMountPath: /home/jovyan
     dynamic:
-      storageClass:  # You might want to specify a storageClass if needed
+      storageClass: local-path
       pvcNameTemplate: claim-{username}{servername}
       volumeNameTemplate: volume-{username}{servername}
       storageAccessModes: [ReadWriteOnce]
