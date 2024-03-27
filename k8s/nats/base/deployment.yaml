@@ -8,12 +8,12 @@ spec:
   sources:
     - repoURL: 'https://nats-io.github.io/k8s/helm/charts/'
       chart: nats
-      targetRevision: '1.1.6'
+      targetRevision: '1.1.10'
       helm:
         releaseName: nats
         valueFiles:
           - $values/k8s/nats/values.yml
-    - repoURL: 'git@github.com:carverauto/threadnexus.git'
+    - repoURL: 'git@github.com:carverauto/threadr.git'
       targetRevision: HEAD
       ref: values
   destination:
