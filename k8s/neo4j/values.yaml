@@ -28,7 +28,8 @@ volumes:
   data:
     mode: "dynamic"
     dynamic:
-      storageClassName: local-path
+      # storageClassName: local-path
+      storageClassName: managed-csi
     NEO4J_PLUGINS: ["apoc"]
   plugins:
     mode: "share"
