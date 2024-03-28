@@ -157,7 +157,7 @@ async def process_cloudevent(message_data: NATSMessage,
                                                            mentioned_nick,
                                                            relationship_type)
             print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
-            # You would publish the message details to be processed asynchronously:
+            print(f"Publishing message to Jetstream {NATS_EMBEDDING_SUBJECT} stream {NATS_EMBEDDING_STREAM}")
             await publish_message_to_jetstream(
                 subject=NATS_EMBEDDING_SUBJECT,
                 stream=NATS_EMBEDDING_STREAM,
