@@ -10,7 +10,7 @@ from typing import Callable
 class NATSConsumer:
     def __init__(self, nats_url=NATS_URL, nkeyseed=NKEYSEED,
                  subjects=["irc"], durable_name="threadr-irc",
-                 stream_name="message_processing", use_queue_group=USE_QUEUE_GROUP,
+                 stream_name="messages", use_queue_group=USE_QUEUE_GROUP,
                  neo4j_adapter=None,
                  message_processor: Callable[[str], None] = None):
         self.nats_url = nats_url
