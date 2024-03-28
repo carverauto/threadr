@@ -62,7 +62,7 @@ jupyterlab_widgets==3.0.10
 langchain==0.1.11
 langchain-community==0.0.29
 langchain-core==0.1.33
-langchain-openai==0.0.8
+langchain-openai
 langchain-text-splitters==0.0.1
 langchainhub==0.1.15
 langsmith==0.1.24
@@ -128,11 +128,11 @@ soupsieve==2.5
 SQLAlchemy==2.0.20
 stack-data==0.6.3
 sympy==1.12
-tavily-python==0.3.1
+tavily-python
 tenacity==8.2.3
 terminado==0.18.1
 threadpoolctl==3.3.0
-tiktoken==0.6.0
+tiktoken
 tinycss2==1.2.1
 tokenizers==0.15.2
 torch==2.2.2

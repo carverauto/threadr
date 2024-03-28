@@ -10,6 +10,7 @@ from modules.embeddings.openai_embeddings import OpenAIEmbedding
 
 
 async def main():
+    print("Starting embeddings processor...")
     neo4j_adapter = Neo4jAdapter(uri=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
 
     # Connect to Neo4j
@@ -44,6 +45,7 @@ async def main():
         neo4j_adapter=neo4j_adapter,
         message_processor=embeddings_processor.process_embedding
     )
+    print("Starting consumer...")
     await consumer.run()
 
     # Cleanup
