@@ -18,7 +18,7 @@ spec:
         - name: ghcr-io-cred
       containers:
         - name: threadr-embeds
-          image: ghcr.io/carverauto/threadr/threadr-embeds:v0.0.1
+          image: ghcr.io/carverauto/threadr/threadr-embeds:v0.0.3
           imagePullPolicy: Always
           env:
             - name: NEO4J_PASSWORD
