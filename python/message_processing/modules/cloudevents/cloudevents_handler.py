@@ -8,10 +8,7 @@ from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.environment.settings import (
     NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM, BOT_NAME
 )
-
-# Assuming these are imported or defined elsewhere in your module
-from modules.langchain.langgraph import execute_graph_with_command
-from modules.langchain.langgraph import format_graph_output_as_response, send_response_message
+from modules.langchain.utils import format_graph_output_as_response, send_response_message, execute_graph_with_command
 
 bot_nicknames = ['twatbot', 'ballsbot', 'thufir']
 url_pattern = re.compile(r'https?://[^\s]+')
@@ -63,3 +60,5 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
         message_id=message_id,
         message_content=message_data.message
     )
+
+
