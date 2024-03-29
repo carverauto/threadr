@@ -1,16 +1,13 @@
 # process_messages.py
 
 import asyncio
-#from langchain.agents import initialize_agent, AgentType
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_community.chat_models import ChatOpenAI
-# from langchain.memory import ConversationBufferMemory
-from langchain import hub
+from langchain_openai import ChatOpenAI
+
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.nats.nats_consumer import NATSConsumer
 from modules.environment.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP, OPENAI_API_KEY
 from modules.messages.message_processor import MessageProcessor
-from modules.langchain.tools import create_tools
+from modules.langchain.tools import create_supervisor, initialize_graph, create_tools
 
 
 async def main():
@@ -19,31 +16,15 @@ async def main():
     # Connect to Neo4j
     await neo4j_adapter.connect()
 
-    prompt = hub.pull("hwchase17/openai-tools-agent")
-
     # Initialize the LLM
     llm = ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY, model_name="gpt-4-0125-preview")
+    tools = create_tools(neo4j_adapter)  # Ensure this returns a dictionary of tools
 
-    # Initialize conversation memory
-    # memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    # Initialize the supervisor chain and graph
+    supervisor_chain = create_supervisor(llm)  # Ensure this function is defined and imported
+    graph = initialize_graph(llm, tools, supervisor_chain)
 
-    # Create tools
-    tools = create_tools(neo4j_adapter)
-
-    # Initialize the agent
-    # agent = initialize_agent(
-    #    tools,
-    #    llm,
-    #    memory=memory,
-    #    agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
-    #    #agent=AgentType.CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-    #    verbose=True,
-    #)
-
-    agent = create_openai_tools_agent(llm, tools, prompt)
-    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=4,return_only_outputs=True)
-
-    message_processor = MessageProcessor(neo4j_adapter=neo4j_adapter, agent_executor=agent_executor)
+    message_processor = MessageProcessor(neo4j_adapter=neo4j_adapter, graph=graph)
 
     consumer = NATSConsumer(
         nats_url=NATS_URL,

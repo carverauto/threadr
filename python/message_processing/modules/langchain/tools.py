@@ -1,3 +1,5 @@
+# modules/langchain/tools.py
+
 from langchain.tools import Tool
 from langchain_community.vectorstores.neo4j_vector import Neo4jVector
 from langchain_openai import OpenAIEmbeddings
@@ -8,6 +10,7 @@ from modules.environment.settings import NEO4J_URI, NEO4J_PASSWORD
 from modules.cloudevents.cypher_templates import CYPHER_GENERATION_TEMPLATE
 from langchain_community.graphs import Neo4jGraph
 from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_experimental.tools import PythonREPLTool
 
 
 def create_tools(neo4j_adapter):
@@ -86,11 +89,16 @@ def create_tools(neo4j_adapter):
             func=perform_vector_similarity_search,
             description="Perform vector similarity search on the Neo4j database",
         ),
-        #Tool(
-        #    name="TavilySearch",
-        #    func=perform_tavily_search,
-        #    description="Perform a search using Tavily",
-        #),
+        Tool(
+            name="TavilySearch",
+            func=perform_tavily_search,
+            description="Perform a search using Tavily",
+        ),
+        Tool(
+            name="PythonREPL",
+            func=PythonREPLTool(),
+            description="Run Python code in a REPL environment",
+        )
 
     ]
 
