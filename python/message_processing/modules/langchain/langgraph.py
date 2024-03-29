@@ -34,8 +34,8 @@ def initialize_graph(llm, tools: Dict[str, object], supervisor_chain):
     """
 
     # Use tools from the dictionary
-    research_agent = create_agent(llm, [tools['tavily_tool']], "You are a web researcher.")
-    code_agent = create_agent(llm, [tools['python_repl_tool']], "You may generate safe python code.")
+    research_agent = create_agent(llm, [tools['TavilySearch']], "You are a web researcher.")
+    code_agent = create_agent(llm, [tools['PythonREPL']], "You may generate safe python code.")
 
     # Define nodes for the graph
     research_node = functools.partial(agent_node, agent=research_agent, name="Researcher")

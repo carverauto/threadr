@@ -102,4 +102,15 @@ def create_tools(neo4j_adapter):
 
     ]
 
-    return tools
+    #return tools
+    # Initialize the tools
+    tavily_tool = TavilySearchResults()
+    python_repl_tool = PythonREPLTool()
+
+    # Return a dictionary of initialized tools
+    return {
+        'CypherQuery': run_cypher_query,
+        'VectorSimilaritySearch': perform_vector_similarity_search,
+        'TavilySearch': tavily_tool,  # Assuming TavilySearchResults has a search method
+        'PythonREPL': python_repl_tool,  # Assuming PythonREPLTool has an execute method
+    }
