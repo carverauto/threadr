@@ -46,7 +46,7 @@ def initialize_graph(llm, tools: Dict[str, object], supervisor_chain):
     workflow.add_node("Neo4j", neo4j_node)
     workflow.add_node("Supervisor", supervisor_chain)
 
-    members = ["Researcher", "Coder"]
+    members = ["Researcher", "Coder", "Neo4j"]
     for member in members:
         workflow.add_edge(member, "Supervisor")
 
