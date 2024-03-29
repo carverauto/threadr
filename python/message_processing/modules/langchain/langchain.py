@@ -2,7 +2,7 @@
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.messages import BaseMessage, HumanMessage
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.chains import RetrievalQAWithSourcesChain, ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser

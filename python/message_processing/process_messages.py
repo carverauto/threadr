@@ -7,7 +7,9 @@ from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.nats.nats_consumer import NATSConsumer
 from modules.environment.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP, OPENAI_API_KEY
 from modules.messages.message_processor import MessageProcessor
-from modules.langchain.tools import create_supervisor, initialize_graph, create_tools
+from modules.langchain.langchain import create_supervisor
+from modules.langchain.langgraph import initialize_graph
+from modules.langchain.tools import create_tools
 
 
 async def main():
