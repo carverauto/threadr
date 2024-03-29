@@ -35,20 +35,14 @@ def format_graph_output_as_response(graph_output, channel):
 
 async def execute_graph_with_command(graph, command, message_data):
     initial_state = {"messages": [HumanMessage(content=command)]}
-    all_messages = []
+    final_message_content = ""
 
     for state in graph.stream(initial_state, {"recursion_limit": 100}):
-        print("State: ", state)
-
-        # Assuming 'messages' key directly contains HumanMessage instances
-        current_messages = state.get('Researcher', {}).get('messages', []) + state.get('Supervisor', {}).get('messages', [])
-        print("Debug - Current State Messages: ", [msg.content for msg in current_messages])
-
-        all_messages.extend(current_messages)  # Collect all messages throughout the execution
-
-        if state.get("Supervisor", {}).get("next") == "FINISH":
+        if "FINISH" in state or state.get("Supervisor", {}).get("next") == "FINISH":
+            messages = state.get("messages", [])
+            if messages:
+                # Concatenate all messages into a single response
+                final_message_content = "\n".join([msg.content for msg in messages])
             break
 
-    # Extract content from the last HumanMessage in the messages list
-    final_message_content = "\n".join([msg.content for msg in all_messages])
     return final_message_content

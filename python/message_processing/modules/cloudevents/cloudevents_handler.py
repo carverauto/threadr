@@ -37,10 +37,10 @@ def extract_command_from_message(message: str) -> Optional[str]:
     :param message:
     :return:
     """
-    command_pattern = re.compile(rf'^{re.escape(BOT_NAME)}:\s*(\w+)')
+    command_pattern = re.compile(rf'^{re.escape(BOT_NAME)}:\s*(.*)')
     match = command_pattern.search(message)
     if match:
-        command = match.group(1)
+        command = match.group(1).strip()  # .strip() to remove any leading/trailing whitespace
         return command
     else:
         return None
@@ -84,12 +84,16 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
 
             if is_command(message_data.message):
+                print("Command found, message_data.message contains: ", message_data.message)
                 command = extract_command_from_message(message_data.message)
+                print("Extracted Command found: ", command)
                 if command:
-                    graph_output = await execute_graph_with_command(graph, command, message_data)
-                    response_message = format_graph_output_as_response(graph_output, message_data.channel)
-                    print("cloudEvents_handler.py: Response message: ", response_message)
-                    await send_response_message(response_message, message_id, "outgoing", "results")
+                    print("Extracted Command found: ", command)
+                    final_message_content = await execute_graph_with_command(graph, command, message_data)
+                    if final_message_content:
+                        response_message = format_graph_output_as_response(final_message_content, message_data.channel)
+                        print("Response message: ", response_message)
+                        await send_response_message(response_message, message_id, "outgoing", "results")
                 else:
                     print("Command found but not recognized.")
                     print("Message: ", message_data.message)
