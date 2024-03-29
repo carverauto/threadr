@@ -20,10 +20,6 @@ class AgentState(TypedDict):
     next: str
 
 
-tavily_tool = TavilySearchResults(max_results=5)
-python_repl_tool = PythonREPLTool()
-
-
 def initialize_graph(llm, tools: Dict[str, object], supervisor_chain):
     """
     Initialize the graph for the workflow.
@@ -36,15 +32,18 @@ def initialize_graph(llm, tools: Dict[str, object], supervisor_chain):
     # Use tools from the dictionary
     research_agent = create_agent(llm, [tools['TavilySearch']], "You are a web researcher.")
     code_agent = create_agent(llm, [tools['PythonREPL']], "You may generate safe python code.")
+    neo4j_agent = create_agent(llm, [tools['CypherQuery']], "You may generate Cypher queries.")
 
     # Define nodes for the graph
     research_node = functools.partial(agent_node, agent=research_agent, name="Researcher")
     code_node = functools.partial(agent_node, agent=code_agent, name="Coder")
+    neo4j_node = functools.partial(agent_node, agent=neo4j_agent, name="Neo4j")
 
     # Initialize and configure the workflow graph
     workflow = StateGraph(AgentState)
     workflow.add_node("Researcher", research_node)
     workflow.add_node("Coder", code_node)
+    workflow.add_node("Neo4j", neo4j_node)
     workflow.add_node("Supervisor", supervisor_chain)
 
     members = ["Researcher", "Coder"]

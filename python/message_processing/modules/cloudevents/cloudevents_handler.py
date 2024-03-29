@@ -84,16 +84,14 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
 
             if is_command(message_data.message):
-                print("Command found, message_data.message contains: ", message_data.message)
                 command = extract_command_from_message(message_data.message)
-                print("Extracted Command found: ", command)
                 if command:
-                    print("Extracted Command found: ", command)
                     final_message_content = await execute_graph_with_command(graph, command, message_data)
+                    print("Final message content: ", final_message_content)
                     if final_message_content:
                         response_message = format_graph_output_as_response(final_message_content, message_data.channel)
                         print("Response message: ", response_message)
-                        await send_response_message(response_message, message_id, "outgoing", "results")
+                        await send_response_message(response_message, message_id, "outgoing", "results", message_data.channel)
                 else:
                     print("Command found but not recognized.")
                     print("Message: ", message_data.message)
@@ -124,7 +122,8 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
         subject=NATS_EMBEDDING_SUBJECT,
         stream=NATS_EMBEDDING_STREAM,
         message_id=message_id,
-        message_content=message_data.message
+        message_content=message_data.message,
+        channel=message_data.channel
     )
 
 
