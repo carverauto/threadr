@@ -3,13 +3,22 @@ from modules.nats.publish_message import publish_message_to_jetstream
 from langchain_core.messages import HumanMessage
 
 
-async def send_response_message(response_message):
+async def send_response_message(response_message, message_id, subject, stream):
+    """
+    Sends a response message to a specified channel.
+    :param stream:
+    :param subject:
+    :param message_id:
+    :param response_message:
+    :return:
+    """
+    print(f"Sending response to {response_message['channel']}: {response_message['response']}")
     # Assuming you're using NATS for messaging
     # Adjust this function to use your messaging system
     await publish_message_to_jetstream(
-        subject="response",  # Adjust as necessary
-        stream="responses",  # Adjust as necessary
-        message_id="unique_id",  # Generate or obtain a unique ID for the message
+        subject=subject,
+        stream=stream,
+        message_id=message_id,
         message_content=response_message["response"]
     )
     print(f"Response sent to {response_message['channel']}: {response_message['response']}")
@@ -39,18 +48,14 @@ async def execute_graph_with_command(graph, command, message_data):
         "messages": [HumanMessage(content=command)]
     }
 
-    # Execute the graph and collect the output
-    graph_output = []
+    final_message_content = None
+
     for state in graph.stream(initial_state, {"recursion_limit": 100}):
-        if "__end__" not in state:
-            # Here, you might want to format or process each piece of output
-            # For simplicity, we're just collecting the outputs
-            graph_output.append(state)
-        else:
+        print(state)
+        if "FINISH" in state:
+            # Assuming the final message is in the last state before "__end__"
+            # and that it's structured as shown in your sample output
+            final_message_content = state.get("messages", [{}])[-1].get("content", "")
             break
 
-    # Format the collected output into a single string or structured data
-    # Depending on your needs, you might format it differently
-    formatted_output = "\n".join([str(output) for output in graph_output])
-
-    return formatted_output
+    return final_message_content
