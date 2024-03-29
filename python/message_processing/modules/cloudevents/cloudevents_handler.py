@@ -88,6 +88,7 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
                 if command:
                     graph_output = await execute_graph_with_command(graph, command, message_data)
                     response_message = format_graph_output_as_response(graph_output, message_data.channel)
+                    print("cloudEvents_handler.py: Response message: ", response_message)
                     await send_response_message(response_message, message_id, "outgoing", "results")
                 else:
                     print("Command found but not recognized.")
