@@ -1,5 +1,6 @@
 # process_messages.py
 
+import os
 import asyncio
 from langchain_openai import ChatOpenAI
 
@@ -10,6 +11,14 @@ from modules.messages.message_processor import MessageProcessor
 from modules.langchain.langchain import create_supervisor
 from modules.langchain.langgraph import initialize_graph
 from modules.langchain.tools import create_tools
+
+# Warning control
+import warnings
+warnings.filterwarnings("ignore")
+
+# Optional, add tracing in LangSmith
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "process_messages"
 
 
 async def main():

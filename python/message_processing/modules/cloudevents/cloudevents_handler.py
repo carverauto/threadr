@@ -16,11 +16,14 @@ twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
 
 
 def is_command(message: str) -> bool:
-    return message.strip().startswith(f"{BOT_NAME}:")
+    # Adjust to check for bot name followed by a recognizable command pattern
+    command_pattern = re.compile(rf'^{BOT_NAME}:\s*!(\w+)')
+    return bool(command_pattern.search(message))
 
 
 def extract_command_from_message(message: str) -> Optional[str]:
-    command_pattern = re.compile(r'!(\w+)')
+    # Adjusted to extract command after bot name and colon
+    command_pattern = re.compile(rf'^{BOT_NAME}:\s*!(\w+)')
     match = command_pattern.search(message)
     return match.group(1) if match else None
 
@@ -40,6 +43,7 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             await send_response_message(response_message)
         else:
             print("Command found but not recognized.")
+            print("Message: ", message_data.message)
     else:
         # Handle non-command messages, e.g., logging, Neo4j updates
         await handle_generic_message(message_data, neo4j_adapter)

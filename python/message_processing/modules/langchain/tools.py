@@ -73,7 +73,7 @@ def create_tools(neo4j_adapter):
         return response
 
     def perform_tavily_search(query):
-        tavily_search = TavilySearchResults()
+        tavily_search = TavilySearchResults(max_results=5)
 
         response = tavily_search(query)
         return response
