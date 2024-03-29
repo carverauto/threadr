@@ -134,7 +134,7 @@ tavily-python==0.3.1
 tenacity==8.2.3
 terminado==0.18.1
 threadpoolctl==3.3.0
-tiktoken==0.6.0
+tiktoken
 tinycss2==1.2.1
 tokenizers==0.15.2
 torch==2.2.2

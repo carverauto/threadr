@@ -14,12 +14,22 @@ from langchain_experimental.tools import PythonREPLTool
 
 
 def create_tools(neo4j_adapter):
+    """
+    Create tools for the LangChain.
+    :param neo4j_adapter:
+    :return:
+    """
     # Define your custom tools here
 
     graph = Neo4jGraph(url=NEO4J_URI, username="neo4j", password=NEO4J_PASSWORD,
                        database="neo4j")
 
     def run_cypher_query(query):
+        """
+        Run a Cypher query.
+        :param query:
+        :return:
+        """
         # Implement the logic to run a Cypher query using neo4j_adapter
         # refresh the graph
         graph.refresh_schema()
@@ -46,8 +56,13 @@ def create_tools(neo4j_adapter):
         return response['result']
 
     def perform_vector_similarity_search(message):
+        """
+        Perform vector similarity search.
+        :param message:
+        :return:
+        """
         # print the message
-        print("Message: ", message)
+        print("Vector Similarity Search - Message: ", message)
 
         # Implement the logic to perform vector similarity search using neo4j_adapter
         vector_index = Neo4jVector.from_existing_graph(
@@ -72,45 +87,14 @@ def create_tools(neo4j_adapter):
         print(response)
         return response
 
-    def perform_tavily_search(query):
-        tavily_search = TavilySearchResults(max_results=5)
-
-        response = tavily_search(query)
-        return response
-
-    tools = [
-        Tool(
-            name="CypherQuery",
-            func=run_cypher_query,
-            description="Run a custom Cypher query on the Neo4j database",
-        ),
-        Tool(
-            name="VectorSimilaritySearch",
-            func=perform_vector_similarity_search,
-            description="Perform vector similarity search on the Neo4j database",
-        ),
-        Tool(
-            name="TavilySearch",
-            func=perform_tavily_search,
-            description="Perform a search using Tavily",
-        ),
-        Tool(
-            name="PythonREPL",
-            func=PythonREPLTool(),
-            description="Run Python code in a REPL environment",
-        )
-
-    ]
-
-    #return tools
     # Initialize the tools
-    tavily_tool = TavilySearchResults()
+    tavily_tool = TavilySearchResults(max_results=5)
     python_repl_tool = PythonREPLTool()
 
     # Return a dictionary of initialized tools
     return {
         'CypherQuery': run_cypher_query,
         'VectorSimilaritySearch': perform_vector_similarity_search,
-        'TavilySearch': tavily_tool,  # Assuming TavilySearchResults has a search method
-        'PythonREPL': python_repl_tool,  # Assuming PythonREPLTool has an execute method
+        'TavilySearch': tavily_tool,
+        'PythonREPL': python_repl_tool,
     }

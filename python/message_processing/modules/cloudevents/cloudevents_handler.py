@@ -16,12 +16,22 @@ twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
 
 
 def is_command(message: str) -> bool:
+    """
+    Check if a message is a command.
+    :param message:
+    :return:
+    """
     # Adjust to check for bot name followed by a recognizable command pattern
     command_pattern = re.compile(rf'^{BOT_NAME}:\s*!(\w+)')
     return bool(command_pattern.search(message))
 
 
 def extract_command_from_message(message: str) -> Optional[str]:
+    """
+    Extract the command from a message.
+    :param message:
+    :return:
+    """
     # Adjusted to extract command after bot name and colon
     command_pattern = re.compile(rf'^{BOT_NAME}:\s*!(\w+)')
     match = command_pattern.search(message)
@@ -29,6 +39,13 @@ def extract_command_from_message(message: str) -> Optional[str]:
 
 
 async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, graph):
+    """
+    Process a message from a CloudEvent.
+    :param message_data:
+    :param neo4j_adapter:
+    :param graph:
+    :return:
+    """
     if (message_data.nick in bot_nicknames or
             url_pattern.search(message_data.message) or
             twitter_expansion_pattern.search(message_data.message)):
@@ -50,6 +67,13 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
 
 
 async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
+    """
+    Handle a generic message that is not a command, log to Neo4j,
+    and publish to Jetstream for embedding.
+    :param message_data:
+    :param neo4j_adapter:
+    :return:
+    """
     # Example: Log the message to Neo4j and publish to Jetstream for embedding
     message_id = await neo4j_adapter.add_message(
         nick=message_data.nick,

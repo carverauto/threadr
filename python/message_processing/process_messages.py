@@ -22,6 +22,10 @@ os.environ["LANGCHAIN_PROJECT"] = "process_messages"
 
 
 async def main():
+    """
+    Main function to process messages.
+    :return:
+    """
     neo4j_adapter = Neo4jAdapter(uri=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD)
 
     # Connect to Neo4j
