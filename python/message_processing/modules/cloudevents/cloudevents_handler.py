@@ -8,7 +8,6 @@ from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.environment.settings import (
     NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM
 )
-from modules.langchain.utils import format_graph_output_as_response, send_response_message, execute_graph_with_command
 
 BOT_NAME = "threadr"  # Ensure this matches the actual bot name used in messages
 bot_nicknames = ['twatbot', 'ballsbot', 'thufir']
@@ -46,12 +45,11 @@ def extract_command_from_message(message: str) -> Optional[str]:
         return None
 
 
-async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, graph):
+async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
     """
     Process a message from a CloudEvent.
     :param message_data:
     :param neo4j_adapter:
-    :param graph:
     :return:
     """
     print("Message received: ", message_data)
@@ -86,12 +84,8 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             if is_command(message_data.message):
                 command = extract_command_from_message(message_data.message)
                 if command:
-                    final_message_content = await execute_graph_with_command(graph, command, message_data)
-                    print("Final message content: ", final_message_content)
-                    if final_message_content:
-                        response_message = format_graph_output_as_response(final_message_content, message_data.channel)
-                        print("Response message: ", response_message)
-                        await send_response_message(response_message, message_id, "outgoing", "results", message_data.channel)
+                    print("Command found: ", command)
+                    # await send_response_message(response_message, message_id, "outgoing", "results", message_data.channel)
                 else:
                     print("Command found but not recognized.")
                     print("Message: ", message_data.message)
@@ -99,7 +93,7 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
                 # Handle non-command messages, e.g., logging, Neo4j updates
                 await handle_generic_message(message_data, neo4j_adapter)
         except Exception as e:
-            print(f"Failed to update Neo4j: {e}")
+            print(f"Failed to update: {e}")
 
 
 async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
