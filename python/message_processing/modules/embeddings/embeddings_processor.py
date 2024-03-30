@@ -35,6 +35,7 @@ class EmbeddingsProcessor:
         try:
             # Parse the raw message data into a VectorEmbeddingMessage object
             message_dict = json.loads(msg.data.decode())
+            print("Message data:", message_dict)
             message_data = VectorEmbeddingMessage(**message_dict)
 
             if self.neo4j_adapter is None:
