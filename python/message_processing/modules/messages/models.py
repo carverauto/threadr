@@ -16,6 +16,12 @@ class NATSMessage(BaseModel):
 
 
 # Vector Embedding Messages class
+class Content(BaseModel):
+    response: str
+    channel: str
+    timestamp: str
+
+
 class VectorEmbeddingMessage(BaseModel):
-    message_id: int = Field(None, description="Message ID")
-    content: str = Field(..., description="Message content")
+    message_id: int
+    content: Content

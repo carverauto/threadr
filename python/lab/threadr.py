@@ -1,4 +1,43 @@
-# modules/cloudevents/cypher_templates.py
+warnings.filterwarnings("ignore")
+#%%
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USERNAME = 'neo4j'
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+NEO4J_DATABASE = 'neo4j'
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Global constants
+VECTOR_INDEX_NAME = 'message-embeddings'
+VECTOR_NODE_LABEL = 'Message'
+VECTOR_SOURCE_PROPERTY = 'text'
+VECTOR_EMBEDDING_PROPERTY = 'textEmbedding'
+
+graph = Neo4jGraph(
+    url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PASSWORD, database=NEO4J_DATABASE
+)
+
+graph.refresh_schema()
+print(textwrap.fill(graph.schema, 60))
+
+vector_index = Neo4jVector.from_existing_graph(
+    OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        dimensions=1536,
+    ),
+    url=NEO4J_URI,
+    username=NEO4J_USERNAME,
+    password=NEO4J_PASSWORD,
+    index_name="message-embeddings",
+    node_label="Message",
+    text_node_properties=['content', 'platform', 'timestamp'],
+    embedding_node_property='embedding',
+)
+
+query = "nude bots?"
+response = vector_index.similarity_search(
+    query
+)
+print(response)
 
 CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to 
 query a graph database.
@@ -38,8 +77,11 @@ MATCH (u:User {{name: 'kongfuzi'}})-[:SENT]->(m:Message)-[:POSTED_IN]->(c:Channe
 RETURN DISTINCT c.name AS channel
 ```
 
+
 ### Looking at all messages related to a particular user,
-### Can be used to answer questions like: "What does alice talk about?
+### Can be used to answer questions like: "What does alice talk about?"
+### or "Is vpro an alcoholic?"
+
 ```
 MATCH (u:User {{name: 'alice'}})-[:SENT]->(m:Message)
 RETURN m.content AS message
@@ -83,13 +125,13 @@ MATCH (chan:Channel)-[:POSTED_IN]-(msg:Message)-[:SENT]-(user:User)
 OPTIONAL MATCH (msg)-[:MENTIONED]->(mentioned:User)
 ```
 
-# Order messages in the channel by timestamp (descending)
+### Order messages in the channel by timestamp (descending)
 ```
 WITH chan, user, msg, mentioned
 ORDER BY msg.timestamp DESC
 ```
 
-# Limit results, preserving the relationships
+### Limit results, preserving the relationships
 ```
 WITH  chan,
       collect({{user: user, msg: msg, mentioned: mentioned}})[..25] as recentChannelActivity
@@ -99,3 +141,24 @@ RETURN chan, result.user, result.msg, result.mentioned
 ```
 The question is:
 {question}"""
+
+CYPHER_GENERATION_PROMPT = PromptTemplate(
+    input_variables=["schema", "question"],
+    template=CYPHER_GENERATION_TEMPLATE,
+)
+
+cypherChain = GraphCypherQAChain.from_llm(
+    cypher_llm=ChatOpenAI(model="gpt-3.5-turbo",temperature=0,openai_api_key=OPENAI_API_KEY),
+    qa_llm=ChatOpenAI(temperature=0, model="gpt-4-0125-preview"),
+    graph=graph,
+    verbose=True,
+    cypher_prompt=CYPHER_GENERATION_PROMPT,
+    validate_cypher=True,
+    top_k=1000,
+    #return_direct=True
+)
+
+def prettyCypherChain(question: str) -> str:
+    response = cypherChain.run(question)
+    print(textwrap.fill(response, 60))
+

@@ -1,12 +1,12 @@
 # modules/nats/publish_message.py
-
+from datetime import datetime
 from nats.aio.client import Client as NATS
 from modules.environment.settings import NATS_URL, NATS_NKEYSEED
 import json
 
 
 async def publish_message_to_jetstream(subject, stream, message_id,
-                                       message_content):
+                                       message_content, channel):
     """
     Publishes message details to a NATS Jetstream queue for asynchronous processing.
 
@@ -40,9 +40,14 @@ async def publish_message_to_jetstream(subject, stream, message_id,
     #        print("message_content is not valid JSON. Publishing as a plain string.")
     #        # Optionally, you could choose to not publish at all or handle differently
 
+    # Construct the message data according to the CommandResult structure
     message_data = {
         "message_id": message_id,
-        "content": message_content  # This is now a dict or the original string if not JSON
+        "content": {
+            "response": message_content,
+            "channel": channel,
+            "timestamp": datetime.now().isoformat()
+        }
     }
 
     await js.publish(subject, json.dumps(message_data).encode())
