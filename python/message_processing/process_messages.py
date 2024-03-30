@@ -11,6 +11,11 @@ from modules.messages.message_processor import MessageProcessor
 from modules.langchain.langchain import create_supervisor
 from modules.langchain.langgraph import initialize_graph
 from modules.langchain.tools import create_tools
+from modules.langchain.cypherquery import CypherQueryTool, to_openai_function
+from langchain import hub
+from langchain.agents import create_openai_functions_agent
+
+
 
 # Warning control
 import warnings
@@ -33,11 +38,19 @@ async def main():
 
     # Initialize the LLM
     llm = ChatOpenAI(temperature=0, openai_api_key=OPENAI_API_KEY, model_name="gpt-4-0125-preview")
-    tools = create_tools(neo4j_adapter)  # Ensure this returns a dictionary of tools
+    # Get the prompt to use - you can modify this!
+    prompt = hub.pull("hwchase17/openai-functions-agent")
+
+    tools = create_tools(neo4j_adapter)
+    cypher_query_tool = tools['CypherQuery']
+    openai_function = to_openai_function(cypher_query_tool)
+
+    # Construct the OpenAI Functions agent
+    agent_runnable = create_openai_functions_agent(llm, [openai_function], prompt)
 
     # Initialize the supervisor chain and graph
     supervisor_chain = create_supervisor(llm)  # Ensure this function is defined and imported
-    graph = initialize_graph(llm, tools, supervisor_chain)
+    graph = initialize_graph(llm, tools, supervisor_chain,agent_runnable)
 
     message_processor = MessageProcessor(neo4j_adapter=neo4j_adapter, graph=graph)
 

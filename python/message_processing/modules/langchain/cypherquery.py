@@ -1,10 +1,10 @@
-from abc import ABC
+# modules/langchain/cypherquery.py
 
 from langchain.chains.graph_qa.cypher import GraphCypherQAChain
 from langchain_core.callbacks import CallbackManagerForToolRun
 from langchain_core.tools import BaseTool
 from langchain_core.pydantic_v1 import BaseModel, Field
-from typing import Dict, Optional, Type, Union, Any
+from typing import Dict, Optional, Type, Union, Any, List
 
 
 class CypherQueryInput(BaseModel):
@@ -25,6 +25,14 @@ class CypherQueryTool(BaseTool):
         super().__init__(cypher_chain=cypher_chain, **kwargs)
         # super().__init__(**kwargs)
         self.cypher_chain = cypher_chain
+
+    async def __call__(self, question: str) -> dict[str, str] | Any:
+        try:
+            response = await self.cypher_chain.arun(question)
+            return response
+        except Exception as e:
+            error_message = f"Failed to generate Cypher query: {str(e)}"
+            return {"error": error_message}
 
     def _run(self, question: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> Union[str, Dict]:
         """Synchronously generate and validate a Cypher query based on a question."""
@@ -50,3 +58,20 @@ class CypherQueryTool(BaseTool):
             return {"error": error_message}
 
     # If you need an asynchronous version, you would adapt this method accordingly.
+
+
+def to_openai_function(cypher_query_tool: CypherQueryTool) -> Dict:
+    return {
+        "name": "cypher_query_generator",
+        "description": "Generates and validates Cypher queries based on natural language input.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Natural language question to generate a Cypher query for",
+                },
+            },
+            "required": ["question"],
+        },
+    }

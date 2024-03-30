@@ -1,7 +1,7 @@
 # modules/langchain/langgraph.py
 
 import operator
-from typing import Annotated, Sequence, TypedDict, Dict
+from typing import Annotated, Sequence, TypedDict, Dict, Union
 import functools
 
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -9,52 +9,99 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from modules.langchain.langchain import create_agent
 from langchain_experimental.tools import PythonREPLTool
+from langchain_core.agents import AgentAction, AgentFinish
+from langchain_core.messages import BaseMessage
+from langchain_core.agents import AgentFinish
+from langgraph.prebuilt.tool_executor import ToolExecutor
+from langchain_core.agents import AgentActionMessageLog
+import operator
 
 
-# The agent state is the input to each node in the graph
 class AgentState(TypedDict):
-    # The annotation tells the graph that new messages will always
-    # be added to the current states
+    # The input string
+    input: str
+    # The list of previous messages in the conversation
     messages: Annotated[Sequence[BaseMessage], operator.add]
-    # The 'next' field indicates where to route to next
-    next: str
+    chat_history: list[BaseMessage]
+    # The outcome of a given call to the agent
+    # Needs `None` as a valid type, since this is what this will start as
+    agent_outcome: Union[AgentAction, AgentFinish, None]
+    # List of actions and corresponding observations
+    # Here we annotate this with `operator.add` to indicate that operations to
+    # this state should be ADDED to the existing values (not overwrite it)
+    intermediate_steps: Annotated[list[tuple[AgentAction, str]], operator.add]
 
 
-def initialize_graph(llm, tools: Dict[str, object], supervisor_chain):
-    """
-    Initialize the graph for the workflow.
-    :param llm:
-    :param tools:
-    :param supervisor_chain:
-    :return:
-    """
+# Define the agent
+def run_agent(data, agent_runnable):
+    agent_outcome = agent_runnable.invoke(data)
+    return {"agent_outcome": agent_outcome}
 
-    # Use tools from the dictionary
-    research_agent = create_agent(llm, [tools['TavilySearch']], "You are a web researcher.")
-    code_agent = create_agent(llm, [tools['PythonREPL']], "You may generate safe python code.")
-    neo4j_agent = create_agent(llm, [tools['CypherQuery']], "You may generate Cypher queries.")
 
-    # Define nodes for the graph
-    research_node = functools.partial(agent_node, agent=research_agent, name="Researcher")
-    code_node = functools.partial(agent_node, agent=code_agent, name="Coder")
-    neo4j_node = functools.partial(agent_node, agent=neo4j_agent, name="Neo4j")
+# Define the function to execute tools
+def execute_tools(data, tool_executor: ToolExecutor):
+    # Get the most recent agent_outcome - this is the key added in the `agent` above
+    agent_action = data["agent_outcome"]
+    output = tool_executor.invoke(agent_action)
+    return {"intermediate_steps": [(agent_action, str(output))]}
 
-    # Initialize and configure the workflow graph
+
+# Define logic that will be used to determine which conditional edge to go down
+def should_continue(data):
+    # If the agent outcome is an AgentFinish, then we return `exit` string
+    # This will be used when setting up the graph to define the flow
+    if isinstance(data["agent_outcome"], AgentFinish):
+        return "end"
+    # Otherwise, an AgentAction is returned
+    # Here we return `continue` string
+    # This will be used when setting up the graph to define the flow
+    else:
+        return "continue"
+
+
+def first_agent(inputs,tool):
+    action = AgentActionMessageLog(
+        # We force call this tool
+        tool=tool,
+        # We just pass in the `input` key to this tool
+        tool_input=inputs["input"],
+        log="",
+        message_log=[],
+    )
+    return {"agent_outcome": action}
+
+
+def initialize_graph(llm, tools: Dict[str, object], supervisor_chain, agent_runnable):
     workflow = StateGraph(AgentState)
-    workflow.add_node("Researcher", research_node)
-    workflow.add_node("Coder", code_node)
-    workflow.add_node("Neo4j", neo4j_node)
-    workflow.add_node("Supervisor", supervisor_chain)
 
-    members = ["Researcher", "Coder", "Neo4j"]
-    for member in members:
-        workflow.add_edge(member, "Supervisor")
+    # Add the Supervisor node to the graph
+    workflow.add_node("Supervisor", lambda state: supervisor_chain.invoke(state))
 
-    conditional_map = {k: k for k in members}
-    conditional_map["FINISH"] = END
-    workflow.add_conditional_edges("Supervisor", lambda x: x["next"], conditional_map)
+    # Define a new node that uses agent_runnable
+    def agent_runnable_node(state):
+        # Assuming state contains the necessary input for agent_runnable
+        input_data = state['input']
+        result = agent_runnable.invoke(input_data)
+        # Process result and decide on next steps
+        if result.get('should_finish', False):  # Corrected line
+            return {"next": END}
+        else:
+            # Continue with other actions based on result
+            return {"next": "SomeOtherNode", "data": result}
+
+    workflow.add_node("AgentRunnable", agent_runnable_node)
+
+    # Add other nodes and edges as before
+    # Example of adding an edge from the supervisor to the agent_runnable node
+    workflow.add_edge("Supervisor", "AgentRunnable")
+
+    # Add an edge from the AgentRunnable node to the END node
+    workflow.add_edge("AgentRunnable", END)
+
+    # Set the entry point of the graph to the Supervisor node
     workflow.set_entry_point("Supervisor")
 
+    # Define other edges and nodes as necessary
     return workflow.compile()
 
 
