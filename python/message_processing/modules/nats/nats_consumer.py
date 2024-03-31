@@ -27,7 +27,9 @@ class NATSConsumer:
                     await self.nats_manager.js.subscribe(subject=subject, durable=self.durable_name,
                                                          queue=self.durable_name, cb=self.message_handler)
                 else:
-                    await self.nats_manager.js.subscribe(subject=subject, durable=self.durable_name, cb=self.message_handler)
+                    await self.nats_manager.js.subscribe(subject=subject,
+                                                         durable=self.durable_name,
+                                                         cb=self.message_handler)
             print("Subscribed to subjects...")
         else:
             print("JetStream context not initialized. Subscription failed.")
