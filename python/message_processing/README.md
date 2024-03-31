@@ -7,6 +7,8 @@ OpenAI embeddings are 1536 dimensions, huggingface/mpnet is 2048.
 
 **Update**: Neo4j 5.18 now supports 4096 dimension vector indices
 
+### message-embeddings
+
 ```cypher
 CREATE VECTOR INDEX `message-embeddings`
 FOR (n: Message) ON (n.embedding)
