@@ -2,10 +2,8 @@
 
 import os
 import asyncio
-from langchain_openai import ChatOpenAI
 
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
-from modules.nats.nats_consumer import NATSConsumer
 from modules.environment.settings import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NATS_URL, NKEYSEED, USE_QUEUE_GROUP, \
     OPENAI_API_KEY
 from modules.messages.message_processor import MessageProcessor
@@ -53,6 +51,7 @@ async def main():
         #neo4j_adapter=neo4j_adapter,
         message_processor=message_processor.process_message
     )
+    print("Starting consumer...")
     await consumer.run()
 
     # Cleanup
