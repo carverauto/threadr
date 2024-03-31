@@ -3,7 +3,8 @@ import re
 from datetime import datetime
 from typing import Optional
 from modules.messages.models import NATSMessage
-from modules.nats.publish_message import publish_message_to_jetstream
+# from modules.nats.publish_message import publish_message_to_jetstream
+from modules.nats.nats_producer import NATSProducer
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.environment.settings import (
     NATS_EMBEDDING_SUBJECT, NATS_EMBEDDING_STREAM
@@ -53,7 +54,6 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
     :param neo4j_adapter:
     :return:
     """
-    print("Message received: ", message_data)
 
     if (message_data.nick in bot_nicknames or
             url_pattern.search(message_data.message) or
@@ -80,28 +80,27 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
                 mentioned_nick,
                 relationship_type
             )
-            print(f"Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
-
-            if is_command(message_data.message):
-                command = extract_command_from_message(message_data.message)
-                if command:
-                    print("Command found: ", command)
-                    # await send_response_message(response_message, message_id, "outgoing", "results", message_data.channel)
-                else:
-                    print("Command found but not recognized.")
-                    print("Message: ", message_data.message)
-            else:
-                # Handle non-command messages, e.g., logging, Neo4j updates
-                await handle_generic_message(message_data, neo4j_adapter, js)
+            print(f"MSGID: {message_id} - Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
         except Exception as e:
             print(f"Failed to update: {e}")
 
+    else:
+        if is_command(message_data.message):
+            command = extract_command_from_message(message_data.message)
+            if command:
+                print("Command found: ", command)
+                # await send_response_message(response_message, message_id, "outgoing", "results", message_data.channel)
+            else:
+                print("Command found but not recognized.")
+                print("Message: ", message_data.message)
+    await handle_generic_message(message_data, neo4j_adapter, js)
 
-async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, js):
+
+async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, producer: NATSProducer):
     """
     Handle a generic message that is not a command, log to Neo4j,
     and publish to Jetstream for embedding.
-    :param js:
+    :param producer:
     :param message_data:
     :param neo4j_adapter:
     :return:
@@ -116,14 +115,19 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
     )
     print(f"Added message with ID: {message_id}")
     print(f"Publishing message to Jetstream for embedding: {message_data.message}")
-    await publish_message_to_jetstream(
-        js=js,
+    message_data = {
+        "message_id": message_id,
+        "content": {
+            "response": message_data.message,
+            "channel": message_data.channel,
+            "timestamp": datetime.now().isoformat()
+        }
+    }
+    await producer.publish_message(
         subject=NATS_EMBEDDING_SUBJECT,
-        #stream=NATS_EMBEDDING_STREAM,
-        message_id=message_id,
-        message_content=message_data.message,
-        channel=message_data.channel
+        message_data=message_data
     )
+    print(f"Published message ID {message_id} to Jetstream subject '{NATS_EMBEDDING_SUBJECT}'.")
 
 
 def extract_mentioned_nick(message):
