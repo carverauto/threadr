@@ -81,6 +81,21 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
                 relationship_type
             )
             print(f"MSGID: {message_id} - Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
+            # Publish the message to Jetstream for embedding
+            message_data = {
+                "message_id": message_id,
+                "content": {
+                    "response": message_data.message,
+                    "channel": message_data.channel,
+                    "timestamp": datetime.now().isoformat()
+                }
+            }
+            await js.publish_message(
+                subject=NATS_EMBEDDING_SUBJECT,
+                message_data=message_data
+            )
+            print(f"Published message ID {message_id} to Jetstream subject '{NATS_EMBEDDING_SUBJECT}'.")
+            return
         except Exception as e:
             print(f"Failed to update: {e}")
 
@@ -93,7 +108,7 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             else:
                 print("Command found but not recognized.")
                 print("Message: ", message_data.message)
-    await handle_generic_message(message_data, neo4j_adapter, js)
+        await handle_generic_message(message_data, neo4j_adapter, js)
 
 
 async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, producer: NATSProducer):
@@ -109,9 +124,9 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
     message_id = await neo4j_adapter.add_message(
         nick=message_data.nick,
         message=message_data.message,
-        timestamp=datetime.now(),  # Adjust as necessary
+        timestamp=message_data.timestamp,
         channel=message_data.channel,
-        platform="platform"  # Adjust as necessary
+        platform=message_data.platform
     )
     print(f"Added message with ID: {message_id}")
     print(f"Publishing message to Jetstream for embedding: {message_data.message}")

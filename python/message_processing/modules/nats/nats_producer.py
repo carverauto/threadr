@@ -1,18 +1,23 @@
 # modules/nats/nats_producer.py
 
 import json
+from modules.messages.models import NATSMessage
 
 
 class NATSProducer:
+    """
+    A class to handle the publishing of messages to a NATS JetStream queue.
+    """
     def __init__(self, nats_manager):
         self.nats_manager = nats_manager
 
-    # subject = NATS_EMBEDDING_SUBJECT,
-    # message_id = message_id,
-    # message_content = message_data.message,
-    # channel = message_data.channel
-
-    async def publish_message(self, subject, message_data):
+    async def publish_message(self, subject, message_data: NATSMessage):
+        """
+        Publishes a message to a NATS JetStream queue.
+        :param subject:
+        :param message_data:
+        :return:
+        """
         if not self.nats_manager.js:
             print("JetStream context not initialized. Publish failed.")
             return
@@ -21,4 +26,3 @@ class NATSProducer:
         except Exception as e:
             print(f"Failed to publish message to Jetstream: {e}")
             return
-        print(f"Published message to Jetstream subject '{subject}'.")
