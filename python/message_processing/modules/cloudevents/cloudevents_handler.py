@@ -45,9 +45,10 @@ def extract_command_from_message(message: str) -> Optional[str]:
         return None
 
 
-async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
+async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, js):
     """
     Process a message from a CloudEvent.
+    :param js:
     :param message_data:
     :param neo4j_adapter:
     :return:
@@ -91,15 +92,16 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
                     print("Message: ", message_data.message)
             else:
                 # Handle non-command messages, e.g., logging, Neo4j updates
-                await handle_generic_message(message_data, neo4j_adapter)
+                await handle_generic_message(message_data, neo4j_adapter, js)
         except Exception as e:
             print(f"Failed to update: {e}")
 
 
-async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter):
+async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, js):
     """
     Handle a generic message that is not a command, log to Neo4j,
     and publish to Jetstream for embedding.
+    :param js:
     :param message_data:
     :param neo4j_adapter:
     :return:
@@ -112,9 +114,12 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
         channel=message_data.channel,
         platform="platform"  # Adjust as necessary
     )
+    print(f"Added message with ID: {message_id}")
+    print(f"Publishing message to Jetstream for embedding: {message_data.message}")
     await publish_message_to_jetstream(
+        js=js,
         subject=NATS_EMBEDDING_SUBJECT,
-        stream=NATS_EMBEDDING_STREAM,
+        #stream=NATS_EMBEDDING_STREAM,
         message_id=message_id,
         message_content=message_data.message,
         channel=message_data.channel
