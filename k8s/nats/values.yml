@@ -25,3 +25,13 @@ container:
         secretKeyRef:
           name: nats-user-credentials
           key: nkey
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: nats-node
+          operator: In
+          values:
+          - "true"
