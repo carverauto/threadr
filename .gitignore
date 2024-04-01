@@ -9,3 +9,4 @@ gds.license
 venv
 *__pycache__*
 .ipynb_checkpoints
+threadr-secrets.yaml
