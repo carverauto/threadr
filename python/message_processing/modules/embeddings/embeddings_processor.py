@@ -33,20 +33,16 @@ class EmbeddingsProcessor:
 
     async def process_embedding(self, msg):
         try:
-            # Parse the raw message data into a VectorEmbeddingMessage object
             message_dict = json.loads(msg.data.decode())
-            print("Message data:", message_dict)
+            print("Processing message for embedding:", message_dict)
             message_data = VectorEmbeddingMessage(**message_dict)
-
-            if self.neo4j_adapter is None:
-                print("Neo4j adapter not initialized.")
-                return
-
             embeddings = self.embedding_model.create_embeddings([message_data.content])
-            print("Length of embeddings:", len(embeddings[0]))
+            if not embeddings:
+                print("No embeddings created for message:", message_data.message_id)
+                return
             await self.save_embedding(embeddings[0], message_data.message_id)
+            print("Embedding saved for message ID:", message_data.message_id)
         except Exception as e:
-            print(f"Error processing message: {e}")
+            print(f"Error processing message for embedding: {e}")
         finally:
-            # Correctly acknowledge the message in JetStream context
             await msg.ack()
