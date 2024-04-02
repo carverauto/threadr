@@ -1,5 +1,5 @@
 import json
-import torch
+# import torch
 from modules.messages.models import VectorEmbeddingMessage
 from .embeddings import EmbeddingInterface, get_embedding_model
 
@@ -12,7 +12,15 @@ class EmbeddingsProcessor:
     async def save_embedding(self, vector, message_id):
         print("Saving embedding for message:", message_id)
         # Ensure vector is in a format that Neo4j can store (e.g., list of floats)
-        embedding_vector = vector.tolist() if torch.is_tensor(vector) else vector
+
+        # check to see if the vector is a tensor without using torch
+        if hasattr(vector, 'tolist'):
+            embedding_vector = vector.tolist()
+        else:
+            embedding_vector = vector
+
+        # embedding_vector = vector.tolist() if torch.is_tensor(vector) else vector
+        embedding_vector = vector if isinstance(vector, list) else vector.tolist()
 
         async with self.neo4j_adapter.driver.session() as session:
             # Define the Cypher query for updating the message with the embedding

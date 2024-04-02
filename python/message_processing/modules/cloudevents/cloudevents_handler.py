@@ -11,9 +11,10 @@ from modules.environment.settings import (
 )
 
 BOT_NAME = "threadr"  # Ensure this matches the actual bot name used in messages
-bot_nicknames = ['twatbot', 'ballsbot', 'thufir']
+bot_nicknames = []
 url_pattern = re.compile(r'https?://[^\s]+')
 twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
+username_pattern = re.compile(r'^(\w+):\s+')
 
 
 def is_command(message: str) -> bool:
@@ -80,7 +81,8 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
                 mentioned_nick,
                 relationship_type
             )
-            print(f"MSGID: {message_id} - Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
+            print(
+                f"MSGID: {message_id} - Updated relationship and added interaction between {message_data.nick} and {mentioned_nick}.")
             # Publish the message to Jetstream for embedding
             message_data = {
                 "message_id": message_id,
@@ -149,9 +151,9 @@ def extract_mentioned_nick(message):
     """
     Extracts a mentioned user from the message, if present.
     """
-    for line in message.splitlines():
-        if ": " in line:
-            mentioned_nick, _, _ = line.partition(": ")
-            return mentioned_nick.strip(), "MENTIONED"
+    # Use a regular expression pattern to match the mentioned user
+    match = username_pattern.search(message)
+    if match:
+        mentioned_nick = match.group(1)
+        return mentioned_nick.strip(), "MENTIONED"
     return None, None
-
