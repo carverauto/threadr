@@ -64,6 +64,8 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
 
     # Attempt to extract a mentioned user and relationship type from the message
     mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
+    print(f"Mentioned nick: {mentioned_nick}, Relationship type: {relationship_type}")
+
     # If a specific user is mentioned, update the relationship and add the interaction
     if mentioned_nick and relationship_type:
         try:
