@@ -1,0 +1,7 @@
+export RESOURCE_GROUP="threadr"
+export LOCATION="eastus"
+export SERVICE_ACCOUNT_NAMESPACE="default"
+export SERVICE_ACCOUNT_NAME="workload-identity-sa"
+export SUBSCRIPTION="$(az account show --query id --output tsv)"
+export USER_ASSIGNED_IDENTITY_NAME="threadr"
+export FEDERATED_IDENTITY_CREDENTIAL_NAME="threadrFed"

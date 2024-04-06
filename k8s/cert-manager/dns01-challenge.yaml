@@ -1,0 +1,23 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns-issuer
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # This will register an issuer with LetsEncrypt.  Replace
+    # with your admin email address.
+    email: mfreeman451@gmail.com
+    privateKeySecretRef:
+      # Set privateKeySecretRef to any unused secret name.
+      name: letsencrypt-dns-issuer
+    solvers:
+    - dns01:
+        cloudDNS:
+          # Set this to your GCP project-id
+          project: $PROJECT_ID
+          # Set this to the secret that we publish our service account key
+          # in the previous step.
+          serviceAccountSecretRef:
+            name: cloud-dns-key
+            key: key.json

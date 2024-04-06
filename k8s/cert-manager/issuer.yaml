@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: threadr-issuer
+spec:
+  acme:
+    ...
+    solvers:
+    - dns01:
+        azureDNS:
+          clientID: 5b24558a-ae02-4b9d-8c94-ce4336786d7e
+          clientSecretSecretRef:
+          # The following is the secret we created in Kubernetes. Issuer will use this to present challenge to Azure DNS.
+            name: azuredns-config
+            key: client-secret
+          subscriptionID: 13042e6e-d36a-43e0-a9ae-5f636f008225
+          tenantID: bb7a39f8-e4f7-4606-bd55-c56d5092e185
+          resourceGroupName: threadr
+          hostedZoneName: threadr.ai
+          # Azure Cloud Environment, default to AzurePublicCloud
+          environment: AzurePublicCloud
