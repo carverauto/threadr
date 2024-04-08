@@ -6,7 +6,9 @@ setuptools~=68.2.2
 openai~=1.13.3
 langgraph~=0.0.32
 fastapi~=0.110.1
-
+nltk
+spacy
+sklearn
 torch~=2.2.2
 transformers~=4.38.2
 uvicorn~=0.29.0
