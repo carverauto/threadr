@@ -9,13 +9,32 @@ hub:
         secretKeyRef:
           name: jupyterhub-secrets
           key: NEO4J_PASSWORD
+  nodeSelector:
+    gpu: "true"
 singleuser:
+  image:
+    # name: jupyter/pytorch-notebook-cuda
+    name: quay.io/jupyter/pytorch-notebook
+    tag: cuda12-latest
+    pullSecrets:
+      - name: myregistrykey
+    pullPolicy: Always
+  extraEnv:
+    JUPYTER_ENABLE_LAB: "yes"
+    JUPYTERHUB_SINGLEUSER_APP: "jupyter_server.serverapp.ServerApp"
+    NEO4J_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: jupyterhub-secrets
+          key: NEO4J_PASSWORD
   storage:
     type: dynamic
     capacity: 20Gi
-    homeMountPath: /home/mfreeman
+    homeMountPath: /home/jovyan
     dynamic:
-      storageClass:  # You might want to specify a storageClass if needed
+      storageClass: local-path
       pvcNameTemplate: claim-{username}{servername}
       volumeNameTemplate: volume-{username}{servername}
       storageAccessModes: [ReadWriteOnce]
+  nodeSelector:
+    gpu: "true"
