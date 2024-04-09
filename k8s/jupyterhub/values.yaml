@@ -27,6 +27,11 @@ singleuser:
         secretKeyRef:
           name: jupyterhub-secrets
           key: NEO4J_PASSWORD
+    GRAPHISTRY_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: graphistry-secrets
+          key: GRAPHISTRY_API_KEY
   storage:
     type: dynamic
     capacity: 20Gi
