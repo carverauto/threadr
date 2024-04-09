@@ -32,6 +32,16 @@ singleuser:
         secretKeyRef:
           name: graphistry-secrets
           key: GRAPHISTRY_API_KEY
+    OPENAI_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: openai-api
+          key: OPENAI_API_KEY
+    LANGCHAIN_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: langchain
+          key: LANGCHAIN_API_KEY
   storage:
     type: dynamic
     capacity: 20Gi
