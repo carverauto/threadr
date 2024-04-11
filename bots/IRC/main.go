@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/carverauto/threadr/bots/IRC/pkg/adapters/broker"
-	irc "github.com/carverauto/threadr/bots/IRC/pkg/adapters/messages"
-	"github.com/carverauto/threadr/bots/IRC/pkg/common"
-	pm "github.com/carverauto/threadr/bots/IRC/pkg/ports"
+	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
+	irc "github.com/carverauto/threadr/bots/pkg/adapters/messages"
+	"github.com/carverauto/threadr/bots/pkg/common"
+	pm "github.com/carverauto/threadr/bots/pkg/ports"
 	"github.com/nats-io/nats.go"
 	"log"
 	"time"
@@ -42,11 +42,13 @@ func main() {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
+	// Setup the IRC adapter
 	var ircAdapter pm.MessageAdapter = irc.NewIRCAdapter()
 	if err := ircAdapter.Connect(ctx, commandsHandler); err != nil {
 		log.Fatal("Failed to connect to IRC:", err)
 	}
 
+	// Subscribe to NATS for handling results
 	go func() {
 		log.Println("main.go - Subscribing to results")
 		resultsHandler.Listen(resultsSubject, "results-durable", func(msg *nats.Msg) {
@@ -84,6 +86,7 @@ func main() {
 			Timestamp: time.Now(),
 		}
 
+		// Publish the CloudEvent
 		log.Printf("main.go - Publishing CloudEvent for message [%d]", msgCounter)
 		err := cloudEventsHandler.PublishEvent(ctx, "irc", ce)
 		if err != nil {

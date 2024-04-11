@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/carverauto/threadr/bots/IRC/pkg/adapters/broker"
+	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/kelseyhightower/envconfig"
 	"net/http"

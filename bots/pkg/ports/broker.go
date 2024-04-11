@@ -3,7 +3,7 @@ package ports
 
 import (
 	"context"
-	"github.com/carverauto/threadr/bots/IRC/pkg/common"
+	"github.com/carverauto/threadr/bots/pkg/common"
 )
 
 type Broker interface {
