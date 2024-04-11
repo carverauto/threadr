@@ -2,29 +2,28 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
 	d "github.com/carverauto/threadr/bots/pkg/adapters/messages"
-	pm "github.com/carverauto/threadr/bots/pkg/ports"
+	"github.com/carverauto/threadr/bots/pkg/common"
+	"github.com/nats-io/nats.go"
 	"log"
 	"os"
 	"os/signal"
 )
 
-func checkNilErr(e error) {
-	if e != nil {
-		log.Fatal("Error message")
-	}
-}
-
 func main() {
-	natsURL := "nats://nats.nats.svc.cluster.local:4222"
+	// natsURL := "nats://nats.nats.svc.cluster.local:4222"
+	natsURL := os.Getenv("NATSURL")
 	sendSubject := "discord"
 	stream := "messages"
 	cmdsSubject := "incoming"
 	cmdsStream := "commands"
 	resultsSubject := "outgoing"
 	resultsStream := "results"
+
+	log.Println("NATS URL: ", natsURL)
 
 	ctx := context.Background()
 
@@ -38,19 +37,52 @@ func main() {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	var discordAdapter pm.MessageAdapter = d.NewDiscordAdapter()
-	if err := discordAdapter.Connect(ctx, commandsHandler); err != nil {
-		log.Fatal("Failed to connect to Discord:", err)
+	resultsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, resultsSubject, resultsStream, true)
+	if err != nil {
+		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
+
+	discordAdapter := d.NewDiscordAdapter() // Setup the Discord adapter
+	if err := discordAdapter.Connect(ctx, commandsHandler); err != nil {
+		log.Fatalf("Failed to connect to Discord: %v", err)
+	}
+
+	publishStartupEvent(cloudEventsHandler, ctx)
+
+	// Subscribe to NATS for handling results
+	go func() {
+		log.Println("Subscribing to results")
+		resultsHandler.Listen(resultsSubject, "results-durable", func(msg *nats.Msg) {
+			log.Printf("Received result: %s", string(msg.Data))
+			var result common.CommandResult
+			if err := json.Unmarshal(msg.Data, &result); err != nil {
+				log.Printf("Failed to unmarshal result: %v", err)
+				return
+			}
+
+			// Send the results back to the Discord channel
+			discordAdapter.Send(result.Content.Channel, result.Content.Response)
+		})
+	}()
 
 	fmt.Println("Bot is now running. Press CTRL+C to exit.")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
 
-	// Properly close the Discord session within the adapter on shutdown
-	if err := discordAdapter.(*d.DiscordAdapter).Session.Close(); err != nil {
+	// Close the Discord session on shutdown
+	if err := discordAdapter.Session.Close(); err != nil {
 		log.Printf("Error closing Discord session: %v", err)
 	}
+}
 
+func publishStartupEvent(handler *broker.CloudEventsNATSHandler, ctx context.Context) {
+	// Construct a simple event message
+	eventMessage := map[string]string{"message": "Bot has started"}
+	// Publish the event
+	if err := handler.PublishEvent(ctx, "bot-startup", eventMessage); err != nil {
+		log.Printf("Failed to publish startup event: %v", err)
+	} else {
+		log.Println("Successfully published startup event")
+	}
 }
