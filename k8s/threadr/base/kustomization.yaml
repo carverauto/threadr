@@ -1,4 +1,5 @@
 resources:
   - threadr-irc.yaml
+  - threadr-discord.yaml
   - threadr-embeds.yaml
   - threadr-messages.yaml

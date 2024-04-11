@@ -1,3 +1,6 @@
+// Package broker pkg/adapters/broker/nats_adapter.go
+// provides a CloudEventsNATSHandler that can be used to publish and subscribe to CloudEvents messages.
+
 package broker
 
 import (
@@ -23,6 +26,7 @@ type CloudEventsNATSHandler struct {
 	config natsConfig
 }
 
+// natsConfig holds the configuration for the NATS connection.
 type natsConfig struct {
 	NatsURL     string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
 	NKey        string `envconfig:"NKEY" required:"true"`
@@ -30,16 +34,20 @@ type natsConfig struct {
 	DurableName string `envconfig:"DURABLE_NAME" default:"durable-results"`
 }
 
+// NewCloudEventsNATSHandler creates a new CloudEventsNATSHandler.
+// The handler is used to publish and subscribe to CloudEvents messages.
 func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool) (*CloudEventsNATSHandler, error) {
 	var env natsConfig
 	if err := envconfig.Process("", &env); err != nil {
 		log.Fatal("Failed to process NATS config:", err)
 	}
 
+	// Create the NATS options
 	natsOpts := []nats.Option{
 		nats.RetryOnFailedConnect(true),
 		nats.Timeout(30 * time.Second),
 		nats.ReconnectWait(1 * time.Second),
+		// use the NKey to sign the connection
 		nats.Nkey(env.NKey, func(bytes []byte) ([]byte, error) {
 			sk, err := nkeys.FromSeed([]byte(env.NkeySeed))
 			if err != nil {
@@ -54,11 +62,13 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool)
 		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
 	}
 
+	// Create the JetStream context
 	jsm, err := nc.JetStream()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JetStream context: %v", err)
 	}
 
+	// Create the CloudEvents client
 	var p *cejsm.Protocol
 	p, err = cejsm.NewProtocol(natsURL, stream, subject, subject, natsOpts, nil, nil)
 	client, err := cloudevents.NewClient(p)
@@ -66,6 +76,7 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool)
 		return nil, fmt.Errorf("failed to create CloudEvents client: %v", err)
 	}
 
+	// Return the CloudEventsNATSHandler
 	return &CloudEventsNATSHandler{
 		client: client,
 		js:     jsm,
@@ -77,13 +88,18 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool)
 func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, subject string, data interface{}) error {
 	event := cloudevents.NewEvent()
 	event.SetID(uuid.New().String())
-	event.SetType("com.carverauto.threadr.chatops.irc.message")
-	event.SetSource("threadr-irc-bot")
+	event.SetType("com.carverauto.threadr.chatops")
+	event.SetSource("threadr-bot")
 	event.SetTime(time.Now())
+
+	// Set the data
 	if err := event.SetData(cloudevents.ApplicationJSON, data); err != nil {
+		log.Println("Failed to set data")
 		return err
 	}
 
+	// Send the event
+	fmt.Println("Sending event", event)
 	if result := h.client.Send(ctx, event); cloudevents.IsUndelivered(result) {
 		return fmt.Errorf("failed to send: %v", result)
 	}
@@ -100,6 +116,7 @@ func (h *CloudEventsNATSHandler) Listen(subject string, durableName string, hand
 
 	log.Printf("Listening for messages on subject '%s'...", subject)
 	for {
+		// Fetch messages
 		msgs, err := sub.Fetch(10, nats.MaxWait(5*time.Second))
 		if err != nil {
 			if errors.Is(err, nats.ErrTimeout) {

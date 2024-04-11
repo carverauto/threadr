@@ -14,32 +14,32 @@ type DiscordAdapter struct {
 }
 
 func NewDiscordAdapter() *DiscordAdapter {
-	dg, err := discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
+	dg, err := discordgo.New("Bot " + os.Getenv("DISCORDTOKEN"))
 	if err != nil {
 		log.Fatalf("error creating Discord session: %v", err)
 	}
 	return &DiscordAdapter{Session: dg}
 }
 
-func (d *DiscordAdapter) Connect(ctx context.Context, commandEventsHandler *broker.CloudEventsNATSHandler) error {
+func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker.CloudEventsNATSHandler) error {
 	d.Session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// Ignore all messages created by the bot itself
 		if m.Author.ID == s.State.User.ID {
 			return
 		}
 
-		// Here you can filter messages or directly handle commands
-		// For simplicity, assuming every message is a command
 		ce := broker.Message{
-			Message:   m.Content,
+			Message:   m.Message.Content,
 			Nick:      m.Author.Username,
 			Channel:   m.ChannelID,
 			Platform:  "Discord",
 			Timestamp: m.Timestamp,
 		}
 
-		log.Printf("Publishing command event for message: %+v", ce)
-		if err := commandEventsHandler.PublishEvent(ctx, "commands", ce); err != nil {
+		s.Identify.Intents |= discordgo.IntentMessageContent
+
+		log.Printf("Publishing message: %+v", ce)
+		if err := cloudEventsHandler.PublishEvent(ctx, "discord", ce); err != nil {
 			log.Printf("Failed to publish command event: %v", err)
 		}
 	})

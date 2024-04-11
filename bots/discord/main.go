@@ -16,14 +16,12 @@ import (
 func main() {
 	// natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	natsURL := os.Getenv("NATSURL")
-	sendSubject := "discord"
+	sendSubject := "irc"
 	stream := "messages"
-	cmdsSubject := "incoming"
-	cmdsStream := "commands"
+	// cmdsSubject := "incoming"
+	// cmdsStream := "commands"
 	resultsSubject := "outgoing"
 	resultsStream := "results"
-
-	log.Println("NATS URL: ", natsURL)
 
 	ctx := context.Background()
 
@@ -32,10 +30,13 @@ func main() {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
 
-	commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
-	if err != nil {
-		log.Fatalf("Failed to create CloudEvents handler: %s", err)
-	}
+	/*
+		commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
+		if err != nil {
+
+			log.Fatalf("Failed to create CloudEvents handler: %s", err)
+		}
+	*/
 
 	resultsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, resultsSubject, resultsStream, true)
 	if err != nil {
@@ -43,11 +44,11 @@ func main() {
 	}
 
 	discordAdapter := d.NewDiscordAdapter() // Setup the Discord adapter
-	if err := discordAdapter.Connect(ctx, commandsHandler); err != nil {
+	if err := discordAdapter.Connect(ctx, cloudEventsHandler); err != nil {
 		log.Fatalf("Failed to connect to Discord: %v", err)
 	}
 
-	publishStartupEvent(cloudEventsHandler, ctx)
+	// publishStartupEvent(cloudEventsHandler, ctx)
 
 	// Subscribe to NATS for handling results
 	go func() {
