@@ -1,3 +1,9 @@
+# DEPRECATED
+
+**This consumer is no longer in use.**
+
+We are no longer using these consumers and instead rely on the python based system.
+
 # Build
 
 ```bash

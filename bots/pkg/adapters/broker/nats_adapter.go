@@ -77,7 +77,7 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool)
 func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, subject string, data interface{}) error {
 	event := cloudevents.NewEvent()
 	event.SetID(uuid.New().String())
-	event.SetType("com.carverauto.threadr.irc.message")
+	event.SetType("com.carverauto.threadr.chatops.irc.message")
 	event.SetSource("threadr-irc-bot")
 	event.SetTime(time.Now())
 	if err := event.SetData(cloudevents.ApplicationJSON, data); err != nil {

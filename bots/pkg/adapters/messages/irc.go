@@ -4,8 +4,8 @@ package messages
 import (
 	"context"
 	"crypto/tls"
-	"github.com/carverauto/threadr/bots/IRC/pkg/adapters/broker"
-	"github.com/carverauto/threadr/bots/IRC/pkg/common"
+	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
+	"github.com/carverauto/threadr/bots/pkg/common"
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 	"github.com/kelseyhightower/envconfig"

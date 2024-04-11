@@ -3,8 +3,8 @@ package ports
 
 import (
 	"context"
-	"github.com/carverauto/threadr/bots/IRC/pkg/adapters/broker"
-	"github.com/carverauto/threadr/bots/IRC/pkg/common"
+	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
+	"github.com/carverauto/threadr/bots/pkg/common"
 )
 
 // MessageAdapter is an interface for connecting to various message sources and listening for message_processing.
