@@ -14,7 +14,11 @@ BOT_NAME = "threadr"  # Ensure this matches the actual bot name used in messages
 bot_nicknames = []
 url_pattern = re.compile(r'https?://[^\s]+')
 twitter_expansion_pattern = re.compile(r'\[.*twitter.com.*\]')
-username_pattern = re.compile(r'^(\w+):\s+')
+# username_pattern = re.compile(r'^(\w+):\s+')
+# Update the pattern to match either a username or a user ID
+# username_pattern = re.compile(r'(?:(\w+):\s+|<@(\d+)>)')
+# username_pattern = re.compile(r'^(?:(\w+):\s+|<@(\d+)>)', re.M)
+username_pattern = re.compile(r'(?<!//)(?<!:)(?<!@\w)(?<!http://)(?<!https://)(?<!ftp://)(?:(\w+):\s+|<@(\d+)>)', re.M)
 
 
 def is_command(message: str) -> bool:
@@ -61,6 +65,9 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
             twitter_expansion_pattern.search(message_data.message)):
         print(f"Ignoring bot message or unwanted pattern from {message_data.nick}.")
         return
+
+    # Decode Unicode escape sequences in the message
+    message_data.message = decode_message(message_data.message)
 
     # Attempt to extract a mentioned user and relationship type from the message
     mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
@@ -151,11 +158,22 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
 
 def extract_mentioned_nick(message):
     """
-    Extracts a mentioned user from the message, if present.
+    Extracts a mentioned user from the message, if present, while ensuring that the mentions are not part of a URL.
+
+    Parameters:
+        message (str): The message string to search for mentions.
+
+    Returns:
+        tuple: (mentioned_nick, "MENTIONED") if a mention is found, otherwise (None, None).
     """
-    # Use a regular expression pattern to match the mentioned user
     match = username_pattern.search(message)
     if match:
-        mentioned_nick = match.group(1)
-        return mentioned_nick.strip(), "MENTIONED"
+        mentioned_nick = match.group(1) or match.group(2)  # Group 1 for names, Group 2 for IDs
+        if mentioned_nick:
+            return mentioned_nick.strip(), "MENTIONED"
     return None, None
+
+
+def decode_message(message):
+    """ Decode Unicode escape sequences in a string. """
+    return bytes(message, "utf-8").decode("unicode_escape")
