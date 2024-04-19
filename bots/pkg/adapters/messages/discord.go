@@ -28,11 +28,20 @@ func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker
 			return
 		}
 
+		// Get channel details
+		channel, err := s.Channel(m.ChannelID)
+		if err != nil {
+			log.Printf("Failed to get channel details: %v", err)
+			return // Optionally handle the error appropriately
+		}
+
 		ce := broker.Message{
 			Message:   m.Message.Content,
 			Nick:      m.Author.Username,
-			Channel:   m.ChannelID,
+			Channel:   channel.Name,
+			ChannelID: channel.ID,
 			Platform:  "Discord",
+			Mentions:  m.Mentions,
 			Timestamp: m.Timestamp,
 		}
 
