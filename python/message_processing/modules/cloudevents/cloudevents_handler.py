@@ -60,21 +60,26 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
     :return:
     """
 
-    if (message_data.nick in bot_nicknames or
-            url_pattern.search(message_data.message) or
-            twitter_expansion_pattern.search(message_data.message)):
-        print(f"Ignoring bot message or unwanted pattern from {message_data.nick}.")
-        return
-
     # Decode Unicode escape sequences in the message
     message_data.message = decode_message(message_data.message)
 
-    # Attempt to extract a mentioned user and relationship type from the message
-    mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
-    print(f"Mentioned nick: {mentioned_nick}, Relationship type: {relationship_type}")
+    # Initialize a list to hold all mentions processed
+    all_mentions = []
+
+    # Check if the platform is IRC or similar that uses text-based mentions
+    if message_data.platform.lower() == "irc":
+        mentioned_nick, relationship_type = extract_mentioned_nick(message_data.message)
+        if mentioned_nick:
+            all_mentions.append((mentioned_nick, relationship_type))
+
+    # For platforms like Discord with JSON structured mentions
+    elif message_data.platform.lower() == "discord" and message_data.mentions:
+        for mention in message_data.mentions:
+            # Use a standard relationship type or customize based on logic
+            all_mentions.append((mention.username, "MENTIONED"))
 
     # If a specific user is mentioned, update the relationship and add the interaction
-    if mentioned_nick and relationship_type:
+    for mentioned_nick, relationship_type in all_mentions:
         try:
             # Add or update the interaction and relationship in Neo4j
             message_id = await neo4j_adapter.add_interaction(

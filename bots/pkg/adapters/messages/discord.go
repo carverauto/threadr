@@ -2,11 +2,13 @@ package messages
 
 import (
 	"context"
+	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
 	"github.com/carverauto/threadr/bots/pkg/common"
 	"log"
 	"os"
+	"strings"
 )
 
 type DiscordAdapter struct {
@@ -19,6 +21,17 @@ func NewDiscordAdapter() *DiscordAdapter {
 		log.Fatalf("error creating Discord session: %v", err)
 	}
 	return &DiscordAdapter{Session: dg}
+}
+
+func replaceUserIDs(content string, mentions []*discordgo.User) string {
+	for _, mention := range mentions {
+		// Create the ID tag as it appears in the message, e.g., <@274107101700423680>
+		idTag := fmt.Sprintf("<@%s>", mention.ID)
+
+		// Replace all occurrences of the ID tag with the user's username
+		content = strings.Replace(content, idTag, mention.Username, -1)
+	}
+	return content
 }
 
 func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker.CloudEventsNATSHandler) error {
@@ -36,7 +49,7 @@ func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker
 		}
 
 		ce := broker.Message{
-			Message:   m.Message.Content,
+			Message:   replaceUserIDs(m.Message.Content, m.Mentions),
 			Nick:      m.Author.Username,
 			Channel:   channel.Name,
 			ChannelID: channel.ID,

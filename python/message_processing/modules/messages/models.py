@@ -5,11 +5,24 @@ from typing import Optional
 from datetime import datetime
 
 
+class Mention(BaseModel):
+    id: int = Field(..., description="Mention ID")
+    email: Optional[str] = Field(None, description="Email address of the mentioned user")
+    username: Optional[str] = Field(None, description="Username of the mentioned user")
+    avatar: Optional[str] = Field(None, description="Avatar URL of the mentioned user")
+    global_name: Optional[str] = Field(None, description="Global name of the mentioned user")
+    verified: Optional[bool] = Field(None, description="Verification status of the mentioned user")
+    mfa_enabled: Optional[bool] = Field(None, description="MFA status of the mentioned user")
+    bot: Optional[bool] = Field(None, description="Bot status of the mentioned user")
+
+
 class NATSMessage(BaseModel):
     id: Optional[int] = Field(None, description="Message ID")
     message: str = Field(..., description="Message content")
     nick: str = Field(..., description="Nickname of the message sender")
+    mentions: Optional[list[Mention]] = Field(None, description="List of mentioned users")
     channel: Optional[str] = Field(None, description="Channel where the message was sent")
+    channel_id: Optional[int] = Field(None, description="Channel ID where the message was sent")
     timestamp: datetime = Field(..., description="Timestamp of the message")
     platform: Optional[str] = Field(None, description="Platform from which the message was sent")
     embedding: Optional[list] = Field(None, description="Message embedding (e.g. BERT, GPT-3, etc.)")

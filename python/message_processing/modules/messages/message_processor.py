@@ -11,7 +11,6 @@ class MessageProcessor:
         self.producer = producer
 
     async def process_message(self, msg):
-        print(f"Received a message: {msg.data.decode()}")
         try:
             # Parse the raw message data into a NATSMessage object
             # message_data = NATSMessage.parse_raw(msg.data.decode())
