@@ -81,11 +81,15 @@ func (irc *IRCAdapter) Connect(ctx context.Context, commandEventsHandler *broker
 			// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			// defer cancel()
 
+			user := broker.User{
+				Username: e.Nick(),
+			}
 			ce := broker.Message{
 				Message:   command,
-				Nick:      e.Nick(),
+				User:      &user,
 				Channel:   target,
 				Platform:  "IRC",
+				Server:    irc.Connection.Server,
 				Timestamp: time.Now(),
 			}
 
@@ -169,6 +173,7 @@ func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {
 			User:     rest,
 			Channel:  e.Params[0],
 			Message:  strings.Join(e.Params[1:], " "),
+			Server:   irc.Connection.Server,
 			FullUser: fullPrefix,
 		}
 

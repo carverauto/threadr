@@ -4,6 +4,7 @@ type IRCMessage struct {
 	Nick     string
 	User     string
 	Channel  string
+	Server   string
 	Message  string
 	FullUser string
 }

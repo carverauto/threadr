@@ -77,10 +77,14 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
+		user := broker.User{
+			Username: ircMsg.Nick,
+		}
 		// Create a CloudEvent
 		ce := broker.Message{
 			Message:   ircMsg.Message,
-			Nick:      ircMsg.Nick,
+			User:      &user,
+			Server:    ircMsg.Server,
 			Channel:   ircMsg.Channel,
 			Platform:  "IRC",
 			Timestamp: time.Now(),

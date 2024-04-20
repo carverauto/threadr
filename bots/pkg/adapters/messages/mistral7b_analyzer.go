@@ -38,7 +38,7 @@ func (h *MistralMessageHandler) Handle(ctx context.Context, event cloudevents.Ev
 
 	// Prepare the payload for the Flask web service
 	payload, err := json.Marshal(map[string]string{
-		"system": data.Nick, // assuming system correlates to Nick for demonstration
+		"system": data.User.Username, // assuming system correlates to Nick for demonstration
 		"user":   data.Message,
 	})
 	if err != nil {

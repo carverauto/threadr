@@ -4,6 +4,8 @@ from neo4j import AsyncGraphDatabase
 from datetime import datetime
 from typing import Optional
 
+from modules.messages.models import NATSMessage
+
 
 class Neo4jAdapter:
     def __init__(self, uri, username, password):
@@ -18,6 +20,24 @@ class Neo4jAdapter:
 
     async def close(self):
         await self.driver.close()
+
+    async def add_or_update_user(self, user):
+        async with self.driver.session() as session:
+            cypher = """
+            MERGE (u:User {id: $id})
+            ON CREATE SET u.username = $username, u.email = $email, u.avatar = $avatar,
+                          u.global_name = $global_name, u.verified = $verified, u.mfa_enabled = $mfa_enabled,
+                          u.bot = $bot
+            ON MATCH SET u.username = $username, u.email = $email, u.avatar = $avatar,
+                         u.global_name = $global_name, u.verified = $verified, u.mfa_enabled = $mfa_enabled,
+                         u.bot = $bot
+            RETURN u
+            """
+            result = await session.run(cypher, id=user.id, username=user.username, email=user.email,
+                                       avatar=user.avatar, global_name=user.global_name, verified=user.verified,
+                                       mfa_enabled=user.mfa_enabled, bot=user.bot)
+            record = await result.single()
+            return record['u'] if record else None
 
     async def add_or_update_relationship(self, from_user, to_user, 
                                          relationship_type):
@@ -54,94 +74,114 @@ class Neo4jAdapter:
             return [{"toUser": record["toUser"], "relationshipType":
                      record["relationshipType"]} for record in result]
 
-    async def add_message(self, nick: str, message: str, timestamp: datetime,
-                          channel: Optional[str] = None,
-                          platform: str = "generic"):
+    async def add_message(self, message_data: NATSMessage):
 
         # Prepare the parameters for the Cypher query
         params = {
-            'nick': nick,
-            'message': message,
-            'timestamp': timestamp.isoformat(),
-            'platform': platform,
+            'username': message_data.user.username,
+            'message': message_data.message,
+            'timestamp': message_data.timestamp.isoformat(),
+            'platform': message_data.platform,
         }
-
+        cypher = """
+                    MERGE (user:User {username: $username})
+                    CREATE (msg:Message {content: $message, timestamp: $timestamp,
+                    platform: $platform})
+                    MERGE (user)-[:SENT]->(msg)
+        """
         async with self.driver.session() as session:
-            cypher = """
-            MERGE (user:User {name: $nick})
-            CREATE (msg:Message {content: $message, timestamp: $timestamp,
-            platform: $platform})
-            MERGE (user)-[:SENT]->(msg)
-            """
-            if channel:
+
+            if message_data.channel:
                 cypher += """
-                MERGE (chan:Channel {name: $channel})
+                MERGE (chan:Channel {name: $channel, id: $channel_id})
                 MERGE (msg)-[:POSTED_IN]->(chan)
                 """
-                params['channel'] = channel
+                params.update({
+                    'channel': message_data.channel,
+                    'channel_id': message_data.channel_id
+                })
             # Add RETURN id(msg) to return the Neo4j node ID of the created message
-            cypher += " RETURN id(msg) as messageId, msg"
+            cypher += " RETURN id(msg) as messageId"
 
             result = await session.run(cypher, **params)
             record = await result.single()
             if record:
                 messageId = record["messageId"]
-                print(f"Message from '{nick}' added to the graph with ID {messageId}.")
+                print(f"Message from '{message_data.user.username}' added to the graph with ID {messageId}.")
                 return messageId
             else:
-                print(f"Failed to add message from '{nick}' to the graph.")
+                print(f"Failed to add message from '{message_data.user.username}' to the graph.")
                 return None
 
-    async def add_interaction(self, from_user: str, to_user: Optional[str],
-                              message_content: str, timestamp: datetime, 
-                              channel: Optional[str],
-                              platform: str = "generic"):
+    async def add_interaction(self, message_data: NATSMessage, relationship_type: str):
+        if message_data.user is None:
+            print("No user data available to process interaction.")
+            return None  # Skip processing this message or handle as needed
+
         async with self.driver.session() as session:
-            # Create/merge the user, message, and channel nodes
-            # Always link the message to the channel and sender
+            # Build the initial part of the cypher query to merge the sender user node
             cypher = """
-            MERGE (from:User {name: $from_user})
-            MERGE (chan:Channel {name: $channel})
-            CREATE (msg:Message {content: $message_content,
-            timestamp: $timestamp, platform: $platform})
-            MERGE (from)-[:SENT]->(msg)
+            MERGE (sender:User {id: $user_id})
+            ON CREATE SET sender.username = $username, sender.email = $email, sender.avatar = $avatar,
+                          sender.global_name = $global_name, sender.verified = $verified, 
+                          sender.mfa_enabled = $mfa_enabled, sender.bot = $bot
+            ON MATCH SET sender.username = $username, sender.email = $email, sender.avatar = $avatar,
+                         sender.global_name = $global_name, sender.verified = $verified, 
+                         sender.mfa_enabled = $mfa_enabled, sender.bot = $bot
+            """
+
+            # Prepare user parameters
+            user_params = {
+                "user_id": message_data.user.id,
+                "username": message_data.user.username,
+                "email": message_data.user.email,
+                "avatar": message_data.user.avatar,
+                "global_name": message_data.user.global_name,
+                "verified": message_data.user.verified,
+                "mfa_enabled": message_data.user.mfa_enabled,
+                "bot": message_data.user.bot,
+            }
+
+            # Append the creation of the message node and its relationships
+            cypher += """
+            CREATE (msg:Message {content: $content, timestamp: $timestamp, platform: $platform})
+            MERGE (sender)-[:SENT]->(msg)
+            MERGE (chan:Channel {id: $channel_id})
+            ON CREATE SET chan.name = $channel
             MERGE (msg)-[:POSTED_IN]->(chan)
             """
-            
-            params = {
-                "from_user": from_user,
-                "message_content": message_content,
-                "timestamp": timestamp.isoformat(),
-                "channel": channel,
-                "platform": platform
-            }
-            
-            # If the message is directed at another user, add that relationship
-            if to_user:
-                cypher += """
-                MERGE (to:User {name: $to_user})
-                MERGE (msg)-[:MENTIONED]->(to)
-                MERGE (from)-[r:INTERACTED_WITH]->(to)
-                    ON CREATE SET r.weight = 1
-                    ON MATCH SET r.weight = r.weight + 1
-                """
-                params["to_user"] = to_user
 
-            # Add RETURN statement to get the ID of the created message node
-            cypher += " RETURN id(msg) AS messageId"
-            
+            # Extend parameters with message details
+            params = {
+                **user_params,
+                "content": message_data.message,
+                "timestamp": message_data.timestamp.isoformat(),
+                "platform": message_data.platform,
+                "channel_id": message_data.channel_id,
+                "channel": message_data.channel,
+            }
+
+            # Handle mentions and establish MENTIONED relationships
+            if message_data.mentions:
+                for index, mention in enumerate(message_data.mentions):
+                    cypher += f"""
+                    MERGE (mentioned{index}:User {{id: $mention_id{index}}})
+                    ON CREATE SET mentioned{index}.username = $mention_username{index}
+                    MERGE (msg)-[:MENTIONED]->(mentioned{index})
+                    """
+                    params[f"mention_id{index}"] = mention.id
+                    params[f"mention_username{index}"] = mention.username
+
+            # Finalize the Cypher query to return the created message ID
+            cypher += "RETURN id(msg) AS messageId"
+
+            # Run the session with the composed Cypher and parameters
             result = await session.run(cypher, **params)
             record = await result.single()
 
             if record:
-                messageId = record["messageId"]
-                print("Message from '{}' added to the graph, directed to '{}',"
-                      .format(from_user, to_user), "in channel '{}'."
-                      .format(channel))
-
-                return messageId
+                print(f"Interaction added with message ID {record['messageId']}.")
+                return record['messageId']
             else:
-                print(f"Failed to add message from '{from_user}' to the graph.")
+                print("Failed to add interaction to the graph.")
                 return None
-
-               

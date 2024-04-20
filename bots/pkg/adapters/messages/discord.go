@@ -48,12 +48,25 @@ func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker
 			return // Optionally handle the error appropriately
 		}
 
+		// Create user object
+		user := broker.User{
+			ID:         m.Author.ID,
+			Username:   m.Author.Username,
+			Avatar:     m.Author.Avatar,
+			Email:      m.Author.Email,
+			Verified:   m.Author.Verified,
+			MFAEnabled: m.Author.MFAEnabled,
+			Bot:        m.Author.Bot,
+		}
+
+		// Create the message event
 		ce := broker.Message{
 			Message:   replaceUserIDs(m.Message.Content, m.Mentions),
-			Nick:      m.Author.Username,
+			User:      &user,
 			Channel:   channel.Name,
 			ChannelID: channel.ID,
 			Platform:  "Discord",
+			Server:    m.GuildID,
 			Mentions:  m.Mentions,
 			Timestamp: m.Timestamp,
 		}

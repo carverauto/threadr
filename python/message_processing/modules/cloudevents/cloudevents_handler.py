@@ -51,6 +51,14 @@ def extract_command_from_message(message: str) -> Optional[str]:
         return None
 
 
+def get_channel_id(platform, channel_name, server=None):
+    if platform.lower() == "irc" and server:
+        return f"irc:{server}:{channel_name}"
+    elif platform.lower() == "discord":
+        return channel_name  # Assuming channel_name is the Discord channel ID
+    return None  # Default case if no proper ID can be formed
+
+
 async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdapter, js):
     """
     Process a message from a CloudEvent.
@@ -62,6 +70,22 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
 
     # Decode Unicode escape sequences in the message
     message_data.message = decode_message(message_data.message)
+
+    # print the message
+    print(f"Processing message: {message_data}")
+
+    # Construct channel ID based on the platform
+    if message_data.platform.lower() == "irc":
+        message_data.channel_id = get_channel_id(message_data.platform, message_data.channel,
+                                                 message_data.server)
+    elif message_data.platform.lower() == "discord":
+        # For Discord, assume channel_id is correctly populated
+        message_data.channel_id = message_data.channel_id
+
+    # Check if user information is missing and handle accordingly
+    if message_data.user is None:
+        print("Error: Message data does not contain user information.")
+        return  # Consider how you want to handle messages with no user info
 
     # Initialize a list to hold all mentions processed
     all_mentions = []
@@ -83,12 +107,10 @@ async def process_cloudevent(message_data: NATSMessage, neo4j_adapter: Neo4jAdap
         try:
             # Add or update the interaction and relationship in Neo4j
             message_id = await neo4j_adapter.add_interaction(
-                message_data.nick,
+                message_data.user.username if message_data.user else None,
                 mentioned_nick,
-                message_data.message,
-                message_data.timestamp,
-                channel=message_data.channel,
-                platform=message_data.platform
+                message_data,
+                relationship_type
             )
             await neo4j_adapter.add_or_update_relationship(
                 message_data.nick,
@@ -137,13 +159,7 @@ async def handle_generic_message(message_data: NATSMessage, neo4j_adapter: Neo4j
     :return:
     """
     # Example: Log the message to Neo4j and publish to Jetstream for embedding
-    message_id = await neo4j_adapter.add_message(
-        nick=message_data.nick,
-        message=message_data.message,
-        timestamp=message_data.timestamp,
-        channel=message_data.channel,
-        platform=message_data.platform
-    )
+    message_id = await neo4j_adapter.add_message(message_data)
     print(f"Added message with ID: {message_id}")
     print(f"Publishing message to Jetstream for embedding: {message_data.message}")
     message_data = {
