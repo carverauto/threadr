@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
-	"github.com/carverauto/threadr/bots/pkg/common"
 	"log"
 	"os"
 	"strings"
@@ -13,6 +12,15 @@ import (
 
 type DiscordAdapter struct {
 	Session *discordgo.Session
+}
+
+// Convert a slice of *discordgo.User to a slice of broker.GenericUser
+func convertDiscordUsersToGeneric(users []*discordgo.User) []broker.GenericUser {
+	genericUsers := make([]broker.GenericUser, len(users))
+	for i, user := range users {
+		genericUsers[i] = &broker.DiscordUser{User: user}
+	}
+	return genericUsers
 }
 
 func NewDiscordAdapter() *DiscordAdapter {
@@ -48,15 +56,19 @@ func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker
 			return // Optionally handle the error appropriately
 		}
 
+		genericMentions := convertDiscordUsersToGeneric(m.Mentions)
+
 		// Create user object
-		user := broker.User{
-			ID:         m.Author.ID,
-			Username:   m.Author.Username,
-			Avatar:     m.Author.Avatar,
-			Email:      m.Author.Email,
-			Verified:   m.Author.Verified,
-			MFAEnabled: m.Author.MFAEnabled,
-			Bot:        m.Author.Bot,
+		user := broker.DiscordUser{
+			User: &discordgo.User{
+				ID:         m.Author.ID,
+				Username:   m.Author.Username,
+				Avatar:     m.Author.Avatar,
+				Email:      m.Author.Email,
+				Verified:   m.Author.Verified,
+				MFAEnabled: m.Author.MFAEnabled,
+				Bot:        m.Author.Bot,
+			},
 		}
 
 		// Create the message event
@@ -67,14 +79,14 @@ func (d *DiscordAdapter) Connect(ctx context.Context, cloudEventsHandler *broker
 			ChannelID: channel.ID,
 			Platform:  "Discord",
 			Server:    m.GuildID,
-			Mentions:  m.Mentions,
+			Mentions:  genericMentions,
 			Timestamp: m.Timestamp,
 		}
 
 		s.Identify.Intents |= discordgo.IntentMessageContent
 
 		log.Printf("Publishing message: %+v", ce)
-		if err := cloudEventsHandler.PublishEvent(ctx, "discord", ce); err != nil {
+		if err := cloudEventsHandler.PublishEvent(ctx, ce); err != nil {
 			log.Printf("Failed to publish command event: %v", err)
 		}
 	})
@@ -89,7 +101,7 @@ func (d *DiscordAdapter) Send(channel string, message string) {
 	}
 }
 
-func (d *DiscordAdapter) Listen(onMessage func(msg common.IRCMessage)) {
+func (d *DiscordAdapter) Listen(onMessage func(msg IRCMessage)) {
 	// This method is not directly applicable to Discord due to its event-driven nature.
 	// All event handling is set up in the Connect method.
 }

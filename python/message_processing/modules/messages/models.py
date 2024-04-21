@@ -17,7 +17,7 @@ class Mention(BaseModel):
 
 
 class User(BaseModel):
-    id: Optional[int] = Field(None, description="User ID")
+    id: Optional[str] = Field(None, description="User ID")
     email: Optional[str] = Field(None, description="Email address of the user")
     username: Optional[str] = Field(None, description="Username of the user")
     avatar: Optional[str] = Field(None, description="Avatar URL of the user")

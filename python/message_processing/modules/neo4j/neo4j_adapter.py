@@ -1,9 +1,6 @@
 # modules/neo4j/neo4j_adapter.py
 
 from neo4j import AsyncGraphDatabase
-from datetime import datetime
-from typing import Optional
-
 from modules.messages.models import NATSMessage
 
 
@@ -39,26 +36,26 @@ class Neo4jAdapter:
             record = await result.single()
             return record['u'] if record else None
 
-    async def add_or_update_relationship(self, from_user, to_user, 
+    async def add_or_update_relationship(self, from_user_id, to_user_id,
                                          relationship_type):
         async with self.driver.session() as session:
             result = await session.write_transaction(
-                self._add_or_update_relationship_tx, from_user, to_user,
+                self._add_or_update_relationship_tx, from_user_id, to_user_id,
                 relationship_type)
             return result
 
     @staticmethod
-    async def _add_or_update_relationship_tx(tx, from_user, to_user,
+    async def _add_or_update_relationship_tx(tx, from_user_id, to_user_id,
                                              relationship_type):
         cypher = """
-            MERGE (a:User {name: $from_user})
-            MERGE (b:User {name: $to_user})
+            MERGE (a:User {id: $from_user_id})
+            MERGE (b:User {id: $to_user_id})
             MERGE (a)-[r:CONNECTION {type: $relationshipType}]->(b)
             ON CREATE SET r.weight = 1
             ON MATCH SET r.weight = r.weight + 1
             RETURN r.weight as weight
         """
-        result = await tx.run(cypher, from_user=from_user, to_user=to_user,
+        result = await tx.run(cypher, from_user=from_user_id, to_user=to_user_id,
                               relationshipType=relationship_type)
         record = await result.single()
         return record["weight"] if record else None
@@ -72,7 +69,7 @@ class Neo4jAdapter:
             """
             result = await session.run(cypher, user=user)
             return [{"toUser": record["toUser"], "relationshipType":
-                     record["relationshipType"]} for record in result]
+                record["relationshipType"]} for record in result]
 
     async def add_message(self, message_data: NATSMessage):
 
@@ -122,12 +119,8 @@ class Neo4jAdapter:
             # Build the initial part of the cypher query to merge the sender user node
             cypher = """
             MERGE (sender:User {id: $user_id})
-            ON CREATE SET sender.username = $username, sender.email = $email, sender.avatar = $avatar,
-                          sender.global_name = $global_name, sender.verified = $verified, 
-                          sender.mfa_enabled = $mfa_enabled, sender.bot = $bot
-            ON MATCH SET sender.username = $username, sender.email = $email, sender.avatar = $avatar,
-                         sender.global_name = $global_name, sender.verified = $verified, 
-                         sender.mfa_enabled = $mfa_enabled, sender.bot = $bot
+            ON CREATE SET sender.username = $username, sender.email = $email, sender.avatar = $avatar, sender.global_name = $global_name, sender.verified = $verified, sender.mfa_enabled = $mfa_enabled, sender.bot = $bot
+            ON MATCH SET sender.username = $username, sender.email = $email, sender.avatar = $avatar, sender.global_name = $global_name, sender.verified = $verified, sender.mfa_enabled = $mfa_enabled, sender.bot = $bot
             """
 
             # Prepare user parameters
@@ -155,7 +148,7 @@ class Neo4jAdapter:
             params = {
                 **user_params,
                 "content": message_data.message,
-                "timestamp": message_data.timestamp.isoformat(),
+                "timestamp": message_data.timestamp.isoformat() if message_data.timestamp else None,
                 "platform": message_data.platform,
                 "channel_id": message_data.channel_id,
                 "channel": message_data.channel,

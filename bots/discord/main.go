@@ -14,18 +14,25 @@ import (
 )
 
 func main() {
-	// natsURL := "nats://nats.nats.svc.cluster.local:4222"
-	natsURL := os.Getenv("NATSURL")
-	sendSubject := "irc"
-	stream := "messages"
-	// cmdsSubject := "incoming"
-	// cmdsStream := "commands"
-	resultsSubject := "outgoing"
-	resultsStream := "results"
-
 	ctx := context.Background()
 
-	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, sendSubject, stream, false)
+	natsConfig := broker.NatsConfig{
+		NatsURL:        os.Getenv("NATSURL"),
+		NKey:           os.Getenv("NKEY"),
+		NKeySeed:       os.Getenv("NKEYSEED"),
+		DurableName:    "threadr-durable-results",
+		DurablePrefix:  "threadr-kv",
+		SendSubject:    "irc",
+		SendStream:     "messages",
+		ResultsSubject: "outgoing",
+		ResultsStream:  "results",
+	}
+	// connect to NATS
+	nc, err := natsConfig.SetupNATSConnection()
+	if err != nil {
+		log.Fatalf("Failed to create NATS connection: %s", err)
+	}
+	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(nc, natsConfig)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
@@ -38,7 +45,7 @@ func main() {
 		}
 	*/
 
-	resultsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, resultsSubject, resultsStream, true)
+	resultsHandler, err := broker.NewCloudEventsNATSHandler(nc, natsConfig)
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
@@ -53,7 +60,7 @@ func main() {
 	// Subscribe to NATS for handling results
 	go func() {
 		log.Println("Subscribing to results")
-		resultsHandler.Listen(resultsSubject, "results-durable", func(msg *nats.Msg) {
+		resultsHandler.Listen(natsConfig.ResultsSubject, "results-durable", func(msg *nats.Msg) {
 			log.Printf("Received result: %s", string(msg.Data))
 			var result common.CommandResult
 			if err := json.Unmarshal(msg.Data, &result); err != nil {
@@ -77,13 +84,16 @@ func main() {
 	}
 }
 
+/*
 func publishStartupEvent(handler *broker.CloudEventsNATSHandler, ctx context.Context) {
 	// Construct a simple event message
 	eventMessage := map[string]string{"message": "Bot has started"}
 	// Publish the event
-	if err := handler.PublishEvent(ctx, "bot-startup", eventMessage); err != nil {
+	if err := handler.PublishEvent(ctx, eventMessage); err != nil {
 		log.Printf("Failed to publish startup event: %v", err)
 	} else {
 		log.Println("Successfully published startup event")
 	}
 }
+
+*/

@@ -24,7 +24,7 @@ spec:
         - name: ghcr-io-cred
       containers:
         - name: threadr
-          image: ghcr.io/carverauto/threadr-irc:v0.0.30
+          image: ghcr.io/carverauto/threadr-irc:v0.0.41
           imagePullPolicy: Always
           env:
             - name: NATSURL
@@ -39,3 +39,5 @@ spec:
                 secretKeyRef:
                   name: nkey-seed-secret
                   key: NKEYSEED
+            - name: THREADR_KV_BUCKET
+              value: threadr-kv

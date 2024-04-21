@@ -7,6 +7,6 @@ import (
 )
 
 type Broker interface {
-	PublishEvent(ctx context.Context, sequence int, message []byte) error
+	PublishEvent(ctx context.Context, message []byte) error
 	Subscribe(ctx context.Context, onMessage func(message common.IRCMessage) error) error
 }

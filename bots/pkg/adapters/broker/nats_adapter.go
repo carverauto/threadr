@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	cejsm "github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2"
-	"github.com/kelseyhightower/envconfig"
 	"github.com/nats-io/nkeys"
 	"log"
 	"time"
@@ -23,33 +22,48 @@ type CloudEventsNATSHandler struct {
 	nc     *nats.Conn
 	js     nats.JetStreamContext
 	client cloudevents.Client
-	config natsConfig
+	config NatsConfig
 }
 
-// natsConfig holds the configuration for the NATS connection.
-type natsConfig struct {
-	NatsURL     string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
-	NKey        string `envconfig:"NKEY" required:"true"`
-	NkeySeed    string `envconfig:"NKEYSEED" required:"true"`
-	DurableName string `envconfig:"DURABLE_NAME" default:"durable-results"`
+// NatsConfig holds the configuration for the NATS connection.
+type NatsConfig struct {
+	NatsURL        string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
+	NKey           string `envconfig:"NKEY" required:"true"`
+	NKeySeed       string `envconfig:"NKEYSEED" required:"true"`
+	DurableName    string `envconfig:"DURABLE_NAME" default:"threadr-durable-results"`
+	DurablePrefix  string `envconfig:"DURABLE_PREFIX" default:"threadr-kv"`
+	SendSubject    string `envconfig:"SEND_SUBJECT" default:"irc"`
+	SendStream     string `envconfig:"SEND_STREAM" default:"messages"`
+	ResultsSubject string `envconfig:"RESULTS_SUBJECT" default:"outgoing"`
+	ResultsStream  string `envconfig:"RESULTS_STREAM" default:"results"`
 }
 
-// NewCloudEventsNATSHandler creates a new CloudEventsNATSHandler.
-// The handler is used to publish and subscribe to CloudEvents messages.
-func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool) (*CloudEventsNATSHandler, error) {
-	var env natsConfig
-	if err := envconfig.Process("", &env); err != nil {
-		log.Fatal("Failed to process NATS config:", err)
+// natOptions returns a list of NATS options for the connection.
+func (n *NatsConfig) natOptions() []nats.Option {
+	return []nats.Option{
+		nats.RetryOnFailedConnect(true),
+		nats.Timeout(10 * time.Second),
+		nats.ReconnectWait(1 * time.Second),
+		nats.Nkey(n.NKey, func(bytes []byte) ([]byte, error) {
+			sk, err := nkeys.FromSeed([]byte(n.NKeySeed))
+			if err != nil {
+				return nil, err
+			}
+			return sk.Sign(bytes)
+		}),
 	}
+}
 
+// SetupNATSConnection creates a NATS connection.
+func (n *NatsConfig) SetupNATSConnection() (*nats.Conn, error) {
 	// Create the NATS options
 	natsOpts := []nats.Option{
 		nats.RetryOnFailedConnect(true),
 		nats.Timeout(30 * time.Second),
 		nats.ReconnectWait(1 * time.Second),
 		// use the NKey to sign the connection
-		nats.Nkey(env.NKey, func(bytes []byte) ([]byte, error) {
-			sk, err := nkeys.FromSeed([]byte(env.NkeySeed))
+		nats.Nkey(n.NKey, func(bytes []byte) ([]byte, error) {
+			sk, err := nkeys.FromSeed([]byte(n.NKeySeed))
 			if err != nil {
 				return nil, err
 			}
@@ -57,35 +71,60 @@ func NewCloudEventsNATSHandler(natsURL, subject, stream string, isConsumer bool)
 		}),
 	}
 
-	nc, err := nats.Connect(env.NatsURL, natsOpts...)
+	conn, err := nats.Connect(n.NatsURL, natsOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %v", err)
 	}
 
-	// Create the JetStream context
-	jsm, err := nc.JetStream()
+	return conn, nil
+}
+
+// SetupJetStreamContext creates a JetStream context.
+func SetupJetStreamContext(conn *nats.Conn) (nats.JetStreamContext, error) {
+	// Create a JetStream context
+	js, err := conn.JetStream()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create JetStream context: %v", err)
+		fmt.Println("Error creating JetStream context:", err)
+		conn.Close()
+		return nil, err
 	}
 
-	// Create the CloudEvents client
-	var p *cejsm.Protocol
-	p, err = cejsm.NewProtocol(natsURL, stream, subject, subject, natsOpts, nil, nil)
+	return js, nil
+}
+
+// NewCloudEventsNATSHandler initializes a new CloudEvents NATS handler.
+func NewCloudEventsNATSHandler(nc *nats.Conn, config NatsConfig) (*CloudEventsNATSHandler, error) {
+	jsm, err := SetupJetStreamContext(nc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set up the CloudEvents protocol over NATS JetStream.
+	p, err := cejsm.NewProtocolFromConn(nc, config.DurablePrefix, config.DurableName, config.DurableName, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CloudEvents protocol: %v", err)
+	}
+
 	client, err := cloudevents.NewClient(p)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CloudEvents client: %v", err)
 	}
 
-	// Return the CloudEventsNATSHandler
 	return &CloudEventsNATSHandler{
-		client: client,
+		nc:     nc,
 		js:     jsm,
-		config: env,
+		client: client,
+		config: config,
 	}, nil
 }
 
+// GetJetStreamContext returns the JetStream context.
+func (h *CloudEventsNATSHandler) GetJetStreamContext() (nats.JetStreamContext, error) {
+	return h.js, nil
+}
+
 // PublishEvent sends a CloudEvent message.
-func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, subject string, data interface{}) error {
+func (h *CloudEventsNATSHandler) PublishEvent(ctx context.Context, data interface{}) error {
 	event := cloudevents.NewEvent()
 	event.SetID(uuid.New().String())
 	event.SetType("com.carverauto.threadr.chatops")
