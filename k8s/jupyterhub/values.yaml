@@ -47,6 +47,11 @@ singleuser:
         secretKeyRef:
           name: langchain
           key: LANGCHAIN_API_KEY
+    PREDIBASE_API_TOKEN:
+      valueFrom:
+        secretKeyRef:
+          name: predibase-secrets
+          key: PREDIBASE_API_TOKEN
   storage:
     type: dynamic
     capacity: 20Gi
