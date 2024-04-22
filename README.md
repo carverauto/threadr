@@ -54,6 +54,10 @@ Trigger-based Collection: Implement triggers based on conversational cues, such 
 
 Interval-based Analysis: Similar to windowing, this involves examining conversations within set intervals to infer relationships and summarize content. This approach can be dynamically adjusted based on the volume of conversation or specific events within the chat room.
 
+#### Leader Selection
+
+Analyze conversation to find conversation leaders or the perceived leader, for many different contexts (primary chat, or within a cluster)
+
 ### Challenges
 
 * Nick Changes - How do we track a user who changes their nick? BBB style database?
