@@ -34,7 +34,7 @@ func main() {
 
 	app.Use(gofiberfirebaseauth.New(gofiberfirebaseauth.Config{
 		FirebaseApp: FirebaseApp,
-		IgnoreUrls:  []string{"GET::/", "POST::/admin/set-claims"},
+		IgnoreUrls:  []string{"GET::/", "POST::/admin/set-claims", "GET::/admin/get-claims/:userId"},
 	}))
 
 	routes.SetupRoutes(app, FirebaseApp)
