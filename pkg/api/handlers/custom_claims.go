@@ -40,16 +40,9 @@ func SetCustomClaimsHandler(app *firebase.App) fiber.Handler {
 // GetCustomClaimsHandler gets custom claims for a user
 func GetCustomClaimsHandler(app *firebase.App) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		type RequestBody struct {
-			UserID string `json:"userId"`
-		}
+		userId := c.Params("userId") // Get userId from URL params
 
 		ctx := c.Context()
-
-		var body RequestBody
-		if err := c.BodyParser(&body); err != nil {
-			return c.Status(fiber.StatusBadRequest).SendString("Bad request")
-		}
 
 		authClient, err := app.Auth(ctx)
 		if err != nil {
@@ -58,8 +51,8 @@ func GetCustomClaimsHandler(app *firebase.App) fiber.Handler {
 
 		// Get custom user claims
 		// Lookup the user associated with the specified uid.
-		fmt.Println("Looking up user:", body.UserID)
-		user, err := authClient.GetUser(ctx, body.UserID)
+		fmt.Println("Looking up user:", userId)
+		user, err := authClient.GetUser(ctx, userId)
 		if err != nil {
 			log.Fatal(err)
 		}

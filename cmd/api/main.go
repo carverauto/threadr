@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"github.com/carverauto/threadr/cmd/api/firebase"
-	"github.com/carverauto/threadr/cmd/api/routes"
+	"fmt"
+	"github.com/carverauto/threadr/pkg/api/firebase"
+	"github.com/carverauto/threadr/pkg/api/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 	gofiberfirebaseauth "github.com/sacsand/gofiber-firebaseauth"
@@ -32,11 +33,17 @@ func main() {
 		return
 	}
 
-	app.Use(gofiberfirebaseauth.New(gofiberfirebaseauth.Config{
+	secure := app.Group("/secure")
+	secure.Use(gofiberfirebaseauth.New(gofiberfirebaseauth.Config{
 		FirebaseApp: FirebaseApp,
-		IgnoreUrls:  []string{"GET::/", "POST::/admin/set-claims", "GET::/admin/get-claims/:userId"},
+		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
+			log.Println("Error:", err)
+			errMsg := fmt.Sprintf("Unauthorized: %s", err.Error())
+			return ctx.Status(fiber.StatusUnauthorized).SendString(errMsg)
+		},
 	}))
 
+	routes.SetupSecureRoutes(secure, FirebaseApp)
 	routes.SetupRoutes(app, FirebaseApp)
 
 	fErr := app.Listen(":3001")
