@@ -2,10 +2,10 @@ package routes
 
 import (
 	firebase "firebase.google.com/go"
+	"github.com/carverauto/threadr/cmd/api/handlers"
+	"github.com/carverauto/threadr/cmd/api/middleware"
 	"github.com/gofiber/fiber/v2"
 	"os"
-	"whatsapp-fiber/handlers"
-	"whatsapp-fiber/middleware"
 )
 
 // SetupRoutes sets up the routes for the application
@@ -24,4 +24,9 @@ func SetupRoutes(app *fiber.App, FirebaseApp *firebase.App) {
 	app.Post("/admin/set-claims",
 		middleware.ApiKeyMiddleware(os.Getenv("ADMIN_API_KEY")),
 		handlers.SetCustomClaimsHandler(FirebaseApp))
+
+	// Admin route to get custom claims
+	app.Get("/admin/get-claims/:userId",
+		middleware.ApiKeyMiddleware(os.Getenv("ADMIN_API_KEY")),
+		handlers.GetCustomClaimsHandler(FirebaseApp))
 }

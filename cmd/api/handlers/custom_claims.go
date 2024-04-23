@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	firebase "firebase.google.com/go"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"log"
 )
 
 // SetCustomClaimsHandler sets custom claims for a user
@@ -32,5 +34,42 @@ func SetCustomClaimsHandler(app *firebase.App) fiber.Handler {
 		}
 
 		return c.SendString("Custom claims updated successfully")
+	}
+}
+
+// GetCustomClaimsHandler gets custom claims for a user
+func GetCustomClaimsHandler(app *firebase.App) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		type RequestBody struct {
+			UserID string `json:"userId"`
+		}
+
+		ctx := c.Context()
+
+		var body RequestBody
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("Bad request")
+		}
+
+		authClient, err := app.Auth(ctx)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Failed to get Auth client")
+		}
+
+		// Get custom user claims
+		// Lookup the user associated with the specified uid.
+		fmt.Println("Looking up user:", body.UserID)
+		user, err := authClient.GetUser(ctx, body.UserID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// The claims can be accessed on the user record.
+		if admin, ok := user.CustomClaims["admin"]; ok {
+			if admin.(bool) {
+				log.Println(admin)
+			}
+		}
+
+		return c.JSON(user)
 	}
 }

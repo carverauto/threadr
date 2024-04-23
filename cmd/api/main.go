@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"github.com/carverauto/threadr/cmd/api/firebase"
+	"github.com/carverauto/threadr/cmd/api/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 	gofiberfirebaseauth "github.com/sacsand/gofiber-firebaseauth"
 	"log"
 	"time"
-	"whatsapp-fiber/firebase"
-	"whatsapp-fiber/routes"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 
 	app.Use(gofiberfirebaseauth.New(gofiberfirebaseauth.Config{
 		FirebaseApp: FirebaseApp,
-		IgnoreUrls:  []string{"GET::/", "POST::/signup"},
+		IgnoreUrls:  []string{"GET::/", "POST::/admin/set-claims"},
 	}))
 
 	routes.SetupRoutes(app, FirebaseApp)
