@@ -5,30 +5,23 @@ import (
 	"github.com/carverauto/threadr/pkg/api/handlers"
 	"github.com/carverauto/threadr/pkg/api/middleware"
 	"github.com/gofiber/fiber/v2"
-	"os"
 )
 
-// SetupRoutes sets up the routes for the application
+// SetupRoutes initializes the public and administrative routes.
 func SetupRoutes(app *fiber.App, FirebaseApp *firebase.App) {
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, World 👋!")
 	})
 
-	// Admin route to set custom claims
-	app.Post("/admin/set-claims",
-		middleware.ApiKeyMiddleware(os.Getenv("ADMIN_API_KEY")),
-		handlers.SetCustomClaimsHandler(FirebaseApp))
-
-	// Admin route to get custom claims
-	app.Get("/admin/get-claims/:userId",
-		middleware.ApiKeyMiddleware(os.Getenv("ADMIN_API_KEY")),
-		handlers.GetCustomClaimsHandler(FirebaseApp))
+	admin := app.Group("/admin")
+	admin.Post("/set-claims", middleware.ApiKeyMiddleware(), handlers.SetCustomClaimsHandler(FirebaseApp))
+	admin.Get("/get-claims/:userId", middleware.ApiKeyMiddleware(), handlers.GetCustomClaimsHandler(FirebaseApp))
 }
 
-// SetupSecureRoutes sets up the secure routes for the application
+// SetupSecureRoutes initializes the routes that require role and tenant level security.
 func SetupSecureRoutes(secure fiber.Router, FirebaseApp *firebase.App) {
-	// Protected route with role and tenant check
-	secure.Get("/secure", middleware.RoleTenantMiddleware(FirebaseApp), func(c *fiber.Ctx) error {
+	secure.Use(middleware.RoleTenantMiddleware(FirebaseApp)) // Apply the middleware to all routes under /secure
+	secure.Get("/:tenant", func(c *fiber.Ctx) error {        // Tenant-specific route
 		userClaims := c.Locals("user").(map[string]interface{})
 		return c.SendString("Welcome Admin, Tenant ID: " + userClaims["tenantId"].(string))
 	})

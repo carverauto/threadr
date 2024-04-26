@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-// RoleTenantMiddleware is a middleware that checks if the user is an admin and belongs to the expected tenant
+// RoleTenantMiddleware checks if the user is an admin and if they belong to the tenant specified in the URL.
 func RoleTenantMiddleware(FirebaseApp *firebase.App) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authClient, err := FirebaseApp.Auth(context.Background())
@@ -19,18 +19,24 @@ func RoleTenantMiddleware(FirebaseApp *firebase.App) fiber.Handler {
 		idToken := c.Get("Authorization")
 		token, err := authClient.VerifyIDToken(context.Background(), idToken)
 		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized access")
+			log.Printf("Token verification failed: %v", err)
+			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized access - Invalid token")
 		}
 
 		claims := token.Claims
-		if role, ok := claims["role"].(string); !ok || role != "admin" {
-			return c.Status(fiber.StatusForbidden).SendString("Access denied")
+		expectedTenantId := c.Params("tenant") // Retrieve tenant ID from the URL parameter
+
+		role, hasRole := claims["role"].(string)
+		tenantId, hasTenantId := claims["tenantId"].(string)
+		if !hasRole || role != "admin" {
+			log.Printf("Access denied: user role '%v' is not 'admin'", role)
+			return c.Status(fiber.StatusForbidden).SendString("Access denied - You must be an admin")
 		}
-		if tenantId, ok := claims["tenantId"].(string); !ok || tenantId != "expectedTenantId" {
-			return c.Status(fiber.StatusForbidden).SendString("Access denied for this tenant")
+		if !hasTenantId || tenantId != expectedTenantId {
+			log.Printf("Access denied: user's tenantId '%v' does not match expected '%v'", tenantId, expectedTenantId)
+			return c.Status(fiber.StatusForbidden).SendString("Access denied - Invalid tenant access")
 		}
 
-		c.Locals("user", claims)
 		return c.Next()
 	}
 }

@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/carverauto/threadr/pkg/api/firebase"
 	"github.com/carverauto/threadr/pkg/api/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
-	gofiberfirebaseauth "github.com/sacsand/gofiber-firebaseauth"
 	"log"
 	"time"
 )
@@ -33,17 +31,11 @@ func main() {
 		return
 	}
 
+	// Group for routes that require tenant and role verification
 	secure := app.Group("/secure")
-	secure.Use(gofiberfirebaseauth.New(gofiberfirebaseauth.Config{
-		FirebaseApp: FirebaseApp,
-		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
-			log.Println("Error:", err)
-			errMsg := fmt.Sprintf("Unauthorized: %s", err.Error())
-			return ctx.Status(fiber.StatusUnauthorized).SendString(errMsg)
-		},
-	}))
-
 	routes.SetupSecureRoutes(secure, FirebaseApp)
+
+	// General and admin routes setup
 	routes.SetupRoutes(app, FirebaseApp)
 
 	fErr := app.Listen(":3001")

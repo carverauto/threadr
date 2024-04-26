@@ -12,8 +12,9 @@ type Claims struct {
 }
 
 const (
-	setClaimsURL = "http://localhost:3001/admin/set-claims"
-	getClaimsURL = "http://localhost:3001/admin/get-claims/%s"
+	setClaimsURL   = "http://localhost:3001/admin/set-claims"
+	getClaimsURL   = "http://localhost:3001/admin/get-claims/%s"
+	secureEndpoint = "http://localhost:3001/secure/%s"
 )
 
 func main() {
@@ -42,5 +43,11 @@ func main() {
 	if err != nil {
 		fmt.Println("Error getting custom claims:", err)
 		return
+	}
+
+	// Test the secure endpoint that requires tenant ID in the URL
+	log.Printf("Accessing secure tenant endpoint for tenant: %s\n", userClaims["tenantId"])
+	if err := AccessSecureEndpoint(fmt.Sprintf(secureEndpoint, userClaims["tenantId"]), apiKey); err != nil {
+		fmt.Println("Error accessing secure endpoint:", err)
 	}
 }
