@@ -28,12 +28,25 @@ type IRCBotSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of IRCBot. Edit ircbot_types.go to remove/update
-	// Foo string `json:"foo,omitempty"`
-	Server   string   `json:"server"`
-	Port     int      `json:"port"`
+	// Server specifies the IRC server the bot should connect to.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=3
+	Server string `json:"server"`
+
+	// Port specifies the server port to connect to.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int `json:"port"`
+
+	// Channels is a list of channels the bot should join.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:UniqueItems=true
 	Channels []string `json:"channels"`
-	Nick     string   `json:"nick"`
+
+	// Nick specifies the nickname of the bot in the IRC channel.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=16
+	Nick string `json:"nick"`
 }
 
 // IRCBotStatus defines the observed state of IRCBot
