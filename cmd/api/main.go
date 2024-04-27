@@ -31,7 +31,7 @@ func main() {
 		return
 	}
 
-	// Group for routes that require tenant and role verification
+	// Group for routes that require instance and role verification
 	secure := app.Group("/secure")
 	routes.SetupSecureRoutes(secure, FirebaseApp)
 
