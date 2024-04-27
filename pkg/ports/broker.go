@@ -3,10 +3,10 @@ package ports
 
 import (
 	"context"
-	"github.com/carverauto/threadr/bots/pkg/common"
+	"github.com/carverauto/threadr/pkg/chat"
 )
 
 type Broker interface {
 	PublishEvent(ctx context.Context, sequence int, message []byte) error
-	Subscribe(ctx context.Context, onMessage func(message common.IRCMessage) error) error
+	Subscribe(ctx context.Context, onMessage func(message chat.IRCMessage) error) error
 }

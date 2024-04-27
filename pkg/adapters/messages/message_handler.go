@@ -2,7 +2,7 @@
 package messages
 
 import (
-	"github.com/carverauto/threadr/bots/pkg/ports"
+	"github.com/carverauto/threadr/pkg/ports"
 )
 
 // SimpleMessageHandler implements the MessageHandler interface.
