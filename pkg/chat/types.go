@@ -1,4 +1,4 @@
-package common
+package chat
 
 type IRCMessage struct {
 	Nick     string

@@ -44,8 +44,8 @@ async def main():
 
     consumer = NATSConsumer(
         nats_manager=nats_manager,
-        subjects=["irc"],
-        durable_name="threadr-irc",
+        subjects=["chat"],
+        durable_name="threadr-chat",
         stream_name="message_processing",
         use_queue_group=USE_QUEUE_GROUP,
         #neo4j_adapter=neo4j_adapter,

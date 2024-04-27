@@ -54,7 +54,8 @@ func GetCustomClaimsHandler(app *firebase.App) fiber.Handler {
 		fmt.Println("Looking up user:", userId)
 		user, err := authClient.GetUser(ctx, userId)
 		if err != nil {
-			log.Fatal(err)
+			log.Println("Failed to get user:", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("Failed to get user")
 		}
 		// The claims can be accessed on the user record.
 		if admin, ok := user.CustomClaims["admin"]; ok {

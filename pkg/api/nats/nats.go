@@ -1,0 +1,5 @@
+package nats
+
+func CreateNATSUser() {
+
+}

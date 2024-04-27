@@ -13,12 +13,12 @@ spec:
       labels:
         app: threadr-consumer-irc
     spec:
-      serviceAccountName: threadr-irc-account
+      serviceAccountName: threadr-chat-account
       imagePullSecrets:
         - name: ghcr-io-cred
       containers:
-        - name: threadr-consumer-irc
-          image: ghcr.io/carverauto/threadr-consumer-irc:v0.0.5
+        - name: threadr-consumer-chat
+          image: ghcr.io/carverauto/threadr-consumer-chat:v0.0.5
           imagePullPolicy: Always
           env:
             - name: NATSURL

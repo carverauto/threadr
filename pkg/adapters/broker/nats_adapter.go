@@ -1,4 +1,4 @@
-// Package broker pkg/adapters/broker/nats_adapter.go
+// Package nats pkg/adapters/nats/nats_adapter.go
 // provides a CloudEventsNATSHandler that can be used to publish and subscribe to CloudEvents messages.
 
 package broker
