@@ -27,11 +27,10 @@ func main() {
 
 	FirebaseApp, err := firebase.SetupFirebaseApp(ctx)
 	if err != nil {
-		log.Println("Error initializing Firebase App:", err)
-		return
+		log.Fatalf("Error initializing Firebase App: %v", err)
 	}
 
-	// Group for routes that require tenant and role verification
+	// Group for routes that require instance and role verification
 	secure := app.Group("/secure")
 	routes.SetupSecureRoutes(secure, FirebaseApp)
 
@@ -40,7 +39,6 @@ func main() {
 
 	fErr := app.Listen(":3001")
 	if fErr != nil {
-		log.Println("Error starting the server:", fErr)
-		return
+		log.Fatalf("Error starting server: %v", fErr)
 	}
 }

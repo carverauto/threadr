@@ -1,4 +1,4 @@
-// Package messages ./bots/IRC/pkg/adapters/message_processing/irc.go
+// Package messages ./bots/IRC/pkg/adapters/message_processing/chat.go
 package messages
 
 import (
@@ -22,7 +22,7 @@ type IRCAdapter struct {
 
 type IRCAdapterConfig struct {
 	Nick            string `envconfig:"BOT_NICK" default:"threadr" required:"true"`
-	Server          string `envconfig:"BOT_SERVER" default:"irc.choopa.net:6667" required:"true"`
+	Server          string `envconfig:"BOT_SERVER" default:"chat.choopa.net:6667" required:"true"`
 	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases,#chases,#𝓉𝓌𝑒𝓇𝓀𝒾𝓃,#singularity" required:"true"`
 	BotSaslLogin    string `envconfig:"BOT_SASL_LOGIN"`
 	BotSaslPassword string `envconfig:"BOT_SASL_PASSWORD"`
@@ -75,7 +75,7 @@ func (irc *IRCAdapter) Connect(ctx context.Context, commandEventsHandler *broker
 		target, message := e.Params[0], e.Params[1]
 		log.Println("PRIVMSG", target, message)
 		if strings.HasPrefix(message, irc.Connection.Nick+":") {
-			// irc.Connection.Privmsg(target, "I'm a simple IRC bot.")
+			// chat.Connection.Privmsg(target, "I'm a simple IRC bot.")
 			command := strings.TrimSpace(strings.TrimPrefix(message, irc.Connection.Nick+":"))
 			log.Println("Command:", command)
 			// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

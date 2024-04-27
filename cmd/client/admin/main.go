@@ -27,8 +27,8 @@ func main() {
 	// Define the user and claims you want to set
 	userID := os.Getenv("FIREBASE_USER_ID")
 	userClaims := map[string]string{
-		"role":     "admin",
-		"tenantId": "threadr",
+		"role":       "admin",
+		"instanceId": "threadr",
 	}
 
 	err := SendClaimsUpdate(setClaimsURL, apiKey, userID, userClaims)
@@ -46,8 +46,8 @@ func main() {
 	}
 
 	// Test the secure endpoint that requires tenant ID in the URL
-	log.Printf("Accessing secure tenant endpoint for tenant: %s\n", userClaims["tenantId"])
-	if err := AccessSecureEndpoint(fmt.Sprintf(secureEndpoint, userClaims["tenantId"]), apiKey); err != nil {
+	log.Printf("Accessing secure instance endpoint for instance: %s\n", userClaims["instanceId"])
+	if err := AccessSecureEndpoint(fmt.Sprintf(secureEndpoint, userClaims["instanceId"]), apiKey); err != nil {
 		fmt.Println("Error accessing secure endpoint:", err)
 	}
 }

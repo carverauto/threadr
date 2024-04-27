@@ -13,7 +13,7 @@ spec:
       labels:
         app: threadr-embeds
     spec:
-      serviceAccountName: threadr-irc-account
+      serviceAccountName: threadr-chat-account
       imagePullSecrets:
         - name: ghcr-io-cred
       containers:

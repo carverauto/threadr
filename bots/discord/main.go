@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
-	d "github.com/carverauto/threadr/bots/pkg/adapters/messages"
-	"github.com/carverauto/threadr/bots/pkg/common"
+	"github.com/carverauto/threadr/pkg/adapters/broker"
+	d "github.com/carverauto/threadr/pkg/adapters/messages"
+	"github.com/carverauto/threadr/pkg/chat"
 	"github.com/nats-io/nats.go"
 	"log"
 	"os"
@@ -16,7 +16,7 @@ import (
 func main() {
 	// natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	natsURL := os.Getenv("NATSURL")
-	sendSubject := "irc"
+	sendSubject := "chat"
 	stream := "messages"
 	// cmdsSubject := "incoming"
 	// cmdsStream := "commands"
@@ -31,7 +31,7 @@ func main() {
 	}
 
 	/*
-		commandsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
+		commandsHandler, err := nats.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
 		if err != nil {
 
 			log.Fatalf("Failed to create CloudEvents handler: %s", err)
@@ -55,7 +55,7 @@ func main() {
 		log.Println("Subscribing to results")
 		resultsHandler.Listen(resultsSubject, "results-durable", func(msg *nats.Msg) {
 			log.Printf("Received result: %s", string(msg.Data))
-			var result common.CommandResult
+			var result chat.CommandResult
 			if err := json.Unmarshal(msg.Data, &result); err != nil {
 				log.Printf("Failed to unmarshal result: %v", err)
 				return
