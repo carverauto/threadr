@@ -4,8 +4,8 @@ package messages
 import (
 	"context"
 	"crypto/tls"
-	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
-	"github.com/carverauto/threadr/bots/pkg/common"
+	"github.com/carverauto/threadr/pkg/adapters/broker"
+	"github.com/carverauto/threadr/pkg/chat"
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 	"github.com/kelseyhightower/envconfig"
@@ -151,7 +151,7 @@ func (irc *IRCAdapter) Send(channel string, message string) {
 	}
 }
 
-func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {
+func (irc *IRCAdapter) Listen(onMessage func(message chat.IRCMessage)) {
 	// Add a callback for the 'PRIVMSG' event
 	irc.Connection.AddCallback("PRIVMSG", func(e ircmsg.Message) {
 		// The first parameter in a PRIVMSG is the full prefix: "nickname!username@host"
@@ -164,7 +164,7 @@ func (irc *IRCAdapter) Listen(onMessage func(message common.IRCMessage)) {
 
 		log.Println("Nickname:", nick, "User:", rest, "Message:", fullMessage)
 
-		ircMsg := common.IRCMessage{
+		ircMsg := chat.IRCMessage{
 			Nick:     e.Nick(),
 			User:     rest,
 			Channel:  e.Params[0],

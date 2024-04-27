@@ -3,8 +3,8 @@ package messages
 import (
 	"context"
 	"github.com/bwmarrin/discordgo"
-	"github.com/carverauto/threadr/bots/pkg/adapters/broker"
-	"github.com/carverauto/threadr/bots/pkg/common"
+	"github.com/carverauto/threadr/pkg/adapters/broker"
+	"github.com/carverauto/threadr/pkg/chat"
 	"log"
 	"os"
 )
@@ -54,7 +54,7 @@ func (d *DiscordAdapter) Send(channel string, message string) {
 	}
 }
 
-func (d *DiscordAdapter) Listen(onMessage func(msg common.IRCMessage)) {
+func (d *DiscordAdapter) Listen(onMessage func(msg chat.IRCMessage)) {
 	// This method is not directly applicable to Discord due to its event-driven nature.
 	// All event handling is set up in the Connect method.
 }
