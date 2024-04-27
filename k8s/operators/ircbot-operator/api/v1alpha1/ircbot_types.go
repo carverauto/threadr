@@ -29,13 +29,19 @@ type IRCBotSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of IRCBot. Edit ircbot_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Foo string `json:"foo,omitempty"`
+	Server   string   `json:"server"`
+	Port     int      `json:"port"`
+	Channels []string `json:"channels"`
+	Nick     string   `json:"nick"`
 }
 
 // IRCBotStatus defines the observed state of IRCBot
 type IRCBotStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Connected       bool        `json:"connected"`
+	LastMessageTime metav1.Time `json:"last_message_time"`
 }
 
 //+kubebuilder:object:root=true
