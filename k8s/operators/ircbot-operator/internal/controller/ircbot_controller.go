@@ -3,13 +3,12 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	appsv1 "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -28,6 +27,9 @@ type IRCBotReconciler struct {
 //+kubebuilder:rbac:groups=cache.threadr.ai,resources=ircbots,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cache.threadr.ai,resources=ircbots/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cache.threadr.ai,resources=ircbots/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main Kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -77,6 +79,13 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	ircbot.Status.LastMessageTime = metav1.Now()
+
+	if err := r.Status().Update(ctx, ircbot); err != nil {
+		ctxLog.Error(err, "Failed to update IRCBot status")
+		return ctrl.Result{}, err
+	}
+
 	// Update status with the count of active jobs
 	activeJobs := int32(getActiveJobs(&childJobs))
 	if ircbot.Status.ActiveJobs != activeJobs {
@@ -105,6 +114,12 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	// reconcileBotDeployment creates a new deployment for the IRCBot
+	if err := r.reconcileBotDeployment(ctx, ircbot); err != nil {
+		ctxLog.Error(err, "Failed to reconcile Bot Deployment")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -114,8 +129,9 @@ func int32Ptr(i int) *int32 {
 	return &n
 }
 
-// reconcileBotDeployment creates a new deployment for the IRCBot
+// reconcileBotDeployment ensures the deployment for the IRCBot exists and is updated if necessary.
 func (r *IRCBotReconciler) reconcileBotDeployment(ctx context.Context, ircbot *cachev1alpha1.IRCBot) error {
+	// Define the desired Deployment object based on the ircbot specs
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ircbot.Name,
@@ -123,7 +139,13 @@ func (r *IRCBotReconciler) reconcileBotDeployment(ctx context.Context, ircbot *c
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": ircbot.Name},
+			},
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": ircbot.Name},
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
@@ -137,16 +159,32 @@ func (r *IRCBotReconciler) reconcileBotDeployment(ctx context.Context, ircbot *c
 							},
 						},
 					},
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "ghcr-secret"},
+					},
 				},
 			},
 		},
 	}
+
 	// Set IRCBot instance as the owner and controller
-	err := ctrl.SetControllerReference(ircbot, dep, r.Scheme)
-	if err != nil {
+	if err := ctrl.SetControllerReference(ircbot, dep, r.Scheme); err != nil {
 		return fmt.Errorf("failed to set controller reference: %w", err)
 	}
-	return r.Client.Create(ctx, dep)
+
+	// Check if the Deployment already exists.
+	found := &appsv1.Deployment{}
+	err := r.Get(ctx, client.ObjectKey{Name: dep.Name, Namespace: dep.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		// Deployment does not exist, create it.
+		return r.Create(ctx, dep)
+	} else if err != nil {
+		return fmt.Errorf("failed to check for existing Deployment: %w", err)
+	}
+
+	// Deployment exists, update it.
+	found.Spec = dep.Spec
+	return r.Update(ctx, found)
 }
 
 // getActiveJobs counts the active jobs from the job list

@@ -40,7 +40,6 @@ spec:
                   type: string
                 minItems: 1
                 type: array
-                uniqueItems: true
               history_limit:
                 description: HistoryLimit specifies the number of messages to keep
                   in memory.

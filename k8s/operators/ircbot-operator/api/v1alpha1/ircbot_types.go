@@ -40,7 +40,6 @@ type IRCBotSpec struct {
 
 	// Channels is a list of channels the bot should join.
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:UniqueItems=true
 	Channels []string `json:"channels"`
 
 	// Nick specifies the nickname of the bot in the IRC channel.
