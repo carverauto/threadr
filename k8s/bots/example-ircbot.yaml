@@ -8,7 +8,7 @@ spec:
   port: 6667
   channels: ["#example"]
   nick: "exampleBot"
-  image_version: "v1.0.24"
+  image_version: "v0.0.26"
   instance_id: "exampleInstance001"
   history_limit: 100
   suspended: false

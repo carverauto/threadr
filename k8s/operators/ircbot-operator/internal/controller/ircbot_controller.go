@@ -159,6 +159,9 @@ func (r *IRCBotReconciler) reconcileBotDeployment(ctx context.Context, ircbot *c
 							},
 						},
 					},
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "ghcr-secret"},
+					},
 				},
 			},
 		},
