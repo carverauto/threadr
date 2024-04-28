@@ -3,6 +3,12 @@ kind: ClusterRole
 metadata:
   name: ircbot-operator-manager-role
 rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [ "" ]
+    resources: [ "events" ]
+    verbs: [ "create", "patch" ]
   - apiGroups: ["batch"]  # API group for jobs
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

@@ -1,0 +1,30 @@
+# ClusterRoleBinding for ircbot-operator-manager-role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ircbot-operator-manager-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: ircbot-operator-controller-manager
+  namespace: ircbot-operator-system
+roleRef:
+  kind: ClusterRole
+  name: ircbot-operator-manager-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# ClusterRoleBinding for ircbot-operator-role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ircbot-operator-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: ircbot-operator-controller-manager
+  namespace: ircbot-operator-system
+roleRef:
+  kind: ClusterRole
+  name: ircbot-operator-role
+  apiGroup: rbac.authorization.k8s.io
+
