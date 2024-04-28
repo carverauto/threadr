@@ -10,10 +10,12 @@ spec:
       app: threadr-messages
   template:
     metadata:
+      annotations:
+        config.linkerd.io/skip-outbound-ports: "4222"
       labels:
         app: threadr-messages
     spec:
-      serviceAccountName: threadr-chat-account
+      serviceAccountName: threadr-irc-account
       imagePullSecrets:
         - name: ghcr-io-cred
       containers:
