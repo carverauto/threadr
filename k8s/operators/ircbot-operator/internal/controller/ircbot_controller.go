@@ -28,6 +28,9 @@ type IRCBotReconciler struct {
 //+kubebuilder:rbac:groups=cache.threadr.ai,resources=ircbots,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cache.threadr.ai,resources=ircbots/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=cache.threadr.ai,resources=ircbots/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main Kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
