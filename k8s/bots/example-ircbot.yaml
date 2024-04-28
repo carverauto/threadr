@@ -2,12 +2,13 @@ apiVersion: cache.threadr.ai/v1alpha1
 kind: IRCBot
 metadata:
   name: example-ircbot
+  namespace: threadr
 spec:
   server: "irc.example.com"
   port: 6667
   channels: ["#example"]
   nick: "exampleBot"
-  image_version: "1.0.0"
+  image_version: "v1.0.24"
   instance_id: "exampleInstance001"
   history_limit: 100
   suspended: false

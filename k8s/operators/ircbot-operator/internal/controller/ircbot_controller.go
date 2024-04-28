@@ -3,13 +3,12 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	appsv1 "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -79,6 +78,8 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		ctxLog.Error(err, "Unable to list child Jobs for IRCBot", "IRCBot.Namespace", ircbot.Namespace, "IRCBot.Name", ircbot.Name)
 		return ctrl.Result{}, err
 	}
+
+	ircbot.Status.LastMessageTime = metav1.Now()
 
 	// Update status with the count of active jobs
 	activeJobs := int32(getActiveJobs(&childJobs))
