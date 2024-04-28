@@ -66,11 +66,26 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, nil
 	}
 
-	// List all jobs owned by this IRCBot instance
+	// List all jobs associated with this IRCBot
 	var childJobs batch.JobList
-	if err := r.List(ctx, &childJobs, client.InNamespace(req.Namespace), client.MatchingFields{"metadata.ownerReferences.uid": string(ircbot.UID)}); err != nil {
-		ctxLog.Error(err, "Unable to list child Jobs")
+	listOpts := []client.ListOption{
+		client.InNamespace(ircbot.Namespace),
+		client.MatchingLabels(map[string]string{"controller": ircbot.Name}),
+	}
+	if err := r.List(ctx, &childJobs, listOpts...); err != nil {
+		ctxLog.Error(err, "Unable to list child Jobs for IRCBot", "IRCBot.Namespace", ircbot.Namespace, "IRCBot.Name", ircbot.Name)
 		return ctrl.Result{}, err
+	}
+
+	// Update status with the count of active jobs
+	activeJobs := int32(getActiveJobs(&childJobs))
+	if ircbot.Status.ActiveJobs != activeJobs {
+		ircbot.Status.ActiveJobs = activeJobs
+		err := r.Status().Update(ctx, ircbot)
+		if err != nil {
+			ctxLog.Error(err, "Failed to update IRCBot status")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Clean up old jobs according to the history limits
@@ -78,15 +93,6 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		ctxLog.Error(err, "Failed to clean up old jobs")
 		return ctrl.Result{}, err
 	}
-
-	// Update IRCBot status with the number of active jobs
-	activeJobs := getActiveJobs(&childJobs)
-	ircbot.Status.ActiveJobs = activeJobs
-	if err := r.Status().Update(ctx, ircbot); err != nil {
-		ctxLog.Error(err, "Failed to update IRCBot status")
-		return ctrl.Result{}, err
-	}
-
 	// Your logic to ensure the desired state of the world here
 	// e.g., ensuring the IRCBot is connected or disconnected based on the spec
 
@@ -144,14 +150,14 @@ func (r *IRCBotReconciler) reconcileBotDeployment(ctx context.Context, ircbot *c
 }
 
 // getActiveJobs counts the active jobs from the job list
-func getActiveJobs(jobs *batch.JobList) int {
+func getActiveJobs(jobs *batch.JobList) int32 {
 	activeJobs := 0
 	for _, job := range jobs.Items {
 		if job.Status.Active > 0 {
 			activeJobs++
 		}
 	}
-	return activeJobs
+	return int32(activeJobs)
 }
 
 // cleanupOldJobs deletes old jobs exceeding history limits

@@ -85,6 +85,7 @@ spec:
             properties:
               active_jobs:
                 description: ActiveJobs is a list of active jobs.
+                format: int32
                 type: integer
               connected:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state

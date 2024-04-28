@@ -73,7 +73,7 @@ type IRCBotStatus struct {
 	LastMessageTime metav1.Time `json:"last_message_time"`
 
 	// ActiveJobs is a list of active jobs.
-	ActiveJobs int `json:"active_jobs"`
+	ActiveJobs int32 `json:"active_jobs"`
 }
 
 //+kubebuilder:object:root=true
