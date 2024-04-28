@@ -81,6 +81,11 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	ircbot.Status.LastMessageTime = metav1.Now()
 
+	if err := r.Status().Update(ctx, ircbot); err != nil {
+		ctxLog.Error(err, "Failed to update IRCBot status")
+		return ctrl.Result{}, err
+	}
+
 	// Update status with the count of active jobs
 	activeJobs := int32(getActiveJobs(&childJobs))
 	if ircbot.Status.ActiveJobs != activeJobs {
