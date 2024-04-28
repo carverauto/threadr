@@ -1,0 +1,12 @@
+apiVersion: cache.threadr.ai/v1alpha1
+kind: IRCBot
+metadata:
+  labels:
+    app.kubernetes.io/name: ircbot
+    app.kubernetes.io/instance: ircbot-sample
+    app.kubernetes.io/part-of: ircbot-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: ircbot-operator
+  name: ircbot-sample
+spec:
+  # TODO(user): Add fields here

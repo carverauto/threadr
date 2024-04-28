@@ -1,0 +1,49 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: ircbot-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: IRCBot is the Schema for the ircbots API
+      displayName: IRCBot
+      kind: IRCBot
+      name: ircbots.cache.threadr.ai
+      version: v1alpha1
+  description: Creates IRC Bots for ThreadR
+  displayName: IRCBot
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - osmi
+  - ircbot
+  links:
+  - name: Ircbot Operator
+    url: https://ircbot-operator.domain
+  maintainers:
+  - email: mfreeman451@gmail.com
+    name: mfreeman451
+  maturity: alpha
+  provider:
+    name: carverauto
+    url: https://threadr.ai
+  version: 0.0.0

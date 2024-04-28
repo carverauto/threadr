@@ -1,0 +1,107 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: ircbots.cache.threadr.ai
+spec:
+  group: cache.threadr.ai
+  names:
+    kind: IRCBot
+    listKind: IRCBotList
+    plural: ircbots
+    singular: ircbot
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: IRCBot is the Schema for the ircbots API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: IRCBotSpec defines the desired state of IRCBot
+            properties:
+              channels:
+                description: Channels is a list of channels the bot should join.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+                uniqueItems: true
+              history_limit:
+                description: HistoryLimit specifies the number of messages to keep
+                  in memory.
+                minimum: 1
+                type: integer
+              image_version:
+                description: ImageVersion specifies the version of the bot image to
+                  use.
+                type: string
+              instance_id:
+                description: InstanceID specifies the instance ID of the bot.
+                minLength: 1
+                type: string
+              nick:
+                description: Nick specifies the nickname of the bot in the IRC channel.
+                maxLength: 16
+                type: string
+              port:
+                description: Port specifies the server port to connect to.
+                maximum: 65535
+                minimum: 1
+                type: integer
+              server:
+                description: Server specifies the IRC server the bot should connect
+                  to.
+                minLength: 3
+                type: string
+              suspended:
+                description: Suspended specifies if the bot should be suspended.
+                type: boolean
+            required:
+            - channels
+            - history_limit
+            - image_version
+            - instance_id
+            - nick
+            - port
+            - server
+            type: object
+          status:
+            description: IRCBotStatus defines the observed state of IRCBot
+            properties:
+              active_jobs:
+                description: ActiveJobs is a list of active jobs.
+                format: int32
+                type: integer
+              connected:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: boolean
+              last_message_time:
+                format: date-time
+                type: string
+            required:
+            - active_jobs
+            - connected
+            - last_message_time
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

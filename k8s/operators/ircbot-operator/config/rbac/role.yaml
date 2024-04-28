@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - cache.threadr.ai
+  resources:
+  - ircbots
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cache.threadr.ai
+  resources:
+  - ircbots/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cache.threadr.ai
+  resources:
+  - ircbots/status
+  verbs:
+  - get
+  - patch
+  - update
