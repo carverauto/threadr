@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+data:
+  TUNNEL_HOSTNAME: "tunnel.example.com"
+

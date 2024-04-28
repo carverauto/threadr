@@ -1,0 +1,20 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: threadr-issuer
+epec:
+  acme:
+    # The ACME server URL for Let's Encrypt
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # Email address used for ACME registration
+    email: mfreeman@threadr.ai
+    # Name of a secret used to store the ACME account private key
+    privateKeySecretRef:
+      name: acme-account-key  # This secret will be created by cert-manager
+    # ACME DNS-01 provider configurations
+    solvers:
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token-secret
+            key: api-token
