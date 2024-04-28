@@ -55,6 +55,14 @@ type IRCBotSpec struct {
 	// HistoryLimit specifies the number of messages to keep in memory.
 	// +kubebuilder:validation:Minimum=1
 	HistoryLimit int `json:"history_limit"`
+
+	// ImageVersion specifies the version of the bot image to use.
+	ImageVersion string `json:"image_version"`
+
+	// InstanceID specifies the instance ID of the bot.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	InstanceID string `json:"instance_id"`
 }
 
 // IRCBotStatus defines the observed state of IRCBot
@@ -65,7 +73,7 @@ type IRCBotStatus struct {
 	LastMessageTime metav1.Time `json:"last_message_time"`
 
 	// ActiveJobs is a list of active jobs.
-	ActiveJobs interface{} `json:"active_jobs"`
+	ActiveJobs int `json:"active_jobs"`
 }
 
 //+kubebuilder:object:root=true

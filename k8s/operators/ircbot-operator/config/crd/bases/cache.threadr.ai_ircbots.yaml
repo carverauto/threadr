@@ -46,6 +46,14 @@ spec:
                   in memory.
                 minimum: 1
                 type: integer
+              image_version:
+                description: ImageVersion specifies the version of the bot image to
+                  use.
+                type: string
+              instance_id:
+                description: InstanceID specifies the instance ID of the bot.
+                minLength: 1
+                type: string
               nick:
                 description: Nick specifies the nickname of the bot in the IRC channel.
                 maxLength: 16
@@ -66,6 +74,8 @@ spec:
             required:
             - channels
             - history_limit
+            - image_version
+            - instance_id
             - nick
             - port
             - server
@@ -73,6 +83,9 @@ spec:
           status:
             description: IRCBotStatus defines the observed state of IRCBot
             properties:
+              active_jobs:
+                description: ActiveJobs is a list of active jobs.
+                type: integer
               connected:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
@@ -82,6 +95,7 @@ spec:
                 format: date-time
                 type: string
             required:
+            - active_jobs
             - connected
             - last_message_time
             type: object

@@ -2,9 +2,15 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"strings"
+
+	appsv1 "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -94,6 +100,47 @@ func (r *IRCBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// int32Ptr returns a pointer to an int32
+func int32Ptr(i int) *int32 {
+	n := int32(i)
+	return &n
+}
+
+// reconcileBotDeployment creates a new deployment for the IRCBot
+func (r *IRCBotReconciler) reconcileBotDeployment(ctx context.Context, ircbot *cachev1alpha1.IRCBot) error {
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ircbot.Name,
+			Namespace: ircbot.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(1),
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "ircbot",
+							Image: "ghcr.io/carverauto/threadr:" + ircbot.Spec.ImageVersion,
+							Env: []corev1.EnvVar{
+								{Name: "IRC_SERVER", Value: ircbot.Spec.Server},
+								{Name: "IRC_PORT", Value: fmt.Sprintf("%d", ircbot.Spec.Port)},
+								{Name: "IRC_CHANNELS", Value: strings.Join(ircbot.Spec.Channels, ",")},
+								{Name: "IRC_NICK", Value: ircbot.Spec.Nick},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	// Set IRCBot instance as the owner and controller
+	err := ctrl.SetControllerReference(ircbot, dep, r.Scheme)
+	if err != nil {
+		return fmt.Errorf("failed to set controller reference: %w", err)
+	}
+	return r.Client.Create(ctx, dep)
 }
 
 // getActiveJobs counts the active jobs from the job list
