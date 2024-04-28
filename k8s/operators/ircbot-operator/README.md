@@ -2,7 +2,12 @@
 // TODO(user): Add simple overview of use/purpose
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+### Controller
+
+The controller is responsible for watching the `IRCBot` custom resource and creating a new `Deployment` for each `IRCBot` resource.
+
+
 
 ## Getting Started
 

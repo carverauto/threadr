@@ -34,13 +34,56 @@ spec:
           spec:
             description: IRCBotSpec defines the desired state of IRCBot
             properties:
-              foo:
-                description: Foo is an example field of IRCBot. Edit ircbot_types.go
-                  to remove/update
+              channels:
+                description: Channels is a list of channels the bot should join.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+                uniqueItems: true
+              history_limit:
+                description: HistoryLimit specifies the number of messages to keep
+                  in memory.
+                minimum: 1
+                type: integer
+              nick:
+                description: Nick specifies the nickname of the bot in the IRC channel.
+                maxLength: 16
                 type: string
+              port:
+                description: Port specifies the server port to connect to.
+                maximum: 65535
+                minimum: 1
+                type: integer
+              server:
+                description: Server specifies the IRC server the bot should connect
+                  to.
+                minLength: 3
+                type: string
+              suspended:
+                description: Suspended specifies if the bot should be suspended.
+                type: boolean
+            required:
+            - channels
+            - history_limit
+            - nick
+            - port
+            - server
             type: object
           status:
             description: IRCBotStatus defines the observed state of IRCBot
+            properties:
+              connected:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: boolean
+              last_message_time:
+                format: date-time
+                type: string
+            required:
+            - connected
+            - last_message_time
             type: object
         type: object
     served: true

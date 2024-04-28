@@ -47,6 +47,14 @@ type IRCBotSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MaxLength=16
 	Nick string `json:"nick"`
+
+	// Suspended specifies if the bot should be suspended.
+	// +kubebuilder:validation:Default=false
+	Suspended bool `json:"suspended,omitempty"`
+
+	// HistoryLimit specifies the number of messages to keep in memory.
+	// +kubebuilder:validation:Minimum=1
+	HistoryLimit int `json:"history_limit"`
 }
 
 // IRCBotStatus defines the observed state of IRCBot
@@ -55,6 +63,9 @@ type IRCBotStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Connected       bool        `json:"connected"`
 	LastMessageTime metav1.Time `json:"last_message_time"`
+
+	// ActiveJobs is a list of active jobs.
+	ActiveJobs interface{} `json:"active_jobs"`
 }
 
 //+kubebuilder:object:root=true
