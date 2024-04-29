@@ -16,6 +16,8 @@ spec:
       app: threadr-irc
   template:
     metadata:
+      annotations:
+        config.linkerd.io/skip-outbound-ports: "6667,4222"
       labels:
         app: threadr-irc
     spec:

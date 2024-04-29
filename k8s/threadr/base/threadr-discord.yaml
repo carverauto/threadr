@@ -16,6 +16,8 @@ spec:
       app: threadr-discord
   template:
     metadata:
+      annotations:
+        config.linkerd.io/skip-outbound-ports: "4222"
       labels:
         app: threadr-discord
     spec:
