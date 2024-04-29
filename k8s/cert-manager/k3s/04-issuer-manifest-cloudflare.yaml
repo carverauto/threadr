@@ -2,7 +2,7 @@ apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
   name: threadr-issuer
-epec:
+spec:
   acme:
     # The ACME server URL for Let's Encrypt
     server: https://acme-v02.api.letsencrypt.org/directory

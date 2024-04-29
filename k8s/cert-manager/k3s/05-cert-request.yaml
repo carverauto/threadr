@@ -10,6 +10,6 @@ spec:
     kind: ClusterIssuer
   commonName: farm.threadr.ai
   dnsNames:
-  - farm.threadr.ai
-  - '*.farm.threadr.ai'
+  - tunnel.threadr.ai
+  - '*.tunnel.threadr.ai'
 
