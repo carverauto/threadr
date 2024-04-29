@@ -1,14 +1,14 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: default-farm-certificate
+  name: default-tunnel-certificate
   namespace: default
 spec:
-  secretName: default-farm-threadr-ai-tls
+  secretName: default-tunnel-threadr-ai-tls
   issuerRef:
     name: threadr-issuer
     kind: ClusterIssuer
-  commonName: farm.threadr.ai
+  commonName: tunnel.threadr.ai
   dnsNames:
   - tunnel.threadr.ai
   - '*.tunnel.threadr.ai'
