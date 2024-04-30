@@ -4,64 +4,89 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/carverauto/threadr/pkg/api/nats"
 )
 
 func main() {
 	var (
-		initFlag       = flag.Bool("init", false, "Initialize the NATS configuration.")
-		forceFlag      = flag.Bool("force", false, "Force overwrite of existing configuration.")
-		createAccFlag  = flag.Bool("new-account", false, "Create a new account JWT.")
-		createUserFlag = flag.String("new-user", "", "Create a new user JWT.")
+		initFlag      = flag.Bool("init", false, "Initialize the NATS configuration.")
+		newAccount    = flag.String("new-account", "", "Create a new account with the specified name.")
+		newUser       = flag.String("new-user", "", "Create a new user with the specified name.")
+		targetAccount = flag.String("target-account", "", "Target account name for creating users or listing users.")
+		listAccounts  = flag.Bool("list-accounts", false, "List all accounts.")
+		listUsers     = flag.Bool("list-users", false, "List all users under the specified account.")
 	)
 	flag.Parse()
 
-	configPath := filepath.Join(os.Getenv("HOME"), ".threadr", "config.json")
-	configDir := filepath.Dir(configPath)
-
 	if *initFlag {
-		if err := os.MkdirAll(configDir, 0755); err != nil {
-			fmt.Printf("Failed to create configuration directory: %v\n", err)
+		if err := handleInit(); err != nil {
+			fmt.Printf("Initialization error: %v\n", err)
 			os.Exit(1)
 		}
-		if _, err := os.Stat(configPath); err == nil && !*forceFlag {
-			fmt.Println("Configuration already exists. Use -force to overwrite.")
-			os.Exit(1)
-		}
-		fmt.Println("Initializing the NATS configuration...")
-		if err := nats.InitialSetup(configPath); err != nil {
-			fmt.Printf("Failed to complete initial setup: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("Setup complete. Configuration saved to:", configPath)
+		fmt.Println("Setup complete. Configuration is now saved.")
 		return
 	}
 
-	cfg, err := nats.LoadConfig(configPath)
+	cfg, err := nats.LoadConfig("natsConfiguration")
 	if err != nil {
 		fmt.Printf("Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
 
-	if *createAccFlag {
-		fmt.Println("Creating a new account...")
-		jwt, err := nats.CreateAccount(cfg.OperatorSeed, "NewAccount") // Uses the operator seed from config
+	if *newAccount != "" {
+		jwt, updatedCfg, err := nats.AddTenant(*newAccount, cfg)
 		if err != nil {
 			fmt.Printf("Failed to create new account: %v\n", err)
 			os.Exit(1)
+		} else {
+			cfg = updatedCfg
+			fmt.Printf("New account created successfully. JWT: %s\n", jwt)
 		}
-		fmt.Println("New account created successfully. JWT:", jwt)
-	} else if *createUserFlag != "" {
-		fmt.Printf("Creating a new user for account: %s...\n", *createUserFlag)
-		jwt, err := nats.CreateUser(cfg.AccountSeed, "NewUser") // Uses the account seed from config
+	}
+
+	if *newUser != "" && *targetAccount != "" {
+		jwt, updatedCfg, err := nats.AddUserToTenant(*newUser, *targetAccount, cfg)
 		if err != nil {
 			fmt.Printf("Failed to create new user: %v\n", err)
 			os.Exit(1)
+		} else {
+			cfg = updatedCfg
+			fmt.Printf("New user created successfully. JWT: %s\n", jwt)
 		}
-		fmt.Println("New user created successfully. JWT:", jwt)
+	}
+
+	if *listAccounts {
+		handleListAccounts(cfg)
+	}
+
+	if *listUsers && *targetAccount != "" {
+		handleListUsers(cfg, *targetAccount)
+	}
+}
+
+func handleInit() error {
+	cfg, err := nats.InitialSetup()
+	if err != nil {
+		return err
+	}
+	return nats.SaveConfig(cfg)
+}
+
+func handleListAccounts(cfg *nats.Config) {
+	fmt.Println("Accounts:")
+	for name := range cfg.Accounts {
+		fmt.Println("- ", name)
+	}
+}
+
+func handleListUsers(cfg *nats.Config, accountName string) {
+	if account, exists := cfg.Accounts[accountName]; exists {
+		fmt.Printf("Users in account '%s':\n", accountName)
+		for _, user := range account.Users {
+			fmt.Println("- ", user)
+		}
 	} else {
-		fmt.Println("No operation specified. Use -h for help.")
+		fmt.Printf("Account '%s' not found\n", accountName)
 	}
 }

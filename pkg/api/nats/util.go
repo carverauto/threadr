@@ -9,16 +9,16 @@ import (
 )
 
 // InitialSetup generates the necessary configuration for the NATS server.
-func InitialSetup(configPath string) error {
+func InitialSetup() (*Config, error) {
 	dir, err := os.MkdirTemp("", "jwt_threadr")
 	if err != nil {
-		return fmt.Errorf("error creating temporary directory: %v", err)
+		return nil, fmt.Errorf("error creating temporary directory: %v", err)
 	}
 	fmt.Printf("Generated config in %s\n", dir)
 
 	okp, err := nkeys.CreateOperator()
 	if err != nil {
-		return fmt.Errorf("error creating operator key: %v", err)
+		return nil, fmt.Errorf("error creating operator key: %v", err)
 	}
 
 	operatorSeed, _ := okp.Seed()
@@ -29,7 +29,7 @@ func InitialSetup(configPath string) error {
 
 	oskp, err := nkeys.CreateOperator()
 	if err != nil {
-		return fmt.Errorf("error creating operator signing key: %v", err)
+		return nil, fmt.Errorf("error creating operator signing key: %v", err)
 	}
 
 	ospk, _ := oskp.PublicKey()
@@ -37,7 +37,7 @@ func InitialSetup(configPath string) error {
 
 	operatorJWT, err := oc.Encode(okp)
 	if err != nil {
-		return fmt.Errorf("error encoding operator JWT: %v", err)
+		return nil, fmt.Errorf("error encoding operator JWT: %v", err)
 	}
 
 	resolver := fmt.Sprintf(`operator: %s
@@ -47,7 +47,7 @@ resolver_preload: {
 }`, operatorJWT, "", "") // Temporarily leave account details empty
 
 	if err := os.WriteFile(filepath.Join(dir, "resolver.conf"), []byte(resolver), 0644); err != nil {
-		return fmt.Errorf("error writing resolver configuration: %v", err)
+		return nil, fmt.Errorf("error writing resolver configuration: %v", err)
 	}
 
 	cfg := Config{
@@ -60,12 +60,12 @@ resolver_preload: {
 	// Create the root account using the operator seed
 	rootAccountJWT, rootAccountDetails, err := createRootAccount(string(operatorSeed))
 	if err != nil {
-		return fmt.Errorf("error setting up root account: %v", err)
+		return nil, fmt.Errorf("error setting up root account: %v", err)
 	}
 	rootAccountDetails.AccountJWT = rootAccountJWT // Assign the JWT to the struct.
 	cfg.Accounts["root"] = rootAccountDetails
 
-	return SaveConfig(configPath, &cfg)
+	return &cfg, nil
 }
 
 // CreateRootAccount generates a new root account JWT.

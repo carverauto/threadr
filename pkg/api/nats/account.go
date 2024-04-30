@@ -6,62 +6,85 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
-// CreateAccount generates a new account JWT using the provided operator seed and account name.
-func CreateAccount(operatorSeed, accountName string) (string, error) {
+// CreateAccount generates a new account JWT using the provided account name.
+func CreateAccount(accountName string, cfg *Config) (string, *Config, error) {
 	akp, err := nkeys.CreateAccount()
 	if err != nil {
-		return "", fmt.Errorf("unable to create account using nkeys: %w", err)
+		return "", nil, fmt.Errorf("unable to create account using nkeys: %v", err)
 	}
 
-	apub, err := akp.PublicKey()
+	apk, err := akp.PublicKey()
 	if err != nil {
-		return "", fmt.Errorf("unable to retrieve public key: %w", err)
+		return "", nil, fmt.Errorf("unable to get public key: %v", err)
 	}
-
-	ac := jwt.NewAccountClaims(apub)
+	ac := jwt.NewAccountClaims(apk)
 	ac.Name = accountName
 
-	// Load operator key pair
-	okp, err := nkeys.FromSeed([]byte(operatorSeed))
+	okp, err := nkeys.FromSeed([]byte(cfg.OperatorSeed))
 	if err != nil {
-		return "", fmt.Errorf("unable to create operator key pair from seed: %w", err)
+		return "", nil, fmt.Errorf("unable to load operator key: %v", err)
+	}
+	accountJWT, err := ac.Encode(okp)
+	if err != nil {
+		return "", nil, fmt.Errorf("unable to encode account JWT: %v", err)
 	}
 
-	// Sign the account claims and convert it into a JWT string
-	ajwt, err := ac.Encode(okp)
+	accountSeed, err := akp.Seed()
 	if err != nil {
-		return "", fmt.Errorf("unable to sign the claims: %w", err)
+		return "", nil, fmt.Errorf("unable to get account seed: %v", err)
 	}
 
-	return ajwt, nil
+	// Update the configuration with the new account details
+	cfg.Accounts[accountName] = AccountDetails{
+		AccountJWT:  accountJWT,
+		AccountSeed: string(accountSeed),
+		Users:       []string{},
+	}
+	return accountJWT, cfg, nil
 }
 
-// CreateUser generates a new user JWT using the provided account seed and user name.
-func CreateUser(accountSeed, userName string) (string, error) {
+func AddTenant(tenantName string, cfg *Config) (string, *Config, error) {
+	accountJWT, updatedCfg, err := CreateAccount(tenantName, cfg)
+	if err != nil {
+		return "", nil, err
+	}
+	err = SaveConfig(updatedCfg)
+	return accountJWT, updatedCfg, err
+}
+
+// AddUserToTenant creates a new user under a specified tenant, generating user JWTs.
+func AddUserToTenant(userName, tenantName string, cfg *Config) (string, *Config, error) {
+	tenantDetails, exists := cfg.Accounts[tenantName]
+	if !exists {
+		return "", nil, fmt.Errorf("tenant '%s' not found in configuration", tenantName)
+	}
+
 	ukp, err := nkeys.CreateUser()
 	if err != nil {
-		return "", fmt.Errorf("unable to create user using nkeys: %w", err)
+		return "", nil, fmt.Errorf("failed to create user key pair: %v", err)
 	}
 
-	upub, err := ukp.PublicKey()
+	upk, err := ukp.PublicKey()
 	if err != nil {
-		return "", fmt.Errorf("unable to retrieve public key: %w", err)
+		return "", nil, fmt.Errorf("failed to get user public key: %v", err)
 	}
 
-	uc := jwt.NewUserClaims(upub)
+	uc := jwt.NewUserClaims(upk)
 	uc.Name = userName
+	uc.IssuerAccount = tenantDetails.AccountJWT
 
-	// Load account key pair
-	akp, err := nkeys.FromSeed([]byte(accountSeed))
+	akp, err := nkeys.FromSeed([]byte(tenantDetails.AccountSeed))
 	if err != nil {
-		return "", fmt.Errorf("unable to create account key pair from seed: %w", err)
+		return "", nil, fmt.Errorf("failed to load tenant's account key pair from seed: %v", err)
 	}
 
-	// Sign the user claims and convert it into a JWT string
-	ujwt, err := uc.Encode(akp)
+	userJWT, err := uc.Encode(akp)
 	if err != nil {
-		return "", fmt.Errorf("unable to sign the claims: %w", err)
+		return "", nil, fmt.Errorf("failed to encode user JWT: %v", err)
 	}
 
-	return ujwt, nil
+	// Append the new user to the tenant's user list and save the configuration
+	tenantDetails.Users = append(tenantDetails.Users, userJWT)
+	cfg.Accounts[tenantName] = tenantDetails
+	return userJWT, cfg, err
 }
