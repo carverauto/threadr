@@ -8,12 +8,14 @@ import (
 	"github.com/carverauto/threadr/pkg/api/nats"
 )
 
+const configKey = "natsConfiguration"
+
 func main() {
 	var (
 		initFlag      = flag.Bool("init", false, "Initialize the NATS configuration.")
 		newAccount    = flag.String("new-account", "", "Create a new account with the specified name.")
 		newUser       = flag.String("new-user", "", "Create a new user with the specified name.")
-		targetAccount = flag.String("target-account", "", "Target account name for creating users or listing users.")
+		targetAccount = flag.String("target-account", "root", "Target account name for creating users or listing users.")
 		listAccounts  = flag.Bool("list-accounts", false, "List all accounts.")
 		listUsers     = flag.Bool("list-users", false, "List all users under the specified account.")
 	)
@@ -28,7 +30,7 @@ func main() {
 		return
 	}
 
-	cfg, err := nats.LoadConfig("natsConfiguration")
+	cfg, err := nats.LoadConfig(configKey)
 	if err != nil {
 		fmt.Printf("Failed to load configuration: %v\n", err)
 		os.Exit(1)
@@ -40,7 +42,7 @@ func main() {
 			fmt.Printf("Failed to create new account: %v\n", err)
 			os.Exit(1)
 		} else {
-			cfg = updatedCfg
+			cfg = updatedCfg // Update cfg with the changes
 			fmt.Printf("New account created successfully. JWT: %s\n", jwt)
 		}
 	}
@@ -51,7 +53,7 @@ func main() {
 			fmt.Printf("Failed to create new user: %v\n", err)
 			os.Exit(1)
 		} else {
-			cfg = updatedCfg
+			cfg = updatedCfg // Update cfg with the changes
 			fmt.Printf("New user created successfully. JWT: %s\n", jwt)
 		}
 	}
@@ -83,8 +85,8 @@ func handleListAccounts(cfg *nats.Config) {
 func handleListUsers(cfg *nats.Config, accountName string) {
 	if account, exists := cfg.Accounts[accountName]; exists {
 		fmt.Printf("Users in account '%s':\n", accountName)
-		for _, user := range account.Users {
-			fmt.Println("- ", user)
+		for userName, userJWT := range account.Users {
+			fmt.Printf("- %s: %s\n", userName, userJWT)
 		}
 	} else {
 		fmt.Printf("Account '%s' not found\n", accountName)

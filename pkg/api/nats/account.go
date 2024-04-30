@@ -38,18 +38,20 @@ func CreateAccount(accountName string, cfg *Config) (string, *Config, error) {
 	cfg.Accounts[accountName] = AccountDetails{
 		AccountJWT:  accountJWT,
 		AccountSeed: string(accountSeed),
-		Users:       []string{},
+		Users:       map[string]string{},
 	}
 	return accountJWT, cfg, nil
 }
 
 func AddTenant(tenantName string, cfg *Config) (string, *Config, error) {
-	accountJWT, updatedCfg, err := CreateAccount(tenantName, cfg)
+	accountJWT, cfg, err := CreateAccount(tenantName, cfg)
 	if err != nil {
 		return "", nil, err
 	}
-	err = SaveConfig(updatedCfg)
-	return accountJWT, updatedCfg, err
+	if err := SaveConfig(cfg); err != nil {
+		return "", cfg, err
+	}
+	return accountJWT, cfg, nil
 }
 
 // AddUserToTenant creates a new user under a specified tenant, generating user JWTs.
@@ -83,8 +85,16 @@ func AddUserToTenant(userName, tenantName string, cfg *Config) (string, *Config,
 		return "", nil, fmt.Errorf("failed to encode user JWT: %v", err)
 	}
 
-	// Append the new user to the tenant's user list and save the configuration
-	tenantDetails.Users = append(tenantDetails.Users, userJWT)
-	cfg.Accounts[tenantName] = tenantDetails
-	return userJWT, cfg, err
+	if tenantDetails.Users == nil {
+		tenantDetails.Users = make(map[string]string)
+	}
+	tenantDetails.Users[userName] = userJWT  // Store JWT with username
+	cfg.Accounts[tenantName] = tenantDetails // Update the tenant details in the configuration
+
+	err = SaveConfig(cfg)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to save configuration after adding user: %v", err)
+	}
+
+	return userJWT, cfg, nil
 }

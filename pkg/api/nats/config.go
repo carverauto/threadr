@@ -17,9 +17,9 @@ type Config struct {
 }
 
 type AccountDetails struct {
-	AccountJWT  string   `json:"account_jwt"`
-	AccountSeed string   `json:"account_seed"`
-	Users       []string `json:"users"`
+	AccountJWT  string            `json:"account_jwt"`
+	AccountSeed string            `json:"account_seed"`
+	Users       map[string]string `json:"users"`
 }
 
 // Assuming you have a Charm Client set up and authenticated

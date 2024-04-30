@@ -90,6 +90,6 @@ func createRootAccount(operatorSeed string) (string, AccountDetails, error) {
 	return accountJWT, AccountDetails{
 		AccountJWT:  accountJWT,
 		AccountSeed: string(accountSeed),
-		Users:       []string{},
+		Users:       map[string]string{},
 	}, nil
 }
