@@ -38,6 +38,7 @@ func CreateAccount(accountName string, cfg *Config) (string, *Config, error) {
 	cfg.Accounts[accountName] = AccountDetails{
 		AccountJWT:  accountJWT,
 		AccountSeed: string(accountSeed),
+		PK:          apk,
 		Users:       map[string]string{},
 	}
 	return accountJWT, cfg, nil

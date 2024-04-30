@@ -1,0 +1,44 @@
+global:
+  enabled: true
+  tlsDisable: false
+injector:
+  enabled: true
+server:
+  extraEnvironmentVars:
+    VAULT_CACERT: /vault/userconfig/vault-ca-crt/letsencrypt-intermediate.pem
+    VAULT_TLSCERT: /vault/userconfig/vault-ca-crt/cert.pem
+    VAULT_TLSKEY: /vault/userconfig/vault-ca-crt/server.key
+  volumes:
+    - name: userconfig-vault-ca-crt
+      secret:
+        defaultMode: 420
+        secretName: vault-ca-crt  # Update secretName to the combined secret name
+  volumeMounts:
+    - mountPath: /vault/userconfig/vault-ca-crt
+      name: userconfig-vault-ca-crt
+      readOnly: true
+  standalone:
+    enabled: false
+  affinity: ""
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        cluster_name = "vault-integrated-storage"
+        ui = true
+        listener "tcp" {
+          tls_disable = 0
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file = "/vault/userconfig/vault-ca-crt/cert.pem"
+          tls_key_file  = "/vault/userconfig/vault-ca-crt/server.key"
+          tls_client_ca_file = "/vault/userconfig/vault-ca-crt/letsencrypt-intermediate.pem"
+        }
+        storage "raft" {
+          path = "/vault/data"
+        }
+        disable_mlock = true
+        service_registration "kubernetes" {}

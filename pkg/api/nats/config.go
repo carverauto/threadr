@@ -19,6 +19,7 @@ type Config struct {
 type AccountDetails struct {
 	AccountJWT  string            `json:"account_jwt"`
 	AccountSeed string            `json:"account_seed"`
+	PK          string            `json:"pk"`
 	Users       map[string]string `json:"users"`
 }
 
