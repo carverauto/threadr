@@ -61,20 +61,21 @@ func CreateNewUser(app *firebase.App) fiber.Handler {
 	}
 }
 
-// CreateNewTenant creates a new tenant, which is a group of users
+// CreateNewInstance creates a new instance, which is a group of users
 // with a shared set of permissions and resources. The user who creates
-// the tenant is automatically assigned the role of tenant admin. Tenant
+// the instance is automatically assigned the role of instance admin. Instance
 // admins can add and remove members, assign roles, and perform other
 // administrative tasks. The data is stored in Firestore.
 // The FireStore structure is as follows:
-// /tenants/{tenantId}
+// /instances/{instanceId}
 //
 //	/metadata { name, createdBy, ...}
 //	/members/{userId} { role, joinedDate, ...}
-func CreateNewTenant(app *firebase.App) fiber.Handler {
+func CreateNewInstance(app *firebase.App) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Parse the request body
 		var body struct {
+			ID   string `json:"id"`
 			Name string `json:"name"`
 		}
 		if err := c.BodyParser(&body); err != nil {
@@ -93,17 +94,17 @@ func CreateNewTenant(app *firebase.App) fiber.Handler {
 		}
 		defer client.Close()
 
-		// Check if tenant already exists
-		tenants := client.Collection("tenants")
-		dsnap, err := tenants.Doc(body.Name).Get(ctx)
+		// Check if instance already exists
+		instances := client.Collection("instances")
+		dsnap, err := instances.Doc(body.ID).Get(ctx)
 		if err == nil && dsnap.Exists() {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "Tenant already exists",
+				"error": "Instance already exists",
 			})
 		}
 
-		// Create new tenant
-		_, err = tenants.Doc(body.Name).Set(ctx, map[string]interface{}{
+		// Create new instance
+		_, err = instances.Doc(body.ID).Set(ctx, map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"name":      body.Name,
 				"createdBy": getUserIdFromToken(c, app),
@@ -123,8 +124,8 @@ func CreateNewTenant(app *firebase.App) fiber.Handler {
 
 		// Return success message
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-			"message": "Tenant created successfully",
-			"tenant":  body.Name,
+			"message":  "Instance created successfully",
+			"instance": body.ID,
 		})
 	}
 }

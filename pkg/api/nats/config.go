@@ -7,11 +7,17 @@ import (
 
 // Config represents the configuration for the NATS API.
 type Config struct {
-	OperatorJWT  string `json:"operator_jwt"`
-	AccountJWT   string `json:"account_jwt"`
-	ResolverConf string `json:"resolver_conf"`
-	OperatorSeed string `json:"operator_seed,omitempty"`
-	AccountSeed  string `json:"account_seed,omitempty"`
+	OperatorJWT  string                    `json:"operator_jwt"`
+	OperatorSeed string                    `json:"operator_seed,omitempty"`
+	AccountSeed  string                    `json:"account_seed,omitempty"`
+	ResolverConf string                    `json:"resolver_conf"`
+	Accounts     map[string]AccountDetails `json:"accounts"`
+}
+
+type AccountDetails struct {
+	AccountJWT  string   `json:"account_jwt"`
+	AccountSeed string   `json:"account_seed"`
+	Users       []string `json:"users"`
 }
 
 // SaveConfig saves the configuration to a JSON file.

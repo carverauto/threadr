@@ -1,4 +1,4 @@
-// Package ports ./bots/IRC/pkg/ports/nats.go
+// Package ports ./bots/IRC/pkg/ports/account.go
 package ports
 
 import (
