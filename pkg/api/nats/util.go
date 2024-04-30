@@ -40,20 +40,9 @@ func InitialSetup() (*Config, error) {
 		return nil, fmt.Errorf("error encoding operator JWT: %v", err)
 	}
 
-	resolver := fmt.Sprintf(`operator: %s
-resolver: MEMORY
-resolver_preload: {
-	%s: %s
-}`, operatorJWT, "", "") // Temporarily leave account details empty
-
-	if err := os.WriteFile(filepath.Join(dir, "resolver.conf"), []byte(resolver), 0644); err != nil {
-		return nil, fmt.Errorf("error writing resolver configuration: %v", err)
-	}
-
 	cfg := Config{
 		OperatorJWT:  operatorJWT,
 		OperatorSeed: string(operatorSeed),
-		ResolverConf: resolver,
 		Accounts:     make(map[string]AccountDetails),
 	}
 
@@ -64,6 +53,21 @@ resolver_preload: {
 	}
 	rootAccountDetails.AccountJWT = rootAccountJWT // Assign the JWT to the struct.
 	cfg.Accounts["root"] = rootAccountDetails
+
+	resolver := fmt.Sprintf(`operator: %s
+		resolver: MEMORY
+		resolver_preload: {
+			"%s": "%s"
+		}`, operatorJWT, rootAccountDetails.PK, rootAccountJWT)
+
+	resolverPath := filepath.Join(dir, "resolver.conf")
+	if err := os.WriteFile(resolverPath, []byte(resolver), 0644); err != nil {
+		return nil, fmt.Errorf("error writing resolver configuration: %v", err)
+	}
+	cfg.ResolverConf = resolverPath
+
+	// Log where we store the resolver.conf
+	fmt.Printf("Resolver configuration saved to %s\n", resolverPath)
 
 	return &cfg, nil
 }
@@ -90,6 +94,7 @@ func createRootAccount(operatorSeed string) (string, AccountDetails, error) {
 	return accountJWT, AccountDetails{
 		AccountJWT:  accountJWT,
 		AccountSeed: string(accountSeed),
+		PK:          apk,
 		Users:       map[string]string{},
 	}, nil
 }
