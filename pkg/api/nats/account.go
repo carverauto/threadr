@@ -3,9 +3,12 @@ package nats
 import (
 	"fmt"
 	"github.com/nats-io/jwt"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 )
 
 func HandleInit() error {
@@ -179,4 +182,51 @@ func AddUserToTenant(userName, tenantName string, cfg *Config) (string, *Config,
 	}
 
 	return userJWT, cfg, nil
+}
+
+func TestConnectionWithCreds(credsPath string) error {
+	opts := []nats.Option{nats.UserCredentials(credsPath)}
+
+	// Connect to NATS
+	nc, err := nats.Connect(nats.DefaultURL, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to connect to NATS: %v", err)
+	}
+	defer nc.Close()
+
+	// Setup a WaitGroup to wait for a message
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Subscribe to a topic
+	sub, err := nc.Subscribe("hello.world", func(m *nats.Msg) {
+		fmt.Printf("Received message: %s\n", string(m.Data))
+		wg.Done() // Signal that we received the message
+	})
+	if err != nil {
+		return fmt.Errorf("failed to subscribe: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	// Publish a message
+	if err := nc.Publish("hello.world", []byte("hello")); err != nil {
+		return fmt.Errorf("failed to publish message: %v", err)
+	}
+
+	// Wait for the message or timeout
+	doneC := make(chan struct{})
+	go func() {
+		defer close(doneC)
+		wg.Wait()
+	}()
+
+	select {
+	case <-doneC:
+		// Message received
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("timeout waiting for message")
+	}
+
+	fmt.Println("Connection and messaging successful with NATS.")
+	return nil
 }

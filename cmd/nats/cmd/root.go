@@ -10,8 +10,8 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "natsctl",
-	Short: "NATS Control is a CLI tool for managing NATS configurations",
-	Long:  `NATS Control provides a command line interface for managing NATS server configurations and credentials.`,
+	Short: "ThreadR NATS Control is a CLI tool for managing NATS configurations",
+	Long:  `ThreadR NATS Control provides a command line interface for managing NATS server configurations and credentials.`,
 }
 
 func Execute() {
