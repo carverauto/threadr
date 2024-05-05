@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/charm v0.12.6
 	github.com/cloudevents/sdk-go/protocol/nats_jetstream/v2 v2.15.2
 	github.com/cloudevents/sdk-go/v2 v2.15.2
+	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ergochat/irc-go v0.4.0
 	github.com/gofiber/fiber/v2 v2.52.4
 	github.com/google/uuid v1.6.0
@@ -17,6 +18,8 @@ require (
 	github.com/nats-io/nats.go v1.34.1
 	github.com/nats-io/nkeys v0.4.7
 	github.com/neo4j/neo4j-go-driver/v4 v4.4.7
+	github.com/rs/zerolog v1.32.0
+	github.com/spf13/cobra v1.8.0
 	google.golang.org/api v0.176.1
 )
 
@@ -32,7 +35,6 @@ require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/caarlos0/env/v6 v6.10.1 // indirect
-	github.com/caarlos0/sshmarshal v0.1.0 // indirect
 	github.com/calmh/randomart v1.1.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -42,7 +44,6 @@ require (
 	github.com/charmbracelet/lipgloss v0.10.0 // indirect
 	github.com/charmbracelet/log v0.4.0 // indirect
 	github.com/containerd/console v1.0.4 // indirect
-	github.com/dgraph-io/badger/v3 v3.2103.5 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -81,7 +82,6 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.52.0 // indirect

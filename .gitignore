@@ -12,3 +12,4 @@ venv
 threadr-secrets.yaml
 *.crt
 *.key
+natsctl

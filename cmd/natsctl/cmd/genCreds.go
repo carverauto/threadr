@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"os"
-
-	"github.com/carverauto/threadr/pkg/api/nats"
+	"fmt"
+	"github.com/carverauto/threadr/pkg/api/natsctl"
 	"github.com/spf13/cobra"
 )
 
@@ -13,17 +12,17 @@ var generateCredsCmd = &cobra.Command{
 	Long: `Generate a NATS credentials file for a specified user under a specified account.
 This file will be stored in the specified directory.`,
 	Args: cobra.ExactArgs(3), // Ensures exactly three arguments are passed
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		account := args[0]
 		user := args[1]
 		dir := args[2]
 
-		// Generate the credentials file
-		if err := nats.GenerateCredsFile(account, user, dir); err != nil {
-			cmd.Printf("Failed to generate credentials file: %v\n", err)
-			os.Exit(1)
+		// Use the instanceId to generate the credentials file
+		if err := natsctl.GenerateCredsFile(instanceId, account, user, dir); err != nil {
+			return fmt.Errorf("failed to generate credentials file: %v", err)
 		}
 		cmd.Println("Credentials file generated successfully.")
+		return nil
 	},
 }
 

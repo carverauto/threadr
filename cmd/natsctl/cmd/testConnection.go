@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/carverauto/threadr/pkg/api/nats"
+	"github.com/carverauto/threadr/pkg/api/natsctl"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ var testConnectionCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		credsPath := args[0]
-		if err := nats.TestConnectionWithCreds(credsPath); err != nil {
+		if err := natsctl.TestConnectionWithCreds(credsPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Connection test failed: %v\n", err)
 			os.Exit(1)
 		}

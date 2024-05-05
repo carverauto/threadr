@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Optional
 from modules.messages.models import NATSMessage
-# from modules.nats.publish_message import publish_message_to_jetstream
+# from modules.natsctl.publish_message import publish_message_to_jetstream
 from modules.nats.nats_producer import NATSProducer
 from modules.neo4j.neo4j_adapter import Neo4jAdapter
 from modules.environment.settings import (

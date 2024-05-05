@@ -1,4 +1,4 @@
-# modules/nats/base_nats.py
+# modules/natsctl/base_nats.py
 
 from nats.aio.client import Client as NATS
 from typing import Optional
