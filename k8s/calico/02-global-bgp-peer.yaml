@@ -3,5 +3,5 @@ kind: BGPPeer
 metadata:
   name: farm-global-peer
 spec:
-  peerIP: 192.168.13.1
-  asNumber: 65000
+  peerIP: 192.168.2.1
+  asNumber: 64999
