@@ -13,7 +13,7 @@ spec:
         releaseName: natsctl
         valueFiles:
           - $values/k8s/natsctl/values.yml
-    - repoURL: 'git@github.com:carverauto/threadnexus.git'
+    - repoURL: 'git@github.com:carverauto/threadr.git'
       targetRevision: HEAD
       ref: values
   destination:

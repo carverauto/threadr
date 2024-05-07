@@ -10,7 +10,11 @@ spec:
       encapsulation: VXLANCrossSubnet
       natOutgoing: Enabled
       nodeSelector: all()
-
+    - blockSize: 122
+      cidr: 2001:470:c0b5:4::1/64
+      encapsulation: None
+      natOutgoing: Enabled
+      nodeSelector: all()
 ---
 
 apiVersion: operator.tigera.io/v1
