@@ -2,13 +2,13 @@ apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRouteTCP
 metadata:
   name: nats-ingressroute
-  namespace: natsctl
+  namespace: nats
 spec:
   entryPoints:
-    - natsctl
+    - nats
   routes:
     - match: HostSNI(`*`)
       services:
-        - name: natsctl-service
+        - name: nats-service
           port: 4222
 
