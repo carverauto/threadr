@@ -23,7 +23,7 @@ container:
     - name: NKEY
       valueFrom:
         secretKeyRef:
-          name: nats-user-credentials
+          name: natsctl-user-credentials
           key: nkey
 
 affinity:
@@ -31,7 +31,7 @@ affinity:
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
       - matchExpressions:
-        - key: nats-node
+        - key: natsctl-node
           operator: In
           values:
           - "true"

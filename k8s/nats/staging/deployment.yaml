@@ -7,18 +7,18 @@ spec:
   project: default
   sources:
     - repoURL: 'https://nats-io.github.io/k8s/helm/charts/'
-      chart: nats
+      chart: natsctl
       targetRevision: '1.1.8'
       helm:
-        releaseName: nats
+        releaseName: natsctl
         valueFiles:
-          - $values/k8s/nats/values.yml
-    - repoURL: 'git@github.com:carverauto/threadnexus.git'
+          - $values/k8s/natsctl/values.yml
+    - repoURL: 'git@github.com:carverauto/threadr.git'
       targetRevision: HEAD
       ref: values
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: nats
+    namespace: natsctl
   syncPolicy:
     automated:
       prune: false

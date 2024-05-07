@@ -1,0 +1,15 @@
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: farm-global-peer
+spec:
+  peerIP: 192.168.2.1
+  asNumber: 64999
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: farm-global-peer-ipv6
+spec:
+  peerIP: 2001:470:c0b5:2::1
+  asNumber: 64998

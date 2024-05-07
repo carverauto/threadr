@@ -1,0 +1,25 @@
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+    - blockSize: 26
+      cidr: 10.42.0.0/16
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+    - blockSize: 122
+      cidr: 2001:470:c0b5:4::1/64
+      encapsulation: None
+      natOutgoing: Enabled
+      nodeSelector: all()
+---
+
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
+

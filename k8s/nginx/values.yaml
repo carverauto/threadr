@@ -1,3 +1,0 @@
-controller:
-  service:
-    loadBalancerIP: "192.168.1.73"

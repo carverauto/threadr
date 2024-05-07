@@ -1,0 +1,11 @@
+apiVersion: projectcalico.org/v3
+kind: CalicoNodeStatus
+metadata:
+  name: threadr-control-status
+spec:
+  classes:
+    - Agent
+    - BGP
+    - Routes
+  node: 192.168.2.217
+  updatePeriodSeconds: 10

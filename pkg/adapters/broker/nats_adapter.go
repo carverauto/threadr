@@ -1,4 +1,4 @@
-// Package nats pkg/adapters/nats/nats_adapter.go
+// Package natsctl pkg/adapters/natsctl/nats_adapter.go
 // provides a CloudEventsNATSHandler that can be used to publish and subscribe to CloudEvents messages.
 
 package broker
@@ -28,7 +28,7 @@ type CloudEventsNATSHandler struct {
 
 // natsConfig holds the configuration for the NATS connection.
 type natsConfig struct {
-	NatsURL     string `envconfig:"NATSURL" default:"nats://nats.nats.svc.cluster.local:4222" required:"true"`
+	NatsURL     string `envconfig:"NATSURL" default:"natsctl://natsctl.natsctl.svc.cluster.local:4222" required:"true"`
 	NKey        string `envconfig:"NKEY" required:"true"`
 	NkeySeed    string `envconfig:"NKEYSEED" required:"true"`
 	DurableName string `envconfig:"DURABLE_NAME" default:"durable-results"`

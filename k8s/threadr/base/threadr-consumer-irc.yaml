@@ -22,7 +22,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: NATSURL
-              value: nats://nats.nats.svc.cluster.local:4222
+              value: natsctl://natsctl.natsctl.svc.cluster.local:4222
             - name: NKEY
               valueFrom:
                 secretKeyRef:
