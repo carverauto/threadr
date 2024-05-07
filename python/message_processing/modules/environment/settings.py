@@ -2,7 +2,7 @@
 
 import os
 
-NATS_URL = os.getenv("NATSURL", "natsctl://localhost:4222")
+NATS_URL = os.getenv("NATSURL", "nats://localhost:4222")
 NATS_EMBEDDING_SUBJECT = os.getenv("NATS_EMBEDDING_SUBJECT", "vector_processing")
 NATS_EMBEDDING_STREAM = os.getenv("NATS_EMBEDDING_STREAM", "embeddings")
 NATS_NKEYSEED = os.getenv("NKEYSEED")

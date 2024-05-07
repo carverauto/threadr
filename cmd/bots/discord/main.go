@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	// natsURL := "natsctl://natsctl.natsctl.svc.cluster.local:4222"
+	// natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	natsURL := os.Getenv("NATSURL")
 	sendSubject := "chat"
 	stream := "messages"
@@ -31,7 +31,7 @@ func main() {
 	}
 
 	/*
-		commandsHandler, err := natsctl.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
+		commandsHandler, err := nats.NewCloudEventsNATSHandler(natsURL, cmdsSubject, cmdsStream, false)
 		if err != nil {
 
 			log.Fatalf("Failed to create CloudEvents handler: %s", err)

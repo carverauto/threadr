@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	natsURL := "natsctl://natsctl.natsctl.svc.cluster.local:4222"
+	natsURL := "nats://nats.nats.svc.cluster.local:4222"
 	sendSubject := "chat"
 	stream := "messages"
 	cmdsSubject := "incoming"

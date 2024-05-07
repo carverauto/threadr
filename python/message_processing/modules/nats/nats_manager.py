@@ -1,4 +1,4 @@
-# modules/natsctl/nats_manager.py
+# modules/nats/nats_manager.py
 
 from nats.aio.client import Client as NATS
 

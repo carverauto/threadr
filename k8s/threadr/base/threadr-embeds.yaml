@@ -41,7 +41,7 @@ spec:
             - name: NEO4J_USERNAME
               value: "neo4j"
             - name: NATSURL
-              value: "natsctl://natsctl.natsctl.svc.cluster.local:4222"
+              value: "nats://nats.nats.svc.cluster.local:4222"
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

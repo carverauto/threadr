@@ -1,4 +1,4 @@
-# modules/natsctl/nats_producer.py
+# modules/nats/nats_producer.py
 
 import json
 from modules.messages.models import NATSMessage

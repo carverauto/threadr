@@ -1,4 +1,4 @@
-# modules/natsctl/nats_consumer.py
+# modules/nats/nats_consumer.py
 
 import asyncio
 from typing import Callable
