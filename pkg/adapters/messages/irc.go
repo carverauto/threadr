@@ -22,10 +22,11 @@ type IRCAdapter struct {
 
 type IRCAdapterConfig struct {
 	Nick            string `envconfig:"BOT_NICK" default:"threadr" required:"true"`
-	Server          string `envconfig:"BOT_SERVER" default:"chat.choopa.net:6667" required:"true"`
+	Server          string `envconfig:"BOT_SERVER" default:"irc.swepipe.se:6699" required:"true"`
 	Channels        string `envconfig:"BOT_CHANNELS" default:"#!chases,#chases,#𝓉𝓌𝑒𝓇𝓀𝒾𝓃,#singularity" required:"true"`
 	BotSaslLogin    string `envconfig:"BOT_SASL_LOGIN"`
 	BotSaslPassword string `envconfig:"BOT_SASL_PASSWORD"`
+	Insecure        bool   `envconfig:"BOT_INSECURE_SKIP_VERIFY" default:"true"`
 }
 
 func NewIRCAdapter() *IRCAdapter {
@@ -44,7 +45,7 @@ func NewIRCAdapter() *IRCAdapter {
 	connection := &ircevent.Connection{
 		Server:       config.Server,
 		Nick:         config.Nick,
-		UseTLS:       false,
+		UseTLS:       true,
 		TLSConfig:    tlsconf,
 		SASLLogin:    config.BotSaslLogin,
 		SASLPassword: config.BotSaslPassword,
@@ -59,6 +60,9 @@ func NewIRCAdapter() *IRCAdapter {
 }
 
 func (irc *IRCAdapter) Connect(ctx context.Context, commandEventsHandler *broker.CloudEventsNATSHandler) error {
+
+	log.Println("Connecting to IRC server", irc.Connection.Server)
+
 	// Set up connection callbacks and handlers
 	irc.Connection.AddConnectCallback(func(e ircmsg.Message) {
 		for _, channel := range irc.channels {

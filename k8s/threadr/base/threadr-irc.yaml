@@ -21,12 +21,12 @@ spec:
       labels:
         app: threadr-irc
     spec:
-      serviceAccountName: threadr-chat-account
+      serviceAccountName: threadr-irc-account
       imagePullSecrets:
         - name: ghcr-io-cred
       containers:
         - name: threadr
-          image: ghcr.io/carverauto/threadr:v0.0.26
+          image: ghcr.io/carverauto/threadr-irc:v0.0.28
           imagePullPolicy: Always
           env:
             - name: NATSURL
@@ -41,3 +41,7 @@ spec:
                 secretKeyRef:
                   name: nkey-seed-secret
                   key: NKEYSEED
+            - name: BOT_SERVER
+              value: "irc.swepipe.se:6697"
+            - name: BOT_INSECURE_SKIP_VERIFY
+              value: "true"

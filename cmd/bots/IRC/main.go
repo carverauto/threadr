@@ -9,11 +9,12 @@ import (
 	pm "github.com/carverauto/threadr/pkg/ports"
 	"github.com/nats-io/nats.go"
 	"log"
+	"os"
 	"time"
 )
 
 func main() {
-	natsURL := "nats://nats.nats.svc.cluster.local:4222"
+	natsURL := os.Getenv("NATSURL")
 	sendSubject := "chat"
 	stream := "messages"
 	cmdsSubject := "incoming"
@@ -21,8 +22,11 @@ func main() {
 	resultsSubject := "outgoing"
 	resultsStream := "results"
 
-	// create a context
-	ctx := context.Background()
+	// Create a context with a timeout of 10 seconds
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	log.Println("main.go - Starting IRC bot")
 
 	// Create a CloudEvents handler, which will be used to send messages
 	cloudEventsHandler, err := broker.NewCloudEventsNATSHandler(natsURL, sendSubject, stream, false)
@@ -41,6 +45,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create CloudEvents handler: %s", err)
 	}
+
+	log.Println("main.go - Connecting to IRC server")
 
 	// Setup the IRC adapter
 	var ircAdapter pm.MessageAdapter = irc.NewIRCAdapter()
