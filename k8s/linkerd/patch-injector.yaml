@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linkerd-proxy-injector
+  namespace: linkerd
+spec:
+  template:
+    spec:
+      containers:
+        - name: linkerd-proxy-injector
+          args:
+            - proxy-injector
+            - -tls-cert-file=/var/linkerd-io/identity/certificate.crt
+            - -tls-key-file=/var/linkerd-io/identity/private.key
+          volumeMounts:
+            - mountPath: /var/linkerd-io/identity
+              name: linkerd-certs
+      volumes:
+        - name: linkerd-certs
+          secret:
+            secretName: default-tunnel-threadr-ai-tls
+

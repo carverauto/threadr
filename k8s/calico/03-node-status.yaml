@@ -7,5 +7,5 @@ spec:
     - Agent
     - BGP
     - Routes
-  node: 192.168.2.217
+  node: 192.168.2.147
   updatePeriodSeconds: 10
