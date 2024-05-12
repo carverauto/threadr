@@ -4,4 +4,4 @@ metadata:
   name: farm-global-peer-ipv6
 spec:
   peerIP: 2001:470:c0b5:2::1
-  asNumber: 64998
+  asNumber: 65000
