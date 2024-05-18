@@ -1,0 +1,9 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: k3s-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - "10.43.0.3-10.43.0.254"
+  - "2001:470:c0b5:5::1-2001:470:c0b5:5::ffff"

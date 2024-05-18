@@ -1,0 +1,8 @@
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  name: default
+spec:
+  ipv6Support: true
+  ipipMTU: 1400
+  chainInsertMode: Append

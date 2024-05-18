@@ -1,0 +1,38 @@
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+      - blockSize: 26
+        cidr: 10.42.0.0/16
+        encapsulation: IPIP
+        natOutgoing: Enabled
+        nodeSelector: all()
+      - blockSize: 122
+        cidr: 2001:470:c0b5:2::/64
+        encapsulation: None
+        natOutgoing: Enabled
+        nodeSelector: all()
+
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: default-ipv6-ippool
+spec:
+  cidr: "2001:470:c0b5:2::/64"
+  ipipMode: Never
+  natOutgoing: true
+  blockSize: 122
+  nodeSelector: all()
+
+---
+
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
+
