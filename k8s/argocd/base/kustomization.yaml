@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: argocd
 resources:
   - argocd-install.yaml
+  - cert-request.yaml
   - service.yaml
 

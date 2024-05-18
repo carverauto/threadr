@@ -3,14 +3,26 @@ kind: Service
 metadata:
   name: argocd-service
   namespace: argocd
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: argocd.tunnel.threadr.ai
+    external-dns.alpha.kubernetes.io/ttl: "120" # optional
 spec:
   selector:
     app.kubernetes.io/name: argocd-server
+  ipFamilies:
+    - IPv4
+    - IPv6
+  ipFamilyPolicy: RequireDualStack
+  type: LoadBalancer
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
       targetPort: 8080
-  type: NodePort 
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8080
 
 ---
 apiVersion: networking.k8s.io/v1
@@ -22,17 +34,16 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-      - argocd.tunnel.threadr.ai
-      secretName: custom-threadr-tls
+        - argocd.tunnel.threadr.ai
+      secretName: argocd-tunnel-threadr-ai-tls
   rules:
     - host: argocd.tunnel.threadr.ai
       http:
         paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: argocd-service
-              port:
-                number: 80
-
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-service
+                port:
+                  number: 443

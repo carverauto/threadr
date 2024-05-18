@@ -1,0 +1,8 @@
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: anbus
+spec:
+  peerIP: 192.168.1.80
+  asNumber: 65000
+  nodeSelector: kubernetes.io/hostname == 'anbus'
