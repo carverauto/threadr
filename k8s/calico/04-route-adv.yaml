@@ -7,8 +7,5 @@ spec:
   asNumber: 65000
   serviceClusterIPs:
     - cidr: 10.43.0.0/16
-  serviceExternalIPs:
-    - cidr: "192.168.5.0/24"
-    - cidr: "192.168.6.0/24"
-    - cidr: "192.168.7.0/24"
-    - cidr: "192.168.8.0/24"
+  serviceLoadBalancerIPs:
+    - cidr: "2001:470:c0b5:5::/64"
