@@ -1,0 +1,56 @@
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    containerIPForwarding: Enabled
+    ipPools:
+      - blockSize: 26
+        cidr: 10.42.0.0/16
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
+      - blockSize: 122
+        cidr: 2001:470:c0b5:4::/64
+        encapsulation: None
+        natOutgoing: Enabled
+        nodeSelector: all()
+---
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calico-config
+  namespace: kube-system
+data:
+  cni_network_config: |-
+    {
+      "name": "k8s-pod-network",
+      "cniVersion": "0.3.1",
+      "plugins": [
+        {
+          "name": "calico",
+          "type": "calico",
+          "log_level": "info",
+          "datastore_type": "kubernetes",
+          "ipam": {
+              "type": "calico-ipam",
+              "assign_ipv4": "true",
+              "assign_ipv6": "true" 
+          },
+          "container_settings": {
+            "allow_ip_forwarding": true
+          }
+        },
+        {
+          "type": "portmap",
+          "capabilities": {"portMappings": true}
+        }
+      ]
+    }

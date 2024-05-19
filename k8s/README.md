@@ -82,8 +82,9 @@ net.ipv6.conf.all.accept_ra = 2
 
 ```
 
+
 ## k3s
 
 ```shell
-k3sup install --ip $IP01 --user mfreeman --k3s-extra-args '--disable traefik --disable servicelb --disable-cloud-controller --kube-proxy-arg proxy-mode=ipvs --cluster-cidr=10.42.0.0/16,2001:470:c0b5:4::/64 --service-cidr=10.43.0.0/16,2001:470:c0b5:5::/64 --disable-network-policy --flannel-backend=none'
+k3sup install --ip $IP01 --user mfreeman --k3s-extra-args '--disable traefik --disable servicelb --disable-cloud-controller --kube-proxy-arg proxy-mode=ipvs --cluster-cidr=10.42.0.0/16,2001:470:c0b5:4::/64 --service-cidr=10.43.0.0/16,2001:470:c0b5:5::/108 --disable-network-policy --flannel-backend=none'
 ```
