@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: curl-test
+spec:
+  containers:
+  - name: curl
+    image: ubuntu
+    command: ["sleep", "infinity"]
+    readinessProbe:
+      exec:
+        command:
+        - curl
+        - --version
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    livenessProbe:
+      exec:
+        command:
+        - curl
+        - --version
+      initialDelaySeconds: 5
+      periodSeconds: 20
+    # Adding an entrypoint that installs curl and openssl
+    lifecycle:
+      postStart:
+        exec:
+          command: ["sh", "-c", "apt-get update && apt-get install -y curl openssl"]
+

@@ -8,7 +8,7 @@ spec:
     ipPools:
       - blockSize: 26
         cidr: 10.42.0.0/16
-        encapsulation: VXLANCrossSubnet
+        encapsulation: None
         natOutgoing: Enabled
         nodeSelector: all()
       - blockSize: 122
@@ -23,34 +23,11 @@ metadata:
   name: default
 spec: {}
 ---
-apiVersion: v1
 kind: ConfigMap
+apiVersion: v1
 metadata:
-  name: calico-config
-  namespace: kube-system
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
 data:
-  cni_network_config: |-
-    {
-      "name": "k8s-pod-network",
-      "cniVersion": "0.3.1",
-      "plugins": [
-        {
-          "name": "calico",
-          "type": "calico",
-          "log_level": "info",
-          "datastore_type": "kubernetes",
-          "ipam": {
-              "type": "calico-ipam",
-              "assign_ipv4": "true",
-              "assign_ipv6": "true" 
-          },
-          "container_settings": {
-            "allow_ip_forwarding": true
-          }
-        },
-        {
-          "type": "portmap",
-          "capabilities": {"portMappings": true}
-        }
-      ]
-    }
+  KUBERNETES_SERVICE_HOST: '192.168.2.251'
+  KUBERNETES_SERVICE_PORT: '6443'
