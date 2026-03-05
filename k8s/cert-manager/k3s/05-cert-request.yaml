@@ -1,15 +1,14 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: default-tunnel-certificate
-  namespace: default
+  name: auth-tunnel-certificate
+  namespace: auth
 spec:
-  secretName: default-tunnel-threadr-ai-tls
+  secretName: auth-services-tls
   issuerRef:
-    name: threadr-issuer
+    name: carverauto-issuer
     kind: ClusterIssuer
-  commonName: tunnel.threadr.ai
+  commonName: tunnel.carverauto.dev
   dnsNames:
-  - tunnel.threadr.ai
-  - '*.tunnel.threadr.ai'
-
+  - tunnel.carverauto.dev
+  - '*.tunnel.carverauto.dev'

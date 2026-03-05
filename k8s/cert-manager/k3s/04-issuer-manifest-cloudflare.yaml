@@ -1,13 +1,13 @@
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: threadr-issuer
+  name: carverauto-issuer
 spec:
   acme:
     # The ACME server URL for Let's Encrypt
     server: https://acme-v02.api.letsencrypt.org/directory
     # Email address used for ACME registration
-    email: mfreeman@threadr.ai
+    email: mfreeman@carverauto.dev
     # Name of a secret used to store the ACME account private key
     privateKeySecretRef:
       name: acme-account-key  # This secret will be created by cert-manager

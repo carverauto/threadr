@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: serviceradar-certificate
+  namespace: default
+spec:
+  secretName: tunnel-serviceradar-tls
+  issuerRef:
+    name: carverauto-issuer
+    kind: ClusterIssuer
+  commonName: tunnel.serviceradar.cloud
+  dnsNames:
+  - tunnel.serviceradar.cloud
+  - '*.tunnel.serviceradar.cloud'
+
