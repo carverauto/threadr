@@ -97,6 +97,27 @@ The current assumption should be:
 
 This keeps the architecture honest about an unresolved capability question: the team has not yet proven that a single local model stack is the best fit for both embeddings and structured extraction.
 
+### Graph Exploration Rendering Pipeline
+Threadr graph exploration should not introduce a second frontend graph stack. The rewrite should reuse the proven ServiceRadar God-View architecture where it fits the product:
+- versioned binary snapshot transport using Apache Arrow IPC payloads
+- compact roaring bitmap side metadata for high-cardinality visual class filters
+- `deck.gl` as the primary graph renderer, targeting WebGPU-capable clients first
+- a Wasm client compute layer for hot-path mask, traversal, and interpolation work
+
+The Threadr graph domain is different from infrastructure topology, so the snapshot schema will be Threadr-specific, but the transport shape and performance model should be the same. The BEAM and PostgreSQL own graph state and query orchestration, while Rust or Wasm-backed components own dense binary packing and local high-volume client compute.
+
+This avoids building:
+1. one stack for analyst QA and another for graph exploration
+2. one binary/GPU path in ServiceRadar and a weaker JSON/SVG path in Threadr
+3. a LiveView graph page that becomes a migration burden when large tenants arrive
+
+The initial graph exploration contract should therefore assume:
+- authenticated tenant-scoped snapshot access
+- a stable snapshot schema version with explicit node and edge column requirements
+- bitmap-backed class filters and neighborhood masks for interactive graph navigation
+- `deck.gl` layer composition instead of bespoke DOM rendering
+- a documented fallback mode when WebGPU or Wasm is unavailable
+
 ## Risks And Mitigations
 - Ash adoption changes the persistence model and developer workflow materially.
   Mitigation: adopt Ash early in the rewrite instead of migrating to it later, and keep resources aligned with the control-plane versus tenant-data boundary from the beginning.

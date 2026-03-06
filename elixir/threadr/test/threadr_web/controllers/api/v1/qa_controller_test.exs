@@ -1,9 +1,14 @@
 defmodule ThreadrWeb.Api.V1.QaControllerTest do
   use ThreadrWeb.ConnCase, async: false
 
+  import Ash.Expr
+  require Ash.Query
+
   alias Threadr.ControlPlane
   alias Threadr.ControlPlane.Service
-  alias Threadr.TenantData.{Actor, Channel, Message, MessageEmbedding}
+  alias Threadr.Events.{ChatMessage, Envelope}
+  alias Threadr.Messaging.Topology
+  alias Threadr.TenantData.{Actor, Channel, Ingest, Message, MessageEmbedding}
 
   setup do
     previous_ml_config = Application.get_env(:threadr, Threadr.ML, [])
@@ -96,6 +101,46 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
            }
   end
 
+  test "POST /api/v1/tenants/:subject_name/qa/graph-answer returns graph-aware context", %{
+    conn: conn
+  } do
+    owner = create_user!("owner")
+    tenant = create_tenant!("QA Graph", owner)
+    seed_graph_rag_data!(tenant)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/graph-answer", %{
+        "question" => "Who is collaborating with Alice?"
+      })
+
+    assert %{"data" => data} = json_response(conn, 200)
+    assert data["answer"]["provider"] == "test"
+    assert data["graph"]["context"] =~ "Relationships:"
+    assert Enum.any?(data["graph"]["relationships"], &(&1["relationship_type"] == "CO_MENTIONED"))
+    assert Enum.any?(data["graph"]["citations"], &String.contains?(&1["body"], "followed up"))
+  end
+
+  test "POST /api/v1/tenants/:subject_name/qa/summarize returns a grounded summary", %{conn: conn} do
+    owner = create_user!("owner")
+    tenant = create_tenant!("QA Summary", owner)
+    seed_graph_rag_data!(tenant)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/summarize", %{
+        "topic" => "Alice, Bob, and Carol incident response activity"
+      })
+
+    assert %{"data" => data} = json_response(conn, 200)
+    assert data["summary"]["provider"] == "test"
+    assert data["summary"]["metadata"]["mode"] == "summarization"
+    assert data["graph"]["context"] =~ "Actors:"
+    assert data["summary"]["content"] =~ "Topic:"
+  end
+
   defp api_key_conn(conn, user) do
     {:ok, _api_key, plaintext_api_key} = Service.create_api_key(user, %{name: "CLI"})
 
@@ -156,6 +201,34 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     create_embedding!(tenant_schema, second_message.id, [0.1, 0.2, 0.3])
   end
 
+  defp seed_graph_rag_data!(tenant) do
+    observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    incident_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "alice",
+        "ops",
+        "Alice mentioned Bob and Carol in incident response planning.",
+        ["bob", "carol"],
+        observed_at
+      )
+
+    _follow_up_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "bob",
+        "ops",
+        "Bob followed up with Carol on endpoint isolation.",
+        ["carol"],
+        DateTime.add(observed_at, 60, :second)
+      )
+
+    create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
+  end
+
   defp create_actor!(tenant_schema, handle) do
     Actor
     |> Ash.Changeset.for_create(
@@ -206,5 +279,37 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
       tenant: tenant_schema
     )
     |> Ash.create!()
+  end
+
+  defp persist_message!(
+         tenant_subject_name,
+         tenant_schema,
+         actor,
+         channel,
+         body,
+         mentions,
+         observed_at
+       ) do
+    envelope =
+      Envelope.new(
+        ChatMessage.from_map(%{
+          platform: "discord",
+          channel: channel,
+          actor: actor,
+          body: body,
+          mentions: mentions,
+          observed_at: observed_at,
+          raw: %{"body" => body}
+        }),
+        "chat.message",
+        Topology.subject_for(:chat_messages, tenant_subject_name),
+        %{id: Ecto.UUID.generate()}
+      )
+
+    {:ok, message} = Ingest.persist_envelope(envelope)
+
+    Message
+    |> Ash.Query.filter(expr(id == ^message.id))
+    |> Ash.read_one!(tenant: tenant_schema)
   end
 end

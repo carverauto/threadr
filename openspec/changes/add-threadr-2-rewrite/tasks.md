@@ -15,11 +15,11 @@
 
 ## 3. Processing And Graph Workflows
 - [ ] 3.1 Evaluate and implement local ML execution for embeddings and schema-based extraction, using Nx/Bumblebee, GLiNER2, or a deliberate combination of both.
-- [ ] 3.2 Implement graph inference and relationship updates against Apache AGE in PostgreSQL.
-- [ ] 3.3 Implement Graph-RAG and summarization workflows without Python services in the critical path.
+- [x] 3.2 Implement graph inference and relationship updates against Apache AGE in PostgreSQL.
+- [x] 3.3 Implement Graph-RAG and summarization workflows without Python services in the critical path.
 
 ## 4. UI And Operations
-- [ ] 4.1 Build Phoenix LiveView interfaces for chat history, dossiers, and graph exploration.
+- [ ] 4.1 Build Phoenix LiveView interfaces for chat history, dossiers, and graph exploration, using the binary Arrow plus roaring bitmap plus `deck.gl` plus Wasm pipeline for graph exploration.
 - [x] 4.2 Implement authenticated web sign-in and tenant-scoped session handling for the Threadr UI.
 - [x] 4.3 Implement self-service API key creation, listing, and revocation for authenticated users.
 - [x] 4.4 Define the first public API surface for tenant-facing automation and control-plane access.

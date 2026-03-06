@@ -20,9 +20,10 @@ The SaaS rewrite also needs a first-class user access model. Tenant users need a
 - Define bot lifecycle transitions through Ash state machines instead of ad hoc status mutation.
 - Define an explicit controller-owned desired-state contract for bot workloads and a machine-authenticated status callback path.
 - Keep local ML backend selection open long enough to compare Nx/Bumblebee and GLiNER2 for the rewrite's actual embedding and schema-based extraction needs, rather than prematurely locking the design to one stack.
+- Define graph exploration around the same high-density pipeline proven in ServiceRadar: versioned Arrow snapshot transport, roaring bitmap overlays, `deck.gl` rendering, and a Wasm client compute layer.
 - Define PostgreSQL with Apache AGE, pgvector, TimescaleDB, and ParadeDB as the replacement for Neo4j and other specialized stores.
 - Capture the rewrite scope in an approved OpenSpec change so later implementation work can proceed against a corrected architecture.
 
 ## Impact
 - Affected specs: `threadr-2-rewrite`
-- Affected code: future Elixir/Phoenix application code, Ash domains and resources, Ash state machine actions, authentication and session flows, public API endpoints, tenant schema migrations, NATS subjects and streams, ingestion adapters, graph and embedding pipelines, Kubernetes control-plane code, controller contract endpoints, and deployment manifests
+- Affected code: future Elixir/Phoenix application code, Ash domains and resources, Ash state machine actions, authentication and session flows, public API endpoints, tenant schema migrations, NATS subjects and streams, ingestion adapters, graph and embedding pipelines, graph exploration snapshot encoders and frontend assets, Kubernetes control-plane code, controller contract endpoints, and deployment manifests

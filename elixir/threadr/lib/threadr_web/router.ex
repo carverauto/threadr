@@ -48,6 +48,7 @@ defmodule ThreadrWeb.Router do
       on_mount: [{ThreadrWeb.LiveUserAuth, :live_user_required}] do
       live "/control-plane/tenants", TenantLive.Index, :index
       live "/control-plane/tenants/:subject_name/qa", TenantQaLive.Index, :index
+      live "/control-plane/tenants/:subject_name/graph", TenantGraphLive.Index, :index
       live "/settings/api-keys", ApiKeyLive.Index, :index
     end
   end
@@ -81,6 +82,8 @@ defmodule ThreadrWeb.Router do
     delete "/tenants/:subject_name/bots/:id", BotController, :delete
     post "/tenants/:subject_name/qa/search", QaController, :search
     post "/tenants/:subject_name/qa/answer", QaController, :answer
+    post "/tenants/:subject_name/qa/graph-answer", QaController, :graph_answer
+    post "/tenants/:subject_name/qa/summarize", QaController, :summarize
     get "/tenants/:subject_name/memberships", MembershipController, :index
     post "/tenants/:subject_name/memberships", MembershipController, :create
     patch "/tenants/:subject_name/memberships/:id", MembershipController, :update

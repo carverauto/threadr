@@ -59,6 +59,62 @@ defmodule ThreadrWeb.Api.V1.QaController do
     end
   end
 
+  def graph_answer(conn, %{"subject_name" => subject_name, "question" => question} = params) do
+    with {:ok, user} <- current_user(conn),
+         {:ok, result} <-
+           Service.answer_tenant_graph_question_for_user(
+             user,
+             subject_name,
+             question,
+             limit: parse_limit(params["limit"])
+           ) do
+      json(conn, %{data: graph_answer_json(result)})
+    else
+      {:error, :unauthorized} ->
+        unauthorized(conn)
+
+      {:error, {:tenant_not_found, _}} ->
+        not_found(conn, "Tenant not found")
+
+      {:error, :forbidden} ->
+        forbidden(conn)
+
+      {:error, :no_message_embeddings} ->
+        unprocessable(conn, "No tenant message embeddings available")
+
+      {:error, reason} ->
+        unprocessable(conn, inspect(reason))
+    end
+  end
+
+  def summarize(conn, %{"subject_name" => subject_name, "topic" => topic} = params) do
+    with {:ok, user} <- current_user(conn),
+         {:ok, result} <-
+           Service.summarize_tenant_topic_for_user(
+             user,
+             subject_name,
+             topic,
+             limit: parse_limit(params["limit"])
+           ) do
+      json(conn, %{data: summary_json(result)})
+    else
+      {:error, :unauthorized} ->
+        unauthorized(conn)
+
+      {:error, {:tenant_not_found, _}} ->
+        not_found(conn, "Tenant not found")
+
+      {:error, :forbidden} ->
+        forbidden(conn)
+
+      {:error, :no_message_embeddings} ->
+        unprocessable(conn, "No tenant message embeddings available")
+
+      {:error, reason} ->
+        unprocessable(conn, inspect(reason))
+    end
+  end
+
   defp current_user(%{assigns: %{current_user: %{id: _} = user}}), do: {:ok, user}
   defp current_user(_conn), do: {:error, :unauthorized}
 
@@ -77,6 +133,33 @@ defmodule ThreadrWeb.Api.V1.QaController do
   defp answer_json(result) do
     search_json(result)
     |> Map.put(:answer, generation_json(result.answer))
+  end
+
+  defp graph_answer_json(result) do
+    answer_json(%{
+      tenant_subject_name: result.tenant_subject_name,
+      tenant_schema: result.tenant_schema,
+      question: result.question,
+      query: result.semantic.query,
+      matches: result.semantic.matches,
+      citations: result.semantic.citations,
+      context: result.context,
+      answer: result.answer
+    })
+    |> Map.put(:semantic, search_json(result.semantic))
+    |> Map.put(:graph, graph_json(result.graph))
+  end
+
+  defp summary_json(result) do
+    %{
+      tenant_subject_name: result.tenant_subject_name,
+      tenant_schema: result.tenant_schema,
+      topic: result.topic,
+      semantic: search_json(result.semantic),
+      graph: graph_json(result.graph),
+      context: result.context,
+      summary: generation_json(result.summary)
+    }
   end
 
   defp match_json(match) do
@@ -100,6 +183,16 @@ defmodule ThreadrWeb.Api.V1.QaController do
       model: answer.model,
       provider: answer.provider,
       metadata: json_safe(answer.metadata)
+    }
+  end
+
+  defp graph_json(graph) do
+    %{
+      actors: json_safe(graph.actors),
+      relationships: json_safe(graph.relationships),
+      related_messages: json_safe(graph.related_messages),
+      citations: json_safe(graph.citations),
+      context: graph.context
     }
   end
 

@@ -13,5 +13,6 @@ defmodule Threadr.TenantData do
     resource Threadr.TenantData.MessageEmbedding
     resource Threadr.TenantData.MessageMention
     resource Threadr.TenantData.Relationship
+    resource Threadr.TenantData.RelationshipObservation
   end
 end

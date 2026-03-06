@@ -42,6 +42,12 @@ defmodule Threadr.ML.Generation do
 
   def answer_question(question, context, opts \\ [])
       when is_binary(question) and is_binary(context) do
+    request_context =
+      opts
+      |> Keyword.get(:context, %{})
+      |> Map.new()
+      |> Map.put("question", question)
+
     system_prompt =
       Keyword.get(
         opts,
@@ -62,7 +68,7 @@ defmodule Threadr.ML.Generation do
       opts
       |> Keyword.put(:mode, :qa)
       |> Keyword.put(:system_prompt, system_prompt)
-      |> Keyword.put(:context, %{"question" => question})
+      |> Keyword.put(:context, request_context)
     )
   end
 

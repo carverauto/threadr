@@ -47,6 +47,7 @@ defmodule Threadr.MixProject do
       {:ash_postgres, "~> 2.6"},
       {:ash_state_machine, "~> 0.2"},
       {:simple_sat, "~> 0.1.4"},
+      {:rustler, "~> 0.37"},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},

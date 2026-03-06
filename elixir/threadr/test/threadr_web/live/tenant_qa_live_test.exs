@@ -1,12 +1,16 @@
 defmodule ThreadrWeb.TenantQaLiveTest do
   use ThreadrWeb.ConnCase, async: false
 
+  import Ash.Expr
   import AshAuthentication.Phoenix.Plug, only: [store_in_session: 2]
   import Phoenix.LiveViewTest
+  require Ash.Query
 
   alias Threadr.ControlPlane
   alias Threadr.ControlPlane.Service
-  alias Threadr.TenantData.{Actor, Channel, Message, MessageEmbedding}
+  alias Threadr.Events.{ChatMessage, Envelope}
+  alias Threadr.Messaging.Topology
+  alias Threadr.TenantData.{Actor, Channel, Ingest, Message, MessageEmbedding}
 
   setup do
     previous_ml_config = Application.get_env(:threadr, Threadr.ML, [])
@@ -76,6 +80,41 @@ defmodule ThreadrWeb.TenantQaLiveTest do
     assert render(view) =~ "Question is required"
   end
 
+  test "renders graph answer and summary results", %{conn: conn} do
+    user = create_user!("tenant-qa-graph")
+    tenant = create_tenant!("Tenant QA Graph", user)
+    seed_graph_rag_data!(tenant)
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, view, _html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/qa")
+
+    view
+    |> element("#tenant-qa-form")
+    |> render_change(%{"question" => "Who is collaborating with Alice?", "limit" => "1"})
+
+    view
+    |> element("#tenant-qa-graph-answer")
+    |> render_click()
+
+    rendered = render(view)
+    assert rendered =~ "Graph Answer"
+    assert rendered =~ "Graph Context"
+    assert rendered =~ "CO_MENTIONED"
+    assert rendered =~ "G1"
+
+    view
+    |> element("#tenant-qa-summarize")
+    |> render_click()
+
+    rendered = render(view)
+    assert rendered =~ "Summary"
+    assert rendered =~ "Topic:"
+  end
+
   defp create_user!(prefix) do
     suffix = System.unique_integer([:positive])
 
@@ -128,6 +167,34 @@ defmodule ThreadrWeb.TenantQaLiveTest do
     create_embedding!(tenant_schema, second_message.id, [0.1, 0.2, 0.3])
   end
 
+  defp seed_graph_rag_data!(tenant) do
+    observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    incident_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "alice",
+        "ops",
+        "Alice mentioned Bob and Carol in incident response planning.",
+        ["bob", "carol"],
+        observed_at
+      )
+
+    _follow_up_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "bob",
+        "ops",
+        "Bob followed up with Carol on endpoint isolation.",
+        ["carol"],
+        DateTime.add(observed_at, 60, :second)
+      )
+
+    create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
+  end
+
   defp create_actor!(tenant_schema, handle) do
     Actor
     |> Ash.Changeset.for_create(
@@ -178,5 +245,37 @@ defmodule ThreadrWeb.TenantQaLiveTest do
       tenant: tenant_schema
     )
     |> Ash.create!()
+  end
+
+  defp persist_message!(
+         tenant_subject_name,
+         tenant_schema,
+         actor,
+         channel,
+         body,
+         mentions,
+         observed_at
+       ) do
+    envelope =
+      Envelope.new(
+        ChatMessage.from_map(%{
+          platform: "discord",
+          channel: channel,
+          actor: actor,
+          body: body,
+          mentions: mentions,
+          observed_at: observed_at,
+          raw: %{"body" => body}
+        }),
+        "chat.message",
+        Topology.subject_for(:chat_messages, tenant_subject_name),
+        %{id: Ecto.UUID.generate()}
+      )
+
+    {:ok, message} = Ingest.persist_envelope(envelope)
+
+    Message
+    |> Ash.Query.filter(expr(id == ^message.id))
+    |> Ash.read_one!(tenant: tenant_schema)
   end
 end

@@ -120,6 +120,8 @@ defmodule Threadr.ML.SemanticQA do
     distance = normalize_distance(match.distance)
 
     match
+    |> Map.update!(:message_id, &normalize_identifier/1)
+    |> Map.update!(:external_id, &normalize_identifier/1)
     |> Map.put(:distance, distance)
     |> Map.put(:similarity, 1.0 - distance)
   end
@@ -146,6 +148,21 @@ defmodule Threadr.ML.SemanticQA do
   defp normalize_distance(%Decimal{} = distance), do: Decimal.to_float(distance)
   defp normalize_distance(distance) when is_float(distance), do: distance
   defp normalize_distance(distance) when is_integer(distance), do: distance / 1
+
+  defp normalize_identifier(nil), do: nil
+
+  defp normalize_identifier(value) when is_binary(value) do
+    if String.valid?(value) do
+      value
+    else
+      case Ecto.UUID.load(value) do
+        {:ok, uuid} -> uuid
+        :error -> Base.encode16(value, case: :lower)
+      end
+    end
+  end
+
+  defp normalize_identifier(value), do: to_string(value)
 
   defp default_embedding_model do
     Application.get_env(:threadr, Threadr.ML, [])

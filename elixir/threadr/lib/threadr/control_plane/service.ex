@@ -250,6 +250,43 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
+  def answer_tenant_graph_question_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        question,
+        opts \\ []
+      )
+      when is_binary(subject_name) and is_binary(question) do
+    with {:ok, tenant, _membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, result} <-
+           Threadr.ML.GraphRAG.answer_question(
+             tenant.subject_name,
+             question,
+             semantic_runtime_opts(opts)
+           ) do
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def summarize_tenant_topic_for_user(%{id: _user_id} = user, subject_name, topic, opts \\ [])
+      when is_binary(subject_name) and is_binary(topic) do
+    with {:ok, tenant, _membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, result} <-
+           Threadr.ML.GraphRAG.summarize_topic(
+             tenant.subject_name,
+             topic,
+             semantic_runtime_opts(opts)
+           ) do
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
   def list_tenant_memberships_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
       when is_binary(subject_name) do
     with {:ok, tenant, membership} <- get_user_tenant_by_subject_name(user, subject_name, opts),
@@ -831,6 +868,7 @@ defmodule Threadr.ControlPlane.Service do
       opts,
       [
         :limit,
+        :graph_message_limit,
         :embedding_provider,
         :embedding_model,
         :document_prefix,
@@ -853,6 +891,7 @@ defmodule Threadr.ControlPlane.Service do
       opts,
       [
         :limit,
+        :graph_message_limit,
         :embedding_provider,
         :embedding_model,
         :document_prefix,

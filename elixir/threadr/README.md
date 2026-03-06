@@ -161,6 +161,8 @@ Then use the new auth and account surfaces:
   - `DELETE /api/v1/tenants/:subject_name/bots/:id`
   - `POST /api/v1/tenants/:subject_name/qa/search`
   - `POST /api/v1/tenants/:subject_name/qa/answer`
+  - `POST /api/v1/tenants/:subject_name/qa/graph-answer`
+  - `POST /api/v1/tenants/:subject_name/qa/summarize`
   - `GET /api/v1/tenants/:subject_name/memberships`
   - `POST /api/v1/tenants/:subject_name/memberships`
   - `PATCH /api/v1/tenants/:subject_name/memberships/:id`
@@ -255,6 +257,8 @@ boundaries:
   summarization, and Graph-RAG flows
 - `Threadr.ML.SemanticQA` combines tenant-scoped vector retrieval with the
   generic generation boundary for the first retrieval-plus-QA path
+- `Threadr.ML.GraphRAG` layers Apache AGE-backed graph neighborhood retrieval on
+  top of semantic matches for graph-aware answers and topic summaries
 
 Embeddings default to `Threadr.ML.Embeddings.BumblebeeProvider` with
 `intfloat/e5-small-v2`. Generation still defaults to the noop provider until a
@@ -265,6 +269,13 @@ The generation boundary is intentionally provider-agnostic. `Threadr.ML.Generati
 accepts a generic request struct and returns a generic result struct, while
 `Threadr.ML.Generation.ChatCompletionsProvider` is just one adapter for
 OpenAI-compatible APIs such as OpenAI, vLLM, Ollama, or similar endpoints.
+
+The tenant QA workspace now supports four workflows from the same page:
+
+- semantic search over embedded tenant messages
+- grounded semantic QA
+- graph-aware QA using AGE neighborhood context
+- topic summarization over combined semantic and graph evidence
 
 ## Multitenancy Shape
 

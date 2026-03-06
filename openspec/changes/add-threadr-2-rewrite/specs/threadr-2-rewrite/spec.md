@@ -156,3 +156,31 @@ Threadr 2.0 SHALL provide analyst-facing chat monitoring, dossier, and graph exp
 #### Scenario: Users observe incoming data and graph changes
 - **WHEN** new messages, relationships, or analysis results are available
 - **THEN** the Phoenix application can push those updates into LiveView-driven interfaces in near real time
+
+### Requirement: Graph exploration uses a binary GPU-first rendering pipeline
+Threadr 2.0 SHALL implement analyst graph exploration with a versioned binary snapshot contract, `deck.gl` rendering, roaring bitmap overlays, and a Wasm client compute layer instead of a JSON-only graph UI.
+
+#### Scenario: Tenant graph snapshots stream over a versioned binary contract
+- **GIVEN** an authenticated tenant user opens the graph exploration surface
+- **WHEN** the application emits a graph snapshot revision
+- **THEN** the snapshot payload is delivered as a versioned binary contract suitable for Apache Arrow IPC decoding
+- **AND** the payload includes explicit metadata required for deterministic client decode
+- **AND** the client keeps the last accepted revision active when a newer revision is rejected
+
+#### Scenario: Graph filters apply locally from bitmap metadata
+- **GIVEN** a decoded tenant graph snapshot revision and its bitmap metadata are loaded
+- **WHEN** the analyst toggles visual classes or neighborhood filters that do not require graph recomputation
+- **THEN** the client applies those filters locally using roaring bitmap or equivalent typed-mask data
+- **AND** the system does not require a server round-trip for visual-only updates
+
+#### Scenario: Graph rendering uses deck.gl on supported clients
+- **GIVEN** the analyst client supports the required GPU capabilities
+- **WHEN** the graph exploration surface initializes
+- **THEN** the client renders the graph through `deck.gl`
+- **AND** the implementation prefers WebGPU-capable execution paths when available
+
+#### Scenario: Wasm handles hot-path graph interactions
+- **GIVEN** a loaded graph snapshot with high-cardinality nodes and edges
+- **WHEN** the analyst performs repeated traversal, mask, or interpolation interactions
+- **THEN** those hot-path operations execute in a Wasm or equivalent typed-memory client layer
+- **AND** the implementation avoids object-per-node JavaScript transforms on the interactive path

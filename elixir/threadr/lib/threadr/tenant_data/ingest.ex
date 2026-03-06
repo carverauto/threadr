@@ -8,8 +8,18 @@ defmodule Threadr.TenantData.Ingest do
 
   alias Threadr.Events.{ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
-  alias Threadr.TenantData.{Actor, Channel, Message, MessageMention, Relationship}
 
+  alias Threadr.TenantData.{
+    Actor,
+    Channel,
+    Graph,
+    Message,
+    MessageMention,
+    Relationship,
+    RelationshipObservation
+  }
+
+  @co_mentioned_relationship_type "CO_MENTIONED"
   @relationship_type "MENTIONED"
 
   def persist_envelope(
@@ -37,7 +47,22 @@ defmodule Threadr.TenantData.Ingest do
            upsert_channel(chat_message.platform, chat_message.channel, tenant_schema),
          {:ok, message} <-
            upsert_message(chat_message, envelope, actor.id, channel.id, tenant_schema),
-         {:ok, _mentions} <- persist_mentions(message, actor, chat_message, tenant_schema) do
+         {:ok, mention_result} <- persist_mentions(message, actor, chat_message, tenant_schema),
+         :ok <-
+           Graph.sync_message(
+             message,
+             actor,
+             channel,
+             mention_result.mentioned_actors,
+             tenant_schema
+           ),
+         {:ok, inferred_relationships} <-
+           persist_graph_inferences(message, chat_message.observed_at, tenant_schema),
+         :ok <-
+           Graph.sync_relationships(
+             mention_result.relationships ++ inferred_relationships,
+             tenant_schema
+           ) do
       {:ok, message}
     end
   end
@@ -112,25 +137,54 @@ defmodule Threadr.TenantData.Ingest do
     chat_message.mentions
     |> Enum.reject(&(&1 == actor.handle))
     |> Enum.uniq()
-    |> Enum.reduce_while({:ok, []}, fn mention_handle, {:ok, acc} ->
+    |> Enum.reduce_while({:ok, %{mentioned_actors: [], relationships: []}}, fn mention_handle,
+                                                                               {:ok, acc} ->
       with {:ok, mentioned_actor} <-
              upsert_actor(chat_message.platform, mention_handle, tenant_schema),
-           {:ok, _mention, mention_status} <-
+           {:ok, _mention} <-
              create_message_mention(message.id, mentioned_actor.id, tenant_schema),
-           {:ok, _relationship} <-
-             maybe_upsert_relationship(
-               mention_status,
+           {:ok, _observation, observation_status} <-
+             create_relationship_observation(
+               @relationship_type,
                actor.id,
                mentioned_actor.id,
                message.id,
                chat_message.observed_at,
+               %{"source" => "chat.message"},
+               tenant_schema
+             ),
+           {:ok, relationship} <-
+             maybe_upsert_relationship(
+               observation_status,
+               @relationship_type,
+               actor.id,
+               mentioned_actor.id,
+               message.id,
+               chat_message.observed_at,
+               %{"source" => "chat.message"},
                tenant_schema
              ) do
-        {:cont, {:ok, [mentioned_actor | acc]}}
+        {:cont,
+         {:ok,
+          %{
+            mentioned_actors: [mentioned_actor | acc.mentioned_actors],
+            relationships: maybe_prepend_relationship(acc.relationships, relationship)
+          }}}
       else
         error -> {:halt, error}
       end
     end)
+    |> case do
+      {:ok, result} ->
+        {:ok,
+         %{
+           mentioned_actors: Enum.reverse(result.mentioned_actors),
+           relationships: Enum.reverse(result.relationships)
+         }}
+
+      error ->
+        error
+    end
   end
 
   defp create_message_mention(message_id, actor_id, tenant_schema) do
@@ -145,52 +199,53 @@ defmodule Threadr.TenantData.Ingest do
           tenant: tenant_schema
         )
         |> Ash.create()
-        |> case do
-          {:ok, mention} -> {:ok, mention, :created}
-          error -> error
-        end
 
       result ->
-        case result do
-          {:ok, mention} -> {:ok, mention, :existing}
-          error -> error
-        end
+        result
     end
   end
 
   defp maybe_upsert_relationship(
          :created,
+         relationship_type,
          from_actor_id,
          to_actor_id,
          source_message_id,
          observed_at,
+         metadata,
          tenant_schema
        ) do
     upsert_relationship(
+      relationship_type,
       from_actor_id,
       to_actor_id,
       source_message_id,
       observed_at,
+      metadata,
       tenant_schema
     )
   end
 
   defp maybe_upsert_relationship(
          :existing,
+         _relationship_type,
          _from_actor_id,
          _to_actor_id,
          _source_message_id,
          _observed_at,
+         _metadata,
          _tenant_schema
        ) do
-    {:ok, :duplicate_message_mention}
+    {:ok, nil}
   end
 
   defp upsert_relationship(
+         relationship_type,
          from_actor_id,
          to_actor_id,
          source_message_id,
          observed_at,
+         metadata,
          tenant_schema
        ) do
     query =
@@ -199,7 +254,7 @@ defmodule Threadr.TenantData.Ingest do
         expr(
           from_actor_id == ^from_actor_id and
             to_actor_id == ^to_actor_id and
-            relationship_type == ^@relationship_type
+            relationship_type == ^relationship_type
         )
       )
 
@@ -209,11 +264,11 @@ defmodule Threadr.TenantData.Ingest do
         |> Ash.Changeset.for_create(
           :create,
           %{
-            relationship_type: @relationship_type,
+            relationship_type: relationship_type,
             weight: 1,
             first_seen_at: observed_at,
             last_seen_at: observed_at,
-            metadata: %{"source" => "chat.message"},
+            metadata: metadata,
             from_actor_id: from_actor_id,
             to_actor_id: to_actor_id,
             source_message_id: source_message_id
@@ -229,6 +284,7 @@ defmodule Threadr.TenantData.Ingest do
           %{
             weight: relationship.weight + 1,
             last_seen_at: observed_at,
+            metadata: metadata,
             source_message_id: source_message_id
           },
           tenant: tenant_schema
@@ -239,4 +295,94 @@ defmodule Threadr.TenantData.Ingest do
         error
     end
   end
+
+  defp create_relationship_observation(
+         relationship_type,
+         from_actor_id,
+         to_actor_id,
+         source_message_id,
+         observed_at,
+         metadata,
+         tenant_schema
+       ) do
+    query =
+      RelationshipObservation
+      |> Ash.Query.filter(
+        expr(
+          relationship_type == ^relationship_type and
+            source_message_id == ^source_message_id and
+            from_actor_id == ^from_actor_id and
+            to_actor_id == ^to_actor_id
+        )
+      )
+
+    case Ash.read_one(query, tenant: tenant_schema) do
+      {:ok, nil} ->
+        RelationshipObservation
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            relationship_type: relationship_type,
+            observed_at: observed_at,
+            metadata: metadata,
+            from_actor_id: from_actor_id,
+            to_actor_id: to_actor_id,
+            source_message_id: source_message_id
+          },
+          tenant: tenant_schema
+        )
+        |> Ash.create()
+        |> case do
+          {:ok, observation} -> {:ok, observation, :created}
+          error -> error
+        end
+
+      {:ok, observation} ->
+        {:ok, observation, :existing}
+
+      error ->
+        error
+    end
+  end
+
+  defp persist_graph_inferences(message, observed_at, tenant_schema) do
+    with {:ok, pairs} <- Graph.infer_co_mentions(message.id, tenant_schema) do
+      Enum.reduce_while(pairs, {:ok, []}, fn {from_actor_id, to_actor_id}, {:ok, relationships} ->
+        with {:ok, from_actor_uuid} <- Ecto.UUID.cast(from_actor_id),
+             {:ok, to_actor_uuid} <- Ecto.UUID.cast(to_actor_id),
+             {:ok, _observation, observation_status} <-
+               create_relationship_observation(
+                 @co_mentioned_relationship_type,
+                 from_actor_uuid,
+                 to_actor_uuid,
+                 message.id,
+                 observed_at,
+                 %{"source" => "age.co_mentions"},
+                 tenant_schema
+               ),
+             {:ok, relationship} <-
+               maybe_upsert_relationship(
+                 observation_status,
+                 @co_mentioned_relationship_type,
+                 from_actor_uuid,
+                 to_actor_uuid,
+                 message.id,
+                 observed_at,
+                 %{"source" => "age.co_mentions"},
+                 tenant_schema
+               ) do
+          {:cont, {:ok, maybe_prepend_relationship(relationships, relationship)}}
+        else
+          error -> {:halt, error}
+        end
+      end)
+      |> case do
+        {:ok, relationships} -> {:ok, Enum.reverse(relationships)}
+        error -> error
+      end
+    end
+  end
+
+  defp maybe_prepend_relationship(relationships, nil), do: relationships
+  defp maybe_prepend_relationship(relationships, relationship), do: [relationship | relationships]
 end
