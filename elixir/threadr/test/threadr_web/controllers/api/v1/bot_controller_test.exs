@@ -199,6 +199,60 @@ defmodule ThreadrWeb.Api.V1.BotControllerTest do
     assert reloaded_bot.desired_generation == 1
   end
 
+  test "POST /api/v1/tenants/:subject_name/bots renders Discord bot settings into the contract",
+       %{
+         conn: conn
+       } do
+    owner = create_user!("owner")
+    tenant = create_tenant!("Owned", owner)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/bots", %{
+        "bot" => %{
+          "name" => "discord-main",
+          "platform" => "discord",
+          "channels" => ["123456789"],
+          "settings" => %{
+            "token" => "discord-super-secret",
+            "application_id" => "1227806998788051027",
+            "public_key" => "8bb798d162e922cfa9e1fed25808b1d4fb474355d094e89bfaa13cd9e0fe2163"
+          }
+        }
+      })
+
+    assert %{"data" => bot} = json_response(conn, 201)
+    assert bot["platform"] == "discord"
+    assert bot["channels"] == ["123456789"]
+    assert bot["settings"]["env"]["THREADR_DISCORD_TOKEN"] == "[REDACTED]"
+    assert bot["settings"]["env"]["THREADR_DISCORD_APPLICATION_ID"] == "1227806998788051027"
+
+    assert bot["settings"]["env"]["THREADR_DISCORD_PUBLIC_KEY"] ==
+             "8bb798d162e922cfa9e1fed25808b1d4fb474355d094e89bfaa13cd9e0fe2163"
+
+    drain_bot_operations!()
+    contract = controller_contract_for_bot!(bot["id"])
+    workload = contract.contract["spec"]["workload"]
+
+    assert contract.contract["spec"]["platform"] == "discord"
+
+    assert workload["env"] == [
+             %{"name" => "THREADR_INGEST_ENABLED", "value" => "true"},
+             %{"name" => "THREADR_BOT_ID", "value" => bot["id"]},
+             %{"name" => "THREADR_TENANT_ID", "value" => tenant.id},
+             %{"name" => "THREADR_TENANT_SUBJECT", "value" => tenant.subject_name},
+             %{"name" => "THREADR_PLATFORM", "value" => "discord"},
+             %{"name" => "THREADR_CHANNELS", "value" => "[\"123456789\"]"},
+             %{"name" => "THREADR_DISCORD_APPLICATION_ID", "value" => "1227806998788051027"},
+             %{
+               "name" => "THREADR_DISCORD_PUBLIC_KEY",
+               "value" => "8bb798d162e922cfa9e1fed25808b1d4fb474355d094e89bfaa13cd9e0fe2163"
+             },
+             %{"name" => "THREADR_DISCORD_TOKEN", "value" => "discord-super-secret"}
+           ]
+  end
+
   test "POST /api/v1/tenants/:subject_name/bots rejects invalid platform config", %{conn: conn} do
     owner = create_user!("owner")
     tenant = create_tenant!("Owned", owner)

@@ -43,6 +43,23 @@ defmodule Threadr.ControlPlane.BotConfigTest do
                "token" => "discord-token"
              })
 
+    assert {:ok,
+            %{
+              settings: %{
+                "env" => %{
+                  "THREADR_DISCORD_APPLICATION_ID" => "1227806998788051027",
+                  "THREADR_DISCORD_PUBLIC_KEY" =>
+                    "8bb798d162e922cfa9e1fed25808b1d4fb474355d094e89bfaa13cd9e0fe2163",
+                  "THREADR_DISCORD_TOKEN" => "discord-token"
+                }
+              }
+            }} =
+             BotConfig.normalize_and_validate("discord", ["123456789"], %{
+               "application_id" => "1227806998788051027",
+               "public_key" => "8bb798d162e922cfa9e1fed25808b1d4fb474355d094e89bfaa13cd9e0fe2163",
+               "token" => "discord-token"
+             })
+
     assert {:error, {:settings, _message}} =
              BotConfig.normalize_and_validate("discord", ["123456789"], %{})
   end

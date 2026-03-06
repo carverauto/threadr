@@ -33,6 +33,7 @@ defmodule Threadr.Ingest.IRC.Agent do
     client_options = Keyword.get(config, :irc_client_options, [])
     {:ok, client} = client_module.start_link(Keyword.put(client_options, :owner, self()))
     :ok = client_module.add_handler(client, self())
+    Ingest.emit_runtime_event(config, :starting)
     send(self(), :connect)
 
     {:ok,
@@ -56,13 +57,21 @@ defmodule Threadr.Ingest.IRC.Agent do
 
     case result do
       :ok ->
+        Ingest.emit_runtime_event(state.config, :connecting, %{host: irc.host, port: irc.port})
         {:noreply, state}
 
       {:ok, _socket} ->
+        Ingest.emit_runtime_event(state.config, :connecting, %{host: irc.host, port: irc.port})
         {:noreply, state}
 
       {:error, reason} ->
         Logger.error("failed to connect IRC ingest runtime: #{inspect(reason)}")
+
+        Ingest.emit_runtime_event(state.config, :error, %{
+          reason: inspect(reason),
+          stage: "connect"
+        })
+
         schedule_reconnect()
         {:noreply, state}
     end
@@ -70,6 +79,7 @@ defmodule Threadr.Ingest.IRC.Agent do
 
   def handle_info({:connected, server, port}, state) do
     Logger.info("connected IRC ingest runtime to #{server}:#{port}")
+    Ingest.emit_runtime_event(state.config, :connected, %{host: server, port: port})
 
     irc = Keyword.fetch!(state.config, :irc)
 
@@ -85,6 +95,9 @@ defmodule Threadr.Ingest.IRC.Agent do
 
       {:error, reason} ->
         Logger.error("failed to log on IRC ingest runtime: #{inspect(reason)}")
+
+        Ingest.emit_runtime_event(state.config, :error, %{reason: inspect(reason), stage: "logon"})
+
         schedule_reconnect()
     end
 
@@ -98,17 +111,21 @@ defmodule Threadr.Ingest.IRC.Agent do
       :ok = state.client_module.join(state.client, channel)
     end)
 
+    Ingest.emit_runtime_event(state.config, :ready, %{channels: state.config[:channels] || []})
+
     {:noreply, state}
   end
 
   def handle_info({:login_failed, reason}, state) do
     Logger.error("IRC ingest login failed: #{inspect(reason)}")
+    Ingest.emit_runtime_event(state.config, :error, %{reason: inspect(reason), stage: "login"})
     schedule_reconnect()
     {:noreply, state}
   end
 
   def handle_info(:disconnected, state) do
     Logger.warning("IRC ingest connection closed, reconnecting")
+    Ingest.emit_runtime_event(state.config, :disconnected)
     schedule_reconnect()
     {:noreply, state}
   end

@@ -52,7 +52,10 @@ config :threadr, Threadr.Ingest,
     password: nil
   },
   discord: %{
-    token: nil
+    token: nil,
+    application_id: nil,
+    public_key: nil,
+    allow_bot_messages: false
   }
 
 config :threadr, Threadr.Messaging.Topology,

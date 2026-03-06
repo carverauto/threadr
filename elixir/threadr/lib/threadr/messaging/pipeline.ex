@@ -11,19 +11,23 @@ defmodule Threadr.Messaging.Pipeline do
   alias Threadr.Messaging.Handlers.{BatchLogger, Commands}
   alias Threadr.Messaging.Topology
 
-  def start_link(_opts \\ []) do
+  def start_link(opts \\ []) do
     broadway = Topology.broadway_config()
     producer_options = jetstream_producer_options(broadway)
+    pipeline_name = Keyword.get(opts, :name, __MODULE__)
+    connection_name = Keyword.get(opts, :connection_name, Topology.connection_name())
+    stream_name = Keyword.get(opts, :stream_name, Topology.stream_name())
+    consumer_name = Keyword.get(opts, :consumer_name, Topology.consumer_name())
 
     Broadway.start_link(__MODULE__,
-      name: __MODULE__,
+      name: pipeline_name,
       producer: [
         module:
           {OffBroadway.Jetstream.Producer,
            [
-             connection_name: Topology.connection_name(),
-             stream_name: Topology.stream_name(),
-             consumer_name: Topology.consumer_name()
+             connection_name: connection_name,
+             stream_name: stream_name,
+             consumer_name: consumer_name
            ] ++ producer_options},
         concurrency: Keyword.fetch!(broadway, :producer_concurrency)
       ],

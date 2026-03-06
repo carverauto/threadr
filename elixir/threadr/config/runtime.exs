@@ -101,7 +101,10 @@ config :threadr, Threadr.Ingest,
     password: System.get_env("THREADR_IRC_PASSWORD")
   },
   discord: %{
-    token: System.get_env("THREADR_DISCORD_TOKEN")
+    token: System.get_env("THREADR_DISCORD_TOKEN"),
+    application_id: System.get_env("THREADR_DISCORD_APPLICATION_ID"),
+    public_key: System.get_env("THREADR_DISCORD_PUBLIC_KEY"),
+    allow_bot_messages: parse_bool.(System.get_env("THREADR_DISCORD_ALLOW_BOT_MESSAGES"))
   }
 
 config :threadr,

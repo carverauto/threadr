@@ -29,8 +29,10 @@ defmodule Threadr.ControlPlane.BotConfig do
     },
     "discord" => %{
       required: ~w(THREADR_DISCORD_TOKEN),
-      optional: [],
+      optional: ~w(THREADR_DISCORD_APPLICATION_ID THREADR_DISCORD_PUBLIC_KEY),
       legacy: %{
+        "application_id" => "THREADR_DISCORD_APPLICATION_ID",
+        "public_key" => "THREADR_DISCORD_PUBLIC_KEY",
         "token" => "THREADR_DISCORD_TOKEN"
       }
     }

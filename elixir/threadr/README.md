@@ -20,6 +20,7 @@ This subtree is the initial Phoenix and Broadway foundation for the Threadr 2.0 
 - `mix threadr.nats.setup` to provision the initial JetStream stream and consumer
 - `mix threadr.smoke.ingest` to publish a tenant-scoped chat event and verify Broadway persistence
 - `mix threadr.smoke.bot_contract` to create a control-plane bot and emit a real `ThreadrBot` contract for operator smoke testing
+- `mix threadr.smoke.discord` to wait for a real Discord gateway `READY` event from the ingest runtime
 - `mix threadr.smoke.operator` to run the Phoenix and Go operator smoke flow end to end
 
 ## Event Subjects
@@ -96,6 +97,23 @@ mix threadr.smoke.operator --tenant-subject threadr-smoke --bot-name irc-main
 ```
 
 That provisions a control-plane contract, boots a temporary Phoenix server, runs `go run ./cmd/threadrbot-smoke` against the machine-authenticated contract feed, and verifies the controller callback updated the bot row for the current generation.
+
+Run the gated Discord runtime smoke check with a real bot token:
+
+```bash
+cd elixir/threadr
+THREADR_INGEST_ENABLED=true \
+THREADR_PLATFORM=discord \
+THREADR_TENANT_SUBJECT=threadr-smoke \
+THREADR_CHANNELS='["123456789"]' \
+THREADR_DISCORD_APPLICATION_ID=... \
+THREADR_DISCORD_PUBLIC_KEY=... \
+THREADR_DISCORD_TOKEN=... \
+mix threadr.smoke.discord
+```
+
+That waits for the ingest runtime to emit a Discord `READY` event and prints the
+observed guild count and shard information.
 
 The same flow is now wired into GitHub Actions through [threadr-operator-smoke.yml](/Users/mfreeman/src/threadr/.github/workflows/threadr-operator-smoke.yml#L1), scoped to changes under `elixir/threadr` and `k8s/operators/ircbot-operator`.
 
@@ -208,6 +226,8 @@ successful logon.
 For Discord pods, set:
 
 - `THREADR_DISCORD_TOKEN`
+- optional `THREADR_DISCORD_APPLICATION_ID`
+- optional `THREADR_DISCORD_PUBLIC_KEY`
 
 The Discord runtime uses `Nostrum`, but the dependency is started on demand only
 when `THREADR_PLATFORM=discord`, so the Phoenix app no longer requires a

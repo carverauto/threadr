@@ -21,6 +21,15 @@ defmodule Threadr.Ingest do
     Keyword.get(config, :platform)
   end
 
+  def emit_runtime_event(config, event, metadata \\ %{})
+      when is_atom(event) and is_map(metadata) do
+    :telemetry.execute(
+      [:threadr, :ingest, :runtime, event],
+      %{system_time: System.system_time()},
+      Map.merge(runtime_metadata(config), metadata)
+    )
+  end
+
   def child_specs(config \\ config())
 
   def child_specs(config) do
@@ -140,6 +149,17 @@ defmodule Threadr.Ingest do
   end
 
   defp normalize_channel(value), do: value |> to_string() |> normalize_channel()
+
+  defp runtime_metadata(config) do
+    %{
+      platform: platform(config),
+      bot_id: Keyword.get(config, :bot_id),
+      tenant_id: Keyword.get(config, :tenant_id),
+      tenant_subject_name: Keyword.get(config, :tenant_subject_name)
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+  end
 
   defp fetch!(attrs, key) do
     fetch(attrs, key) || raise ArgumentError, "missing required key #{inspect(key)}"

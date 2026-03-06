@@ -40,8 +40,11 @@ defmodule ThreadrWeb.Api.V1.BotPlatformControllerTest do
     assert data["discord"] == %{
              "platform" => "discord",
              "required_env" => ["THREADR_DISCORD_TOKEN"],
-             "optional_env" => [],
-             "legacy_settings" => ["token"],
+             "optional_env" => [
+               "THREADR_DISCORD_APPLICATION_ID",
+               "THREADR_DISCORD_PUBLIC_KEY"
+             ],
+             "legacy_settings" => ["application_id", "public_key", "token"],
              "channel_format" => "discord-channel-id",
              "supports_image_override" => true
            }
