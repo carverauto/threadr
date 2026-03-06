@@ -68,6 +68,45 @@ parse_bool = fn
   _value -> false
 end
 
+parse_integer = fn
+  nil ->
+    nil
+
+  value when is_integer(value) ->
+    value
+
+  value when is_binary(value) ->
+    value
+    |> String.trim()
+    |> case do
+      "" -> nil
+      integer -> String.to_integer(integer)
+    end
+end
+
+parse_float = fn
+  nil ->
+    nil
+
+  value when is_float(value) ->
+    value
+
+  value when is_integer(value) ->
+    value / 1
+
+  value when is_binary(value) ->
+    value
+    |> String.trim()
+    |> case do
+      "" ->
+        nil
+
+      float ->
+        {parsed, _rest} = Float.parse(float)
+        parsed
+    end
+end
+
 normalize_module = fn
   nil ->
     nil
@@ -179,6 +218,12 @@ ml_generation_config =
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :endpoint
         ),
+    provider_name:
+      System.get_env("THREADR_GENERATION_PROVIDER_NAME") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :provider_name
+        ),
     model:
       System.get_env("THREADR_GENERATION_MODEL") ||
         Keyword.get(
@@ -196,6 +241,24 @@ ml_generation_config =
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :system_prompt
+        ),
+    temperature:
+      parse_float.(System.get_env("THREADR_GENERATION_TEMPERATURE")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :temperature
+        ),
+    max_tokens:
+      parse_integer.(System.get_env("THREADR_GENERATION_MAX_TOKENS")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :max_tokens
+        ),
+    timeout:
+      parse_integer.(System.get_env("THREADR_GENERATION_TIMEOUT_MS")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :timeout
         )
   )
 

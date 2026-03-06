@@ -73,6 +73,18 @@ defmodule Threadr.ML.Generation do
   end
 
   defp provider_opts(opts) do
-    Keyword.take(opts, [:endpoint, :model, :api_key, :system_prompt])
+    Keyword.take(
+      opts,
+      [
+        :endpoint,
+        :model,
+        :api_key,
+        :system_prompt,
+        :provider_name,
+        :temperature,
+        :max_tokens,
+        :timeout
+      ]
+    )
   end
 end

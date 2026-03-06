@@ -36,11 +36,7 @@ defmodule Threadr.ML.Embeddings.BumblebeeProvider do
 
     {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, config[:model]})
 
-    Bumblebee.Text.text_embedding(model_info, tokenizer,
-      output_attribute: :embedding,
-      output_pool: :mean_pooling,
-      embedding_processor: :l2_norm
-    )
+    Bumblebee.Text.text_embedding(model_info, tokenizer, embedding_processor: :l2_norm)
   end
 
   defp config(opts) do

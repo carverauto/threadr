@@ -48,4 +48,20 @@ defmodule Threadr.ML.GenerationTest do
     assert result.metadata["mode"] == :qa
     assert result.metadata["context"]["question"] == "What does Alice know about Bob?"
   end
+
+  test "passes provider-agnostic runtime options through the boundary" do
+    assert {:ok, result} =
+             Generation.complete(
+               "What happened?",
+               provider: Threadr.TestGenerationProvider,
+               model: "test-chat",
+               provider_name: "openai-compatible",
+               temperature: 0.1,
+               max_tokens: 128,
+               timeout: 10_000
+             )
+
+    assert result.provider == "test"
+    assert result.model == "test-chat"
+  end
 end

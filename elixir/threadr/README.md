@@ -23,6 +23,8 @@ This subtree is the initial Phoenix and Broadway foundation for the Threadr 2.0 
 - `mix threadr.smoke.discord` to wait for a real Discord gateway `READY` event from the ingest runtime
 - `mix threadr.embeddings.generate` to generate and publish a local `processing.result` embedding event for an existing tenant message
 - `mix threadr.generation.complete` to run a prompt through the configured generation provider boundary
+- `mix threadr.generation.answer` to run question-answering against explicit context through the same provider boundary
+- `mix threadr.generation.answer_tenant` to retrieve tenant message context by vector similarity and answer against it
 - `mix threadr.smoke.operator` to run the Phoenix and Go operator smoke flow end to end
 
 ## Event Subjects
@@ -145,6 +147,7 @@ Then use the new auth and account surfaces:
 - Web sign-in: `http://localhost:4000/sign-in`
 - Registration: `http://localhost:4000/register`
 - Tenant control plane: `http://localhost:4000/control-plane/tenants`
+- Tenant QA workspace: `http://localhost:4000/control-plane/tenants/:subject_name/qa`
 - Personal API keys: `http://localhost:4000/settings/api-keys`
 - Public API examples:
   - `GET /api/v1/bot-platforms`
@@ -156,6 +159,8 @@ Then use the new auth and account surfaces:
   - `POST /api/v1/tenants/:subject_name/bots`
   - `PATCH /api/v1/tenants/:subject_name/bots/:id`
   - `DELETE /api/v1/tenants/:subject_name/bots/:id`
+  - `POST /api/v1/tenants/:subject_name/qa/search`
+  - `POST /api/v1/tenants/:subject_name/qa/answer`
   - `GET /api/v1/tenants/:subject_name/memberships`
   - `POST /api/v1/tenants/:subject_name/memberships`
   - `PATCH /api/v1/tenants/:subject_name/memberships/:id`
@@ -173,6 +178,7 @@ Then use the new auth and account surfaces:
 - `THREADR_CONTROL_PLANE_TOKEN` should be set for machine-to-machine controller callbacks
 - `THREADR_EMBEDDINGS_PROVIDER`, `THREADR_EMBEDDINGS_MODEL`, and related embedding env vars control the local embedding backend
 - `THREADR_GENERATION_PROVIDER`, `THREADR_GENERATION_ENDPOINT`, `THREADR_GENERATION_MODEL`, and related generation env vars control the general-purpose LLM backend
+- `THREADR_GENERATION_PROVIDER_NAME`, `THREADR_GENERATION_TEMPERATURE`, `THREADR_GENERATION_MAX_TOKENS`, and `THREADR_GENERATION_TIMEOUT_MS` tune the chat-completions backend without changing application call sites
 - `Threadr.ControlPlane.BotOperationDispatcher` drains pending bot reconciliation operations asynchronously
 - dispatcher retries failed reconciliation attempts according to `max_attempts` and `retry_backoff_ms`
 - `Threadr.ControlPlane.KubernetesBotReconciler` now emits a concrete `ThreadrBot` custom resource contract that a Kubernetes controller can own
@@ -247,11 +253,18 @@ boundaries:
   path
 - `Threadr.ML.Generation` handles general prompt completion for future QA,
   summarization, and Graph-RAG flows
+- `Threadr.ML.SemanticQA` combines tenant-scoped vector retrieval with the
+  generic generation boundary for the first retrieval-plus-QA path
 
 Embeddings default to `Threadr.ML.Embeddings.BumblebeeProvider` with
 `intfloat/e5-small-v2`. Generation still defaults to the noop provider until a
 real backend is configured, for example
 `Threadr.ML.Generation.ChatCompletionsProvider`.
+
+The generation boundary is intentionally provider-agnostic. `Threadr.ML.Generation`
+accepts a generic request struct and returns a generic result struct, while
+`Threadr.ML.Generation.ChatCompletionsProvider` is just one adapter for
+OpenAI-compatible APIs such as OpenAI, vLLM, Ollama, or similar endpoints.
 
 ## Multitenancy Shape
 

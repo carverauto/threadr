@@ -24,22 +24,26 @@ defmodule Threadr.ML.Generation.ChatCompletionsProvider do
       Req.post!(
         config[:endpoint],
         headers: headers,
-        json: %{
-          model: config[:model],
-          messages: messages
-        }
+        receive_timeout: config[:timeout],
+        json: request_body(config, messages)
       )
 
     case response.status do
       status when status in 200..299 ->
-        parse_success(response.body, config, request)
+        response.body
+        |> normalize_body()
+        |> parse_success(config, request)
 
       status ->
-        {:error, {:generation_request_failed, status, response.body}}
+        {:error, {:generation_request_failed, status, normalize_body(response.body)}}
     end
   rescue
     error ->
       {:error, {:generation_failed, Exception.message(error)}}
+  end
+
+  defp parse_success({:error, reason}, _config, _request) do
+    {:error, {:unexpected_generation_response, reason}}
   end
 
   defp parse_success(body, config, request) when is_map(body) do
@@ -48,10 +52,14 @@ defmodule Threadr.ML.Generation.ChatCompletionsProvider do
         {:ok,
          %Result{
            content: content,
-           model: config[:model],
-           provider: "chat_completions",
+           model: body["model"] || config[:model],
+           provider: config[:provider_name] || "chat_completions",
            metadata:
-             Map.take(body, ["id", "usage"])
+             Map.take(body, ["id", "usage", "system_fingerprint"])
+             |> Map.put(
+               "finish_reason",
+               get_in(body, ["choices", Access.at(0), "finish_reason"])
+             )
              |> Map.put("mode", request.mode)
              |> Map.put("context", request.context)
          }}
@@ -59,6 +67,10 @@ defmodule Threadr.ML.Generation.ChatCompletionsProvider do
       _ ->
         {:error, {:unexpected_generation_response, body}}
     end
+  end
+
+  defp parse_success(body, _config, _request) do
+    {:error, {:unexpected_generation_response, body}}
   end
 
   defp maybe_add_system_message(messages, nil), do: messages
@@ -74,6 +86,30 @@ defmodule Threadr.ML.Generation.ChatCompletionsProvider do
   defp maybe_add_bearer_token(headers, api_key) do
     [{"authorization", "Bearer #{api_key}"} | headers]
   end
+
+  defp request_body(config, messages) do
+    %{
+      model: config[:model],
+      messages: messages
+    }
+    |> maybe_put(:temperature, config[:temperature])
+    |> maybe_put(:max_tokens, config[:max_tokens])
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, _key, ""), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp normalize_body(body) when is_map(body), do: body
+
+  defp normalize_body(body) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} -> decoded
+      {:error, reason} -> {:error, {:invalid_json_response, reason, body}}
+    end
+  end
+
+  defp normalize_body(body), do: body
 
   defp config(opts) do
     Application.get_env(:threadr, Threadr.ML, [])

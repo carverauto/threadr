@@ -67,10 +67,14 @@ config :threadr, Threadr.ML,
   ],
   generation: [
     provider: Threadr.ML.Generation.NoopProvider,
+    provider_name: "chat_completions",
     endpoint: "http://localhost:11434/v1/chat/completions",
     model: "llama3.1:8b-instruct",
     api_key: nil,
-    system_prompt: nil
+    system_prompt: nil,
+    temperature: nil,
+    max_tokens: nil,
+    timeout: 30_000
   ]
 
 config :threadr, Threadr.Messaging.Topology,
