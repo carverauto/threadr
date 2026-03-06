@@ -23,7 +23,8 @@
 - [x] 4.2 Implement authenticated web sign-in and tenant-scoped session handling for the Threadr UI.
 - [x] 4.3 Implement self-service API key creation, listing, and revocation for authenticated users.
 - [x] 4.4 Define the first public API surface for tenant-facing automation and control-plane access.
-- [ ] 4.5 Define deployment, observability, and operational guidance for the rewrite components.
+- [x] 4.5 Define deployment, observability, Bazel-driven image delivery, and operational guidance for the rewrite components.
 - [x] 4.6 Implement or scaffold the Kubernetes control-plane boundary that reconciles tenant bot definitions into bot workloads in the shared namespace.
 - [x] 4.7 Define and persist a controller-owned `ThreadrBot` custom resource contract for bot workloads, with generation-aware status callbacks.
 - [ ] 4.8 Verify end-to-end ingestion through JetStream, Broadway consumers, PostgreSQL persistence, and LiveView updates.
+- [x] 4.9 Implement first-install operator-admin bootstrap, persisted operator-admin authorization, and forced password rotation for bootstrap credentials.

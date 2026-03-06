@@ -71,6 +71,6 @@ defmodule Threadr.TenantData.GraphLayoutTest do
   defp distance(left, right) do
     dx = left.x - right.x
     dy = left.y - right.y
-    :math.sqrt((dx * dx) + (dy * dy))
+    :math.sqrt(dx * dx + dy * dy)
   end
 end

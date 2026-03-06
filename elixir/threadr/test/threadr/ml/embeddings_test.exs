@@ -65,4 +65,38 @@ defmodule Threadr.ML.EmbeddingsTest do
                provider: Threadr.ML.Embeddings.NoopProvider
              )
   end
+
+  test "hash provider returns deterministic normalized vectors for document and query text" do
+    assert {:ok, document} =
+             Embeddings.embed_query(
+               "malicious oauth app calendar sync helper",
+               provider: Threadr.ML.Embeddings.HashProvider
+             )
+
+    assert {:ok, query} =
+             Embeddings.embed_query(
+               "what was the malicious oauth app called?",
+               provider: Threadr.ML.Embeddings.HashProvider
+             )
+
+    assert document.model == "term-hash-384-v1"
+    assert query.model == "term-hash-384-v1"
+    assert document.provider == "hash"
+    assert query.provider == "hash"
+    assert length(document.embedding) == 384
+    assert length(query.embedding) == 384
+
+    document_magnitude =
+      document.embedding
+      |> Enum.reduce(0.0, fn value, acc -> acc + value * value end)
+      |> :math.sqrt()
+
+    query_magnitude =
+      query.embedding
+      |> Enum.reduce(0.0, fn value, acc -> acc + value * value end)
+      |> :math.sqrt()
+
+    assert_in_delta document_magnitude, 1.0, 1.0e-6
+    assert_in_delta query_magnitude, 1.0, 1.0e-6
+  end
 end

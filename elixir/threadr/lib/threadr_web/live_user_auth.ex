@@ -26,6 +26,14 @@ defmodule ThreadrWeb.LiveUserAuth do
     end
   end
 
+  def on_mount(:password_rotation_required, _params, _session, socket) do
+    if socket.assigns[:current_user] && socket.assigns.current_user.must_rotate_password do
+      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/settings/password")}
+    else
+      {:cont, socket}
+    end
+  end
+
   def on_mount(:live_no_user, _params, _session, socket) do
     if socket.assigns[:current_user] do
       {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/control-plane/tenants")}

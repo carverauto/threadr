@@ -352,7 +352,8 @@ defmodule Threadr.TenantData.GraphSnapshot do
     states = Enum.map(nodes, & &1.state)
 
     case Native.build_roaring_bitmaps(states) do
-      {root, affected, healthy, unknown, {root_count, affected_count, healthy_count, unknown_count}} ->
+      {root, affected, healthy, unknown,
+       {root_count, affected_count, healthy_count, unknown_count}} ->
         {:ok,
          %{
            root: root,
@@ -375,7 +376,8 @@ defmodule Threadr.TenantData.GraphSnapshot do
   defp encode_payload(revision, projection, bitmaps) do
     nodes =
       Enum.map(projection.nodes, fn node ->
-        {node.x, node.y, node.state, node.label, node.kind, node.size, Jason.encode!(node.details)}
+        {node.x, node.y, node.state, node.label, node.kind, node.size,
+         Jason.encode!(node.details)}
       end)
 
     edges =

@@ -3,12 +3,18 @@ defmodule ThreadrWeb.AuthController do
   use AshAuthentication.Phoenix.Controller
 
   def success(conn, activity, user, _token) do
-    return_to = get_session(conn, :return_to) || ~p"/control-plane/tenants"
+    return_to =
+      if user.must_rotate_password do
+        ~p"/settings/password"
+      else
+        get_session(conn, :return_to) || ~p"/control-plane/tenants"
+      end
 
     message =
       case activity do
         {:password, :reset} -> "Your password has been reset"
         {:password, :register} -> "Your account has been created"
+        _ when user.must_rotate_password -> "Rotate your bootstrap password before continuing"
         _ -> "You are now signed in"
       end
 

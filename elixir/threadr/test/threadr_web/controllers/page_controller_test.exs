@@ -3,6 +3,9 @@ defmodule ThreadrWeb.PageControllerTest do
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Peace of mind from prototype to production"
+    html = html_response(conn, 200)
+    assert html =~ "Build tenant-scoped intelligence graphs from live chat streams."
+    assert html =~ "Create an account"
+    assert html =~ "Graph explorer"
   end
 end

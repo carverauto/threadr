@@ -85,5 +85,11 @@ config :phoenix_live_view,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
 
+config :threadr, Threadr.ML,
+  embeddings: [
+    provider: Threadr.ML.Embeddings.HashProvider,
+    model: "term-hash-384-v1"
+  ]
+
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false

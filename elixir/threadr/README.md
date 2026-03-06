@@ -84,6 +84,141 @@ cd elixir/threadr
 mix threadr.smoke.ingest --tenant-name "Acme Threat Intel" --mentions bob,carol
 ```
 
+Seed a tenant with realistic demo chat history and inline embeddings for the QA UI:
+
+```bash
+cd elixir/threadr
+mix threadr.seed.demo --tenant-subject carverauto
+```
+
+That leaves the selected tenant ready for semantic search in the QA workspace.
+Development defaults to the deterministic
+`Threadr.ML.Embeddings.HashProvider`, so the seed finishes quickly and the QA
+workspace can search immediately. Set `THREADR_EMBEDDINGS_PROVIDER` if you want
+to force `Threadr.ML.Embeddings.BumblebeeProvider` instead.
+
+Bootstrap the first operator-admin account on a fresh install:
+
+```bash
+cd elixir/threadr
+mix threadr.bootstrap.operator_admin \
+  --email admin@example.com \
+  --name "Platform Admin" \
+  --secret-name threadr-bootstrap-admin \
+  --namespace threadr
+```
+
+That creates the first persisted operator-admin only when none exists, prints the
+temporary bootstrap password once, and can emit a Kubernetes `Secret` manifest for
+install-time automation. Bootstrap users are forced to rotate that password at
+first sign-in before they can use the control plane.
+
+For Kubernetes installs, a Kustomize-native control-plane base is included under
+[k8s/threadr/control-plane/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/kustomization.yaml#L1).
+It includes:
+- a `Deployment` and `Service` for the Phoenix control plane
+- a default `Ingress` for the web surface
+- a migration init container that runs `bin/threadr eval 'Threadr.ReleaseTasks.migrate()'`
+- a bootstrap `Job` that creates or reuses the `threadr-bootstrap-admin` Secret and then bootstraps the first operator admin
+- HTTP health probes on `/health/live` and `/health/ready`
+- Prometheus-style metrics on `/metrics`
+
+That base expects:
+- a real control-plane release image instead of the placeholder `threadr-control-plane:latest`
+- a runtime env Secret named `threadr-control-plane-env` with at least `DATABASE_URL`, `SECRET_KEY_BASE`, and the normal production env required by `runtime.exs`
+- `THREADR_BOOTSTRAP_ADMIN_EMAIL` set in `threadr-bootstrap-admin-config`
+
+An example runtime Secret is included at
+[control-plane-env-secret.example.yaml](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/control-plane-env-secret.example.yaml#L1).
+
+Apply it with Kustomize after setting those values:
+
+```bash
+kubectl apply -k k8s/threadr/control-plane
+```
+
+The rendered Service is named `threadr-control-plane`, and the base defaults
+`PHX_HOST` to `threadr-control-plane.threadr.svc.cluster.local`.
+The default ingress host is `threadr.local`; patch
+[ingress.yaml](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/ingress.yaml#L1)
+or override it in your environment-specific Kustomize layer.
+
+The service is annotated for scrape-by-annotation Prometheus setups, and the
+application exports metrics at `GET /metrics`. Health probes use:
+- `GET /health/live`
+- `GET /health/ready`
+
+Optional overlays are included for more opinionated clusters:
+- TLS ingress overlay:
+  [overlays/nginx-tls/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/nginx-tls/kustomization.yaml#L1)
+- Prometheus Operator overlay:
+  [overlays/prometheus-servicemonitor/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/prometheus-servicemonitor/kustomization.yaml#L1)
+- Restricted network policy overlay:
+  [overlays/restricted-network/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/restricted-network/kustomization.yaml#L1)
+
+Example:
+
+```bash
+kubectl apply -k k8s/threadr/overlays/control-plane/nginx-tls
+kubectl apply -k k8s/threadr/overlays/control-plane/prometheus-servicemonitor
+kubectl apply -k k8s/threadr/overlays/control-plane/restricted-network
+```
+
+The release image is built from
+[Dockerfile](/Users/mfreeman/src/threadr/elixir/threadr/Dockerfile#L1), and GitHub
+Actions publishes it to `ghcr.io/carverauto/threadr/threadr-control-plane` through
+[threadr-control-plane-image.yml](/Users/mfreeman/src/threadr/.github/workflows/threadr-control-plane-image.yml#L1).
+The image override overlay for GHCR is
+[ghcr/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/ghcr/kustomization.yaml#L1).
+The canonical local build and push entrypoints are Bazel targets:
+
+```bash
+bazel run //elixir/threadr:control_plane_image_build -- --tag dev
+bazel run //elixir/threadr:control_plane_image_push -- --tag main --tag sha-$(git rev-parse --short HEAD)
+```
+
+On `main`, the image publish workflow also resolves the pushed GHCR digest and
+commits it back into
+[image-patch.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/production/image-patch.yaml#L1),
+so the production overlay stays pinned to an immutable image reference without
+manual manifest edits.
+
+An ArgoCD `Application` manifest for the control plane is included at
+[application.yaml](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/application.yaml#L1).
+It points at the production overlay and enables automated sync with prune and self-heal.
+
+The production overlay is
+[production/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/production/kustomization.yaml#L1).
+It pins:
+- the GHCR image digest
+- the external hostname and TLS secret name
+- the bootstrap operator email
+- the observer-enabled control-plane config
+
+The placeholder digest in
+[image-patch.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/production/image-patch.yaml#L1)
+is expected to be replaced automatically by the image publish workflow on `main`.
+
+Before syncing that overlay, create these Secrets in the `threadr` namespace:
+- `threadr-control-plane-env`
+- `threadr-control-plane-tls`
+
+The runtime env Secret is now expected to be managed through Sealed Secrets.
+Start from
+[control-plane-env-secret.example.yaml](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/control-plane-env-secret.example.yaml#L1),
+replace the placeholder values, and seal it with
+[seal_control_plane_env.sh](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/seal_control_plane_env.sh#L1):
+
+```bash
+./k8s/threadr/control-plane/seal_control_plane_env.sh \
+  --input k8s/threadr/control-plane/control-plane-env-secret.example.yaml \
+  --output k8s/threadr/control-plane/control-plane-env.sealedsecret.yaml
+kubectl apply -f k8s/threadr/control-plane/control-plane-env.sealedsecret.yaml
+```
+
+That keeps plaintext production credentials out of Git while standardizing the
+cluster-side secret source around the existing `sealed-secrets` controller.
+
 Provision a real control-plane bot contract for the operator smoke path:
 
 ```bash
@@ -146,7 +281,10 @@ Then use the new auth and account surfaces:
 
 - Web sign-in: `http://localhost:4000/sign-in`
 - Registration: `http://localhost:4000/register`
+- Password rotation: `http://localhost:4000/settings/password`
+- Operator system LLM settings: `http://localhost:4000/control-plane/admin/llm`
 - Tenant control plane: `http://localhost:4000/control-plane/tenants`
+- Tenant graph workspace: `http://localhost:4000/control-plane/tenants/:subject_name/graph`
 - Tenant QA workspace: `http://localhost:4000/control-plane/tenants/:subject_name/qa`
 - Personal API keys: `http://localhost:4000/settings/api-keys`
 - Public API examples:
@@ -168,6 +306,24 @@ Then use the new auth and account surfaces:
   - `PATCH /api/v1/tenants/:subject_name/memberships/:id`
   - `DELETE /api/v1/tenants/:subject_name/memberships/:id`
 
+The local dev server path is verified with:
+
+```bash
+cd elixir/threadr
+THREADR_DB_HOST=localhost \
+THREADR_DB_PORT=55432 \
+THREADR_DB_USER=postgres \
+THREADR_DB_PASSWORD=postgres \
+THREADR_DB_NAME=threadr_dev \
+THREADR_NATS_HOST=localhost \
+THREADR_NATS_PORT=54222 \
+THREADR_BROADWAY_ENABLED=true \
+mix phx.server
+```
+
+That boots Phoenix with working Tailwind and esbuild watchers, so the graph and
+QA workspaces are now testable in a real browser session.
+
 ## Runtime Configuration
 
 - `THREADR_NATS_HOST` defaults to `localhost`
@@ -178,9 +334,12 @@ Then use the new auth and account surfaces:
 - `THREADR_IRC_SSL=true` enables TLS for IRC connections, which is typically required on `6697`
 - `THREADR_TOKEN_SIGNING_SECRET` should be set in real environments; local dev falls back to a static dev secret
 - `THREADR_CONTROL_PLANE_TOKEN` should be set for machine-to-machine controller callbacks
+- the first operator-admin can be bootstrapped with `mix threadr.bootstrap.operator_admin`; repeated runs are intentionally no-ops once an operator-admin exists
+- system LLM configuration is operator-admin only; tenant managers can only choose between `Use system provider` and `Use tenant override`
 - `THREADR_EMBEDDINGS_PROVIDER`, `THREADR_EMBEDDINGS_MODEL`, and related embedding env vars control the local embedding backend
-- `THREADR_GENERATION_PROVIDER`, `THREADR_GENERATION_ENDPOINT`, `THREADR_GENERATION_MODEL`, and related generation env vars control the general-purpose LLM backend
-- `THREADR_GENERATION_PROVIDER_NAME`, `THREADR_GENERATION_TEMPERATURE`, `THREADR_GENERATION_MAX_TOKENS`, and `THREADR_GENERATION_TIMEOUT_MS` tune the chat-completions backend without changing application call sites
+- `THREADR_SYSTEM_LLM_ADAPTER`, `THREADR_SYSTEM_LLM_PROVIDER`, `THREADR_SYSTEM_LLM_ENDPOINT`, `THREADR_SYSTEM_LLM_MODEL`, and `THREADR_SYSTEM_LLM_API_KEY` control the operator-managed default LLM backend
+- `THREADR_SYSTEM_LLM_SYSTEM_PROMPT`, `THREADR_SYSTEM_LLM_TEMPERATURE`, `THREADR_SYSTEM_LLM_MAX_TOKENS`, and `THREADR_SYSTEM_LLM_TIMEOUT_MS` tune that backend without changing application call sites
+- legacy `THREADR_GENERATION_*` env vars are still accepted as compatibility aliases, but the control-plane secret contract should use `THREADR_SYSTEM_LLM_*`
 - `Threadr.ControlPlane.BotOperationDispatcher` drains pending bot reconciliation operations asynchronously
 - dispatcher retries failed reconciliation attempts according to `max_attempts` and `retry_backoff_ms`
 - `Threadr.ControlPlane.KubernetesBotReconciler` now emits a concrete `ThreadrBot` custom resource contract that a Kubernetes controller can own
@@ -261,8 +420,9 @@ boundaries:
   top of semantic matches for graph-aware answers and topic summaries
 
 Embeddings default to `Threadr.ML.Embeddings.BumblebeeProvider` with
-`intfloat/e5-small-v2`. Generation still defaults to the noop provider until a
-real backend is configured, for example
+`intfloat/e5-small-v2`, but development overrides that with the deterministic
+`Threadr.ML.Embeddings.HashProvider` for fast local QA and demo seeding.
+Generation still defaults to the noop provider until a real backend is configured, for example
 `Threadr.ML.Generation.ChatCompletionsProvider`.
 
 The generation boundary is intentionally provider-agnostic. `Threadr.ML.Generation`

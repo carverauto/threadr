@@ -5,12 +5,42 @@ defmodule ThreadrWeb.TenantLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :tenants, load_tenants(socket.assigns.current_user))}
+    {:ok,
+     socket
+     |> assign(:tenants, load_tenants(socket.assigns.current_user))
+     |> assign(:tenant_form, %{"name" => "", "subject_name" => ""})}
   end
 
   @impl true
   def handle_event("refresh", _params, socket) do
     {:noreply, assign(socket, :tenants, load_tenants(socket.assigns.current_user))}
+  end
+
+  def handle_event("create_tenant", %{"tenant" => params}, socket) do
+    attrs =
+      params
+      |> Map.take(["name", "subject_name"])
+      |> Enum.reject(fn {_key, value} -> is_nil(value) or String.trim(value) == "" end)
+      |> Map.new()
+
+    socket =
+      case Service.create_tenant_for_user(socket.assigns.current_user, attrs) do
+        {:ok, tenant} ->
+          socket
+          |> put_flash(:info, "Tenant created: #{tenant.subject_name}")
+          |> assign(:tenants, load_tenants(socket.assigns.current_user))
+          |> assign(:tenant_form, %{"name" => "", "subject_name" => ""})
+
+        {:error, reason} ->
+          socket
+          |> put_flash(:error, create_tenant_error(reason))
+          |> assign(:tenant_form, %{
+            "name" => Map.get(params, "name", ""),
+            "subject_name" => Map.get(params, "subject_name", "")
+          })
+      end
+
+    {:noreply, socket}
   end
 
   def handle_event("migrate", %{"subject_name" => subject_name}, socket) do
@@ -43,7 +73,7 @@ defmodule ThreadrWeb.TenantLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_user={@current_user}>
       <section class="space-y-6">
         <.header>
           Control Plane
@@ -72,6 +102,45 @@ defmodule ThreadrWeb.TenantLive.Index do
             <div class="stat-value text-3xl">{Service.latest_tenant_migration_version() || "-"}</div>
           </div>
         </div>
+
+        <section class="grid gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
+          <div class="rounded-box border border-base-300 bg-base-100 p-5">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+              Create Tenant
+            </div>
+            <div class="mt-2 text-sm text-base-content/70">
+              Provision a new tenant schema and create yourself as the owner.
+            </div>
+
+            <.form for={%{}} as={:tenant} phx-submit="create_tenant" class="mt-5 space-y-3">
+              <.input
+                name="tenant[name]"
+                value={@tenant_form["name"]}
+                label="Tenant name"
+                placeholder="Acme Threat Intel"
+                required
+              />
+
+              <.input
+                name="tenant[subject_name]"
+                value={@tenant_form["subject_name"]}
+                label="Tenant subject"
+                placeholder="Optional. Defaults from the tenant name."
+              />
+
+              <.button class="btn btn-primary w-full">Create tenant</.button>
+            </.form>
+          </div>
+
+          <div class="rounded-box border border-base-300 bg-base-100 p-5">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+              Tenant Inventory
+            </div>
+            <div class="mt-2 text-sm text-base-content/70">
+              Schemas, migration state, and analyst workspaces.
+            </div>
+          </div>
+        </section>
 
         <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
           <.table id="tenants" rows={@tenants} row_id={&"tenant-#{&1.id}"}>
@@ -119,6 +188,15 @@ defmodule ThreadrWeb.TenantLive.Index do
                 navigate={~p"/control-plane/tenants/#{tenant.subject_name}/qa"}
               >
                 Workspace
+              </.button>
+            </:action>
+            <:action :let={tenant}>
+              <.button
+                :if={Service.manager_role?(tenant.membership_role)}
+                class="btn btn-sm"
+                navigate={~p"/control-plane/tenants/#{tenant.subject_name}/llm"}
+              >
+                LLM
               </.button>
             </:action>
             <:action :let={tenant}>
@@ -172,4 +250,12 @@ defmodule ThreadrWeb.TenantLive.Index do
   defp badge_class("pending"), do: "badge badge-ghost"
   defp badge_class("failed"), do: "badge badge-error"
   defp badge_class(_status), do: "badge badge-neutral"
+
+  defp create_tenant_error(%Ash.Error.Invalid{errors: errors}) do
+    errors
+    |> Enum.map(&Exception.message/1)
+    |> Enum.join(", ")
+  end
+
+  defp create_tenant_error(reason), do: "Tenant creation failed: #{inspect(reason)}"
 end

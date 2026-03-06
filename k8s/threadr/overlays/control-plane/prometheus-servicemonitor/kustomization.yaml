@@ -1,0 +1,5 @@
+namespace: threadr
+
+resources:
+  - ../../../control-plane
+  - servicemonitor.yaml

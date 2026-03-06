@@ -1,0 +1,69 @@
+name: Threadr Control Plane Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/threadr-control-plane-image.yml"
+      - ".bazelrc"
+      - ".bazelversion"
+      - "MODULE.bazel"
+      - "elixir/threadr/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image via Bazel
+        run: |
+          bazel run //elixir/threadr:control_plane_image_push -- \
+            --image ghcr.io/carverauto/threadr/threadr-control-plane \
+            --tag main \
+            --tag sha-${GITHUB_SHA}
+
+      - name: Update production digest pin
+        if: github.ref == 'refs/heads/main'
+        run: |
+          chmod +x elixir/threadr/tools/bazel/update_production_digest.sh
+          elixir/threadr/tools/bazel/update_production_digest.sh \
+            --image ghcr.io/carverauto/threadr/threadr-control-plane \
+            --tag sha-${GITHUB_SHA} \
+            --file k8s/threadr/overlays/control-plane/production/image-patch.yaml
+
+      - name: Commit production digest pin
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- k8s/threadr/overlays/control-plane/production/image-patch.yaml; then
+            echo "production digest pin already current"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s/threadr/overlays/control-plane/production/image-patch.yaml
+          git commit -m "ci: update control-plane production digest pin"
+          git push

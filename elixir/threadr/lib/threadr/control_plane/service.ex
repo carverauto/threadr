@@ -16,6 +16,7 @@ defmodule Threadr.ControlPlane.Service do
     :error
   ]
   @tenant_schema_prefix "tenant_"
+  @bootstrap_password_length 24
 
   def create_tenant(attrs, opts \\ []) do
     ash_opts = ash_opts(opts)
@@ -128,6 +129,49 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
+  def operator_admin?(%{is_operator_admin: true}), do: true
+  def operator_admin?(_user), do: false
+
+  def authorize_operator_admin(user) do
+    if operator_admin?(user), do: :ok, else: {:error, :forbidden}
+  end
+
+  def bootstrap_operator_admin(attrs, opts \\ []) do
+    password = normalize_blank(fetch(attrs, :password)) || generate_bootstrap_password()
+
+    with {:ok, 0} <- count_operator_admins(opts),
+         {:ok, email} <- fetch_required_string(attrs, :email),
+         name <- normalize_blank(fetch(attrs, :name)),
+         {:ok, user} <-
+           Threadr.ControlPlane.create_bootstrap_user(
+             %{
+               email: email,
+               name: name,
+               is_operator_admin: true,
+               must_rotate_password: true,
+               password: password
+             },
+             system_ash_opts(opts)
+           ) do
+      {:ok, user, password}
+    else
+      {:ok, _count} -> {:error, :operator_admin_already_bootstrapped}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def rotate_password_for_user(%{id: _user_id} = user, attrs, opts \\ []) do
+    Threadr.ControlPlane.change_password(
+      user,
+      %{
+        current_password: fetch(attrs, :current_password),
+        password: fetch(attrs, :password),
+        password_confirmation: fetch(attrs, :password_confirmation)
+      },
+      actor_ash_opts(user, opts)
+    )
+  end
+
   def get_user_tenant_by_subject_name(%{id: _user_id} = user, subject_name, opts \\ [])
       when is_binary(subject_name) do
     with {:ok, tenant} <-
@@ -238,11 +282,13 @@ defmodule Threadr.ControlPlane.Service do
       when is_binary(subject_name) and is_binary(question) do
     with {:ok, tenant, _membership} <-
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
          {:ok, result} <-
            Threadr.ML.SemanticQA.answer_question(
              tenant.subject_name,
              question,
-             semantic_runtime_opts(opts)
+             runtime_opts
            ) do
       {:ok, result}
     else
@@ -259,11 +305,13 @@ defmodule Threadr.ControlPlane.Service do
       when is_binary(subject_name) and is_binary(question) do
     with {:ok, tenant, _membership} <-
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
          {:ok, result} <-
            Threadr.ML.GraphRAG.answer_question(
              tenant.subject_name,
              question,
-             semantic_runtime_opts(opts)
+             runtime_opts
            ) do
       {:ok, result}
     else
@@ -275,11 +323,95 @@ defmodule Threadr.ControlPlane.Service do
       when is_binary(subject_name) and is_binary(topic) do
     with {:ok, tenant, _membership} <-
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
          {:ok, result} <-
            Threadr.ML.GraphRAG.summarize_topic(
              tenant.subject_name,
              topic,
-             semantic_runtime_opts(opts)
+             runtime_opts
+           ) do
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def get_tenant_llm_config_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
+      when is_binary(subject_name) do
+    with {:ok, tenant, membership} <- get_user_tenant_by_subject_name(user, subject_name, opts),
+         :ok <- authorize_manager_role(membership),
+         {:ok, config} <- fetch_tenant_llm_config(tenant.id, system_ash_opts(opts)) do
+      {:ok, build_tenant_llm_settings_response(config)}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def get_system_llm_config_for_user(%{id: _user_id} = user, opts \\ []) do
+    with :ok <- authorize_operator_admin(user),
+         {:ok, config} <- fetch_system_llm_config(system_ash_opts(opts)) do
+      {:ok, build_system_llm_settings_response(config)}
+    end
+  end
+
+  def upsert_system_llm_config_for_user(%{id: _user_id} = user, attrs, opts \\ []) do
+    with :ok <- authorize_operator_admin(user),
+         {:ok, existing_config} <- fetch_system_llm_config(system_ash_opts(opts)),
+         {:ok, normalized_attrs} <- normalize_system_llm_attrs(attrs, existing_config),
+         {:ok, _config} <- persist_system_llm_config(existing_config, normalized_attrs, opts),
+         {:ok, config} <- fetch_system_llm_config(system_ash_opts(opts)) do
+      {:ok, build_system_llm_settings_response(config)}
+    end
+  end
+
+  def test_system_llm_config_for_user(%{id: _user_id} = user, attrs, opts \\ []) do
+    with :ok <- authorize_operator_admin(user),
+         {:ok, existing_config} <- fetch_system_llm_config(system_ash_opts(opts)),
+         {:ok, normalized_attrs} <- normalize_system_llm_attrs(attrs, existing_config),
+         runtime_opts <- build_system_generation_runtime_opts(normalized_attrs),
+         {:ok, result} <-
+           Threadr.ML.Generation.complete(
+             "Reply with exactly OK and mention the configured model name.",
+             Keyword.merge(runtime_opts, semantic_runtime_opts(opts))
+           ) do
+      {:ok, result}
+    end
+  end
+
+  def upsert_tenant_llm_config_for_user(%{id: _user_id} = user, subject_name, attrs, opts \\ [])
+      when is_binary(subject_name) do
+    with {:ok, tenant, membership} <- get_user_tenant_by_subject_name(user, subject_name, opts),
+         :ok <- authorize_manager_role(membership),
+         {:ok, existing_config} <- fetch_tenant_llm_config(tenant.id, system_ash_opts(opts)),
+         {:ok, normalized_attrs} <- normalize_tenant_llm_attrs(tenant.id, attrs, existing_config),
+         {:ok, _config} <-
+           persist_tenant_llm_config(existing_config, normalized_attrs, user, opts),
+         {:ok, config} <- fetch_tenant_llm_config(tenant.id, system_ash_opts(opts)) do
+      {:ok, build_tenant_llm_settings_response(config)}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def test_tenant_llm_config_for_user(%{id: _user_id} = user, subject_name, attrs, opts \\ [])
+      when is_binary(subject_name) do
+    with {:ok, tenant, membership} <- get_user_tenant_by_subject_name(user, subject_name, opts),
+         :ok <- authorize_manager_role(membership),
+         {:ok, system_config} <- fetch_system_llm_config(system_ash_opts(opts)),
+         {:ok, existing_config} <- fetch_tenant_llm_config(tenant.id, system_ash_opts(opts)),
+         {:ok, normalized_attrs} <- normalize_tenant_llm_attrs(tenant.id, attrs, existing_config),
+         runtime_opts =
+           []
+           |> merge_generation_runtime_opts(build_system_generation_runtime_opts(system_config))
+           |> merge_generation_runtime_opts(
+             build_tenant_generation_runtime_opts(normalized_attrs)
+           )
+           |> Keyword.merge(semantic_runtime_opts(opts)),
+         {:ok, result} <-
+           Threadr.ML.Generation.complete(
+             "Reply with exactly OK and mention the configured model name.",
+             runtime_opts
            ) do
       {:ok, result}
     else
@@ -691,6 +823,13 @@ defmodule Threadr.ControlPlane.Service do
   defp authorize_api_key_owner(%{user_id: user_id}, user_id), do: :ok
   defp authorize_api_key_owner(_api_key, _user_id), do: {:error, :forbidden}
 
+  defp count_operator_admins(opts) do
+    case Threadr.ControlPlane.list_operator_admins(system_ash_opts(opts)) do
+      {:ok, admins} -> {:ok, length(admins)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp fetch_bot_for_tenant(user, tenant_id, bot_id, opts) do
     case Threadr.ControlPlane.get_bot(bot_id, actor_ash_opts(user, opts)) do
       {:ok, %{tenant_id: ^tenant_id} = bot} -> {:ok, bot}
@@ -768,8 +907,8 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  defp authorize_manager_role(%{role: role}) when role in @manager_roles, do: :ok
-  defp authorize_manager_role(_membership), do: {:error, :forbidden}
+  def authorize_manager_role(%{role: role}) when role in @manager_roles, do: :ok
+  def authorize_manager_role(_membership), do: {:error, :forbidden}
 
   defp normalize_membership_role(role) when role in @membership_roles, do: {:ok, role}
   defp normalize_membership_role(role) when is_binary(role), do: {:error, {:invalid_role, role}}
@@ -862,6 +1001,326 @@ defmodule Threadr.ControlPlane.Service do
 
   defp wrap_ok({:error, _} = error), do: error
   defp wrap_ok(result), do: {:ok, result}
+
+  defp fetch_tenant_llm_config(tenant_id, opts) do
+    case Threadr.ControlPlane.get_tenant_llm_config(tenant_id, opts) do
+      {:ok, config} ->
+        {:ok, config}
+
+      {:error, %Ash.Error.Invalid{errors: errors}} = error ->
+        if Enum.any?(errors, &match?(%Ash.Error.Query.NotFound{}, &1)) do
+          {:ok, nil}
+        else
+          error
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp fetch_system_llm_config(opts) do
+    case Threadr.ControlPlane.get_system_llm_config("default", opts) do
+      {:ok, config} ->
+        {:ok, config}
+
+      {:error, %Ash.Error.Invalid{errors: errors}} = error ->
+        if Enum.any?(errors, &match?(%Ash.Error.Query.NotFound{}, &1)) do
+          {:ok, nil}
+        else
+          error
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp build_system_llm_settings_response(nil) do
+    config = Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, [])
+
+    %{
+      provider_name: Keyword.get(config, :provider_name, "openai"),
+      endpoint:
+        Keyword.get(config, :endpoint) ||
+          Threadr.ML.Generation.ProviderResolver.default_endpoint(
+            Keyword.get(config, :provider_name, "openai")
+          ),
+      model: Keyword.get(config, :model),
+      system_prompt: Keyword.get(config, :system_prompt),
+      temperature: Keyword.get(config, :temperature),
+      max_tokens: Keyword.get(config, :max_tokens),
+      api_key_configured: present_string?(Keyword.get(config, :api_key))
+    }
+  end
+
+  defp build_system_llm_settings_response(config) do
+    %{
+      id: config.id,
+      provider_name: config.provider_name,
+      endpoint: config.endpoint,
+      model: config.model,
+      system_prompt: config.system_prompt,
+      temperature: config.temperature,
+      max_tokens: config.max_tokens,
+      api_key_configured: present_string?(config.api_key)
+    }
+  end
+
+  defp build_tenant_llm_settings_response(nil) do
+    %{
+      use_system: true,
+      provider_name: "openai",
+      endpoint: nil,
+      model: nil,
+      system_prompt: nil,
+      temperature: nil,
+      max_tokens: nil,
+      api_key_configured: false
+    }
+  end
+
+  defp build_tenant_llm_settings_response(config) do
+    %{
+      id: config.id,
+      tenant_id: config.tenant_id,
+      use_system: config.use_system,
+      provider_name: config.provider_name,
+      endpoint: config.endpoint,
+      model: config.model,
+      system_prompt: config.system_prompt,
+      temperature: config.temperature,
+      max_tokens: config.max_tokens,
+      api_key_configured: present_string?(config.api_key)
+    }
+  end
+
+  defp normalize_tenant_llm_attrs(tenant_id, attrs, existing_config) do
+    use_system = parse_boolean(fetch(attrs, :use_system), true)
+    provider_name = normalize_provider_name(fetch(attrs, :provider_name))
+
+    normalized =
+      %{
+        tenant_id: tenant_id,
+        use_system: use_system,
+        provider_name: provider_name,
+        endpoint: normalize_endpoint(provider_name, fetch(attrs, :endpoint)),
+        model: normalize_blank(fetch(attrs, :model)),
+        api_key: normalize_blank(fetch(attrs, :api_key)) || existing_api_key(existing_config),
+        system_prompt: normalize_blank(fetch(attrs, :system_prompt)),
+        temperature: normalize_float(fetch(attrs, :temperature)),
+        max_tokens: normalize_integer(fetch(attrs, :max_tokens))
+      }
+
+    cond do
+      not supported_provider_name?(provider_name) ->
+        {:error, {:unsupported_generation_provider, provider_name}}
+
+      use_system ->
+        {:ok, normalized}
+
+      is_nil(normalized.endpoint) ->
+        {:error, {:missing_required_field, :endpoint}}
+
+      is_nil(normalized.model) ->
+        {:error, {:missing_required_field, :model}}
+
+      is_nil(normalized.api_key) ->
+        {:error, {:missing_required_field, :api_key}}
+
+      true ->
+        {:ok, normalized}
+    end
+  end
+
+  defp normalize_system_llm_attrs(attrs, existing_config) do
+    provider_name = normalize_provider_name(fetch(attrs, :provider_name))
+
+    normalized =
+      %{
+        scope: "default",
+        provider_name: provider_name,
+        endpoint: normalize_endpoint(provider_name, fetch(attrs, :endpoint)),
+        model: normalize_blank(fetch(attrs, :model)),
+        api_key: normalize_blank(fetch(attrs, :api_key)) || existing_api_key(existing_config),
+        system_prompt: normalize_blank(fetch(attrs, :system_prompt)),
+        temperature: normalize_float(fetch(attrs, :temperature)),
+        max_tokens: normalize_integer(fetch(attrs, :max_tokens))
+      }
+
+    cond do
+      not supported_provider_name?(provider_name) ->
+        {:error, {:unsupported_generation_provider, provider_name}}
+
+      is_nil(normalized.endpoint) ->
+        {:error, {:missing_required_field, :endpoint}}
+
+      is_nil(normalized.model) ->
+        {:error, {:missing_required_field, :model}}
+
+      is_nil(normalized.api_key) ->
+        {:error, {:missing_required_field, :api_key}}
+
+      true ->
+        {:ok, normalized}
+    end
+  end
+
+  defp persist_tenant_llm_config(nil, attrs, user, opts) do
+    Threadr.ControlPlane.create_tenant_llm_config(
+      attrs,
+      actor_ash_opts(user, opts)
+    )
+  end
+
+  defp persist_tenant_llm_config(config, attrs, user, opts) do
+    Threadr.ControlPlane.update_tenant_llm_config(
+      config,
+      Map.drop(attrs, [:tenant_id]),
+      actor_ash_opts(user, opts)
+    )
+  end
+
+  defp persist_system_llm_config(nil, attrs, opts) do
+    Threadr.ControlPlane.create_system_llm_config(
+      attrs,
+      system_ash_opts(opts)
+    )
+  end
+
+  defp persist_system_llm_config(config, attrs, opts) do
+    Threadr.ControlPlane.update_system_llm_config(
+      config,
+      Map.drop(attrs, [:scope]),
+      system_ash_opts(opts)
+    )
+  end
+
+  defp tenant_generation_runtime_opts(tenant, runtime_opts) do
+    with {:ok, system_config} <- fetch_system_llm_config(context: %{system: true}),
+         {:ok, tenant_config} <- fetch_tenant_llm_config(tenant.id, context: %{system: true}) do
+      resolved_opts =
+        []
+        |> merge_generation_runtime_opts(build_system_generation_runtime_opts(system_config))
+        |> merge_generation_runtime_opts(build_tenant_generation_runtime_opts(tenant_config))
+        |> Keyword.merge(runtime_opts)
+
+      {:ok, resolved_opts}
+    end
+  end
+
+  defp build_system_generation_runtime_opts(nil), do: []
+
+  defp build_system_generation_runtime_opts(config) do
+    provider = resolve_generation_provider!(config.provider_name)
+
+    []
+    |> put_runtime_opt(:generation_provider, provider)
+    |> put_runtime_opt(:generation_provider_name, config.provider_name)
+    |> put_runtime_opt(
+      :generation_endpoint,
+      config.endpoint || Threadr.ML.Generation.ProviderResolver.default_endpoint(config.provider_name)
+    )
+    |> put_runtime_opt(:generation_model, config.model)
+    |> put_runtime_opt(:generation_api_key, config.api_key)
+    |> put_runtime_opt(:generation_system_prompt, config.system_prompt)
+    |> put_runtime_opt(:generation_temperature, config.temperature)
+    |> put_runtime_opt(:generation_max_tokens, config.max_tokens)
+  end
+
+  defp build_tenant_generation_runtime_opts(nil), do: []
+  defp build_tenant_generation_runtime_opts(%{use_system: true}), do: []
+
+  defp build_tenant_generation_runtime_opts(config) do
+    build_system_generation_runtime_opts(config)
+  end
+
+  defp merge_generation_runtime_opts(opts, []), do: opts
+  defp merge_generation_runtime_opts(opts, other), do: Keyword.merge(opts, other)
+
+  defp put_runtime_opt(opts, _key, nil), do: opts
+  defp put_runtime_opt(opts, key, value), do: Keyword.put(opts, key, value)
+
+  defp existing_api_key(nil), do: nil
+  defp existing_api_key(config), do: config.api_key
+
+  defp parse_boolean(value, default)
+
+  defp parse_boolean(nil, default), do: default
+  defp parse_boolean(value, _default) when value in [true, "true", "on", "1", 1], do: true
+  defp parse_boolean(value, _default) when value in [false, "false", "off", "0", 0], do: false
+  defp parse_boolean(_value, default), do: default
+
+  defp normalize_provider_name(value) do
+    value
+    |> normalize_blank()
+    |> case do
+      nil -> "openai"
+      provider -> String.downcase(provider)
+    end
+  end
+
+  defp normalize_endpoint(provider_name, endpoint) do
+    normalize_blank(endpoint) ||
+      Threadr.ML.Generation.ProviderResolver.default_endpoint(normalize_provider_name(provider_name))
+  end
+
+  defp resolve_generation_provider!(provider_name) do
+    case Threadr.ML.Generation.ProviderResolver.resolve(provider_name) do
+      {:ok, provider} -> provider
+      {:error, _reason} -> raise ArgumentError, "unsupported generation provider #{inspect(provider_name)}"
+    end
+  end
+
+  defp supported_provider_name?(provider_name) do
+    provider_name in Threadr.ML.Generation.ProviderResolver.supported_provider_names()
+  end
+
+  defp normalize_blank(nil), do: nil
+
+  defp normalize_blank(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp normalize_blank(value), do: value
+
+  defp normalize_float(nil), do: nil
+  defp normalize_float(value) when is_float(value), do: value
+  defp normalize_float(value) when is_integer(value), do: value / 1
+
+  defp normalize_float(value) when is_binary(value) do
+    case Float.parse(String.trim(value)) do
+      {parsed, ""} -> parsed
+      _ -> nil
+    end
+  end
+
+  defp normalize_float(_value), do: nil
+
+  defp normalize_integer(nil), do: nil
+  defp normalize_integer(value) when is_integer(value), do: value
+
+  defp normalize_integer(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {parsed, ""} -> parsed
+      _ -> nil
+    end
+  end
+
+  defp normalize_integer(_value), do: nil
+
+  defp generate_bootstrap_password do
+    @bootstrap_password_length
+    |> :crypto.strong_rand_bytes()
+    |> Base.url_encode64(padding: false)
+    |> binary_part(0, @bootstrap_password_length)
+  end
+
+  defp present_string?(value) when is_binary(value), do: String.trim(value) != ""
+  defp present_string?(_value), do: false
 
   defp semantic_ash_opts(opts) do
     Keyword.drop(

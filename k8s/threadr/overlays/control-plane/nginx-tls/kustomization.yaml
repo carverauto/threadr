@@ -1,0 +1,7 @@
+namespace: threadr
+
+resources:
+  - ../../../control-plane
+
+patches:
+  - path: ingress-patch.yaml

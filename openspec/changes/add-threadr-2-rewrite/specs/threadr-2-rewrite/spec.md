@@ -63,6 +63,34 @@ Threadr 2.0 SHALL keep cross-tenant control-plane resources in a shared public s
 - **THEN** those records live in shared control-plane data structures that can be read by the platform control plane
 - **AND** those records remain separate from tenant-scoped conversation and graph data
 
+### Requirement: Control-plane images are built and published through Bazel entrypoints
+Threadr 2.0 SHALL use Bazel entrypoints as the canonical interface for building and publishing control-plane OCI images.
+
+#### Scenario: A maintainer builds a local control-plane image
+- **WHEN** a maintainer needs a local control-plane release image
+- **THEN** the repository provides a Bazel target that builds that image from the Phoenix release `Dockerfile`
+- **AND** the maintainer does not need a separate handwritten shell recipe outside the repository
+
+#### Scenario: CI publishes the control-plane image
+- **WHEN** CI publishes the control-plane image to GHCR
+- **THEN** the workflow invokes the Bazel push entrypoint
+- **AND** the published image is the same artifact shape the Kubernetes deployment overlays expect
+- **AND** the workflow does not duplicate the image build logic in an ad hoc `docker build` step
+
+#### Scenario: CI refreshes the production image pin after publish
+- **WHEN** CI successfully publishes a new control-plane image for the default branch
+- **THEN** the workflow resolves the pushed GHCR digest
+- **AND** the production deployment overlay is updated to reference that immutable digest
+
+### Requirement: Production deployment overlays define the control-plane runtime contract
+Threadr 2.0 SHALL provide an environment-oriented deployment overlay that pins the control-plane hostname, TLS Secret name, bootstrap operator email, and immutable image reference while leaving production secret material out of Git.
+
+#### Scenario: Operators prepare a production control-plane deployment
+- **WHEN** operators apply the production deployment overlay through ArgoCD or Kustomize
+- **THEN** the overlay defines the intended external hostname, TLS Secret name, and published control-plane image reference
+- **AND** the overlay documents the required runtime Secret names the cluster must provide
+- **AND** the repository provides a Sealed Secrets workflow for materializing `threadr-control-plane-env` without committing plaintext production secrets
+
 ### Requirement: Tenants can provision bots through a control plane
 Threadr 2.0 SHALL provide a control plane that allows tenants to create and manage Threadr bot workloads.
 
@@ -112,6 +140,20 @@ Threadr 2.0 SHALL provide authenticated sign-in for tenant users accessing the w
 - **WHEN** a valid tenant user completes the supported sign-in flow
 - **THEN** the system creates an authenticated web session
 - **AND** subsequent UI access can be authorized against that user identity and tenant membership
+
+### Requirement: The first operator administrator is bootstrapped deterministically
+Threadr 2.0 SHALL provide a first-install bootstrap path that creates the initial operator administrator exactly once and requires that bootstrap credential to be rotated before normal control-plane use.
+
+#### Scenario: A fresh installation has no operator administrator
+- **WHEN** the install-time bootstrap job or task runs against a deployment where no operator-admin user exists
+- **THEN** the system creates exactly one operator-admin user in persisted application state
+- **AND** the bootstrap path emits a one-time installation credential or setup secret for that user
+- **AND** subsequent bootstrap executions do not create additional operator-admin users automatically
+
+#### Scenario: A bootstrap administrator signs in for the first time
+- **WHEN** a bootstrap-created operator-admin authenticates with the installation credential
+- **THEN** the system requires password rotation before granting normal control-plane access
+- **AND** the rotated credential becomes the durable sign-in secret instead of the original bootstrap credential
 
 ### Requirement: Threadr exposes a public tenant-facing API
 Threadr 2.0 SHALL expose a public API for tenant-facing automation and integrations.

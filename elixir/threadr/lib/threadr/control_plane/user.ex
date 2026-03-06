@@ -12,6 +12,19 @@ defmodule Threadr.ControlPlane.User do
   actions do
     defaults [:read]
 
+    create :create_bootstrap_user do
+      accept [:email, :name, :is_operator_admin, :must_rotate_password]
+
+      argument :password, :string do
+        allow_nil? false
+        sensitive? true
+        constraints min_length: 12
+      end
+
+      change Threadr.ControlPlane.Changes.NormalizeEmail
+      change {AshAuthentication.Strategy.Password.HashPasswordChange, strategy_name: :password}
+    end
+
     update :update do
       primary? true
       accept [:email, :name]
@@ -19,11 +32,44 @@ defmodule Threadr.ControlPlane.User do
       change Threadr.ControlPlane.Changes.NormalizeEmail
     end
 
+    update :change_password do
+      accept []
+      require_atomic? false
+
+      argument :current_password, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      argument :password, :string do
+        allow_nil? false
+        sensitive? true
+        constraints min_length: 12
+      end
+
+      argument :password_confirmation, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      validate confirm(:password, :password_confirmation)
+
+      validate {AshAuthentication.Strategy.Password.PasswordValidation,
+                strategy_name: :password, password_argument: :current_password}
+
+      change {AshAuthentication.Strategy.Password.HashPasswordChange, strategy_name: :password}
+      change set_attribute(:must_rotate_password, false)
+    end
+
     read :get_by_subject do
       description "Get a user by the subject claim in a JWT"
       argument :subject, :string, allow_nil?: false
       get? true
       prepare AshAuthentication.Preparations.FilterBySubject
+    end
+
+    read :operator_admins do
+      filter expr(is_operator_admin == true)
     end
 
     read :sign_in_with_api_key do
@@ -76,7 +122,19 @@ defmodule Threadr.ControlPlane.User do
     end
 
     attribute :name, :string do
+      allow_nil? true
+      public? true
+    end
+
+    attribute :is_operator_admin, :boolean do
       allow_nil? false
+      default false
+      public? true
+    end
+
+    attribute :must_rotate_password, :boolean do
+      allow_nil? false
+      default false
       public? true
     end
 
@@ -129,7 +187,7 @@ defmodule Threadr.ControlPlane.User do
       authorize_if always()
     end
 
-    policy action([:read, :update]) do
+    policy action([:read, :update, :change_password]) do
       authorize_if expr(id == ^actor(:id))
     end
   end

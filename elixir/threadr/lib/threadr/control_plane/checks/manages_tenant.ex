@@ -48,6 +48,14 @@ defmodule Threadr.ControlPlane.Checks.ManagesTenant do
 
         present(value)
 
+      Threadr.ControlPlane.TenantLlmConfig ->
+        value =
+          changeset.attributes[:tenant_id] ||
+            Map.get(changeset.arguments, :tenant_id) ||
+            changeset.data.tenant_id
+
+        present(value)
+
       Threadr.ControlPlane.Tenant ->
         present(changeset.data.id)
 
@@ -59,11 +67,13 @@ defmodule Threadr.ControlPlane.Checks.ManagesTenant do
   defp tenant_id(%resource{} = record)
        when resource in [
               Threadr.ControlPlane.Bot,
+              Threadr.ControlPlane.TenantLlmConfig,
               Threadr.ControlPlane.Tenant,
               Threadr.ControlPlane.TenantMembership
             ] do
     case resource do
       Threadr.ControlPlane.Bot -> present(record.tenant_id)
+      Threadr.ControlPlane.TenantLlmConfig -> present(record.tenant_id)
       Threadr.ControlPlane.TenantMembership -> present(record.tenant_id)
       Threadr.ControlPlane.Tenant -> present(record.id)
     end

@@ -1,0 +1,11 @@
+sh_binary(
+    name = "control_plane_image_build",
+    srcs = ["tools/bazel/control_plane_image.sh"],
+    args = ["build"],
+)
+
+sh_binary(
+    name = "control_plane_image_push",
+    srcs = ["tools/bazel/control_plane_image.sh"],
+    args = ["push"],
+)

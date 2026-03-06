@@ -113,6 +113,12 @@ defmodule ThreadrWeb.TenantQaLive.Index do
           <:actions>
             <div class="flex gap-2">
               <.button navigate={~p"/control-plane/tenants"}>Tenants</.button>
+              <.button
+                :if={Service.manager_role?(@membership_role)}
+                navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/llm"}
+              >
+                LLM Settings
+              </.button>
               <.button navigate={~p"/settings/api-keys"}>API Keys</.button>
             </div>
           </:actions>
@@ -347,6 +353,9 @@ defmodule ThreadrWeb.TenantQaLive.Index do
 
   defp normalize_result_error({:error, :forbidden}),
     do: {:error, "You do not have access to that tenant"}
+
+  defp normalize_result_error({:error, :generation_provider_not_configured}),
+    do: {:error, "No LLM is configured. Use tenant LLM settings or the system provider."}
 
   defp normalize_result_error({:error, {:tenant_not_found, _}}), do: {:error, "Tenant not found"}
 

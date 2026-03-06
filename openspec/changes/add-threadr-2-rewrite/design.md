@@ -11,6 +11,7 @@ The rewrite is also expected to operate as a SaaS platform. Multiple tenants sho
 - Isolate tenant data with schema-based multitenancy on a shared PostgreSQL cluster.
 - Support tenant-managed bot provisioning through a control plane.
 - Provide authenticated web access for tenant users.
+- Provide a deterministic first-install onboarding path for the first operator administrator.
 - Provide a public API for tenant automation and integrations.
 - Let authenticated users create and revoke their own API keys.
 - Standardize asynchronous processing around Broadway consumers.
@@ -82,10 +83,45 @@ The rewrite includes first-class user authentication for the web UI. Tenant user
 
 Authentication and authorization should stay aligned with the Ash-centered application model so user, membership, and policy rules are not split across ad hoc controller logic.
 
+### First-Install Operator Bootstrap
+The first operator administrator must be created through a deterministic bootstrap path owned by the application, not through direct database mutation and not through a long-lived runtime email allowlist.
+
+The bootstrap contract should be:
+- a persisted operator-admin flag on the user resource
+- a bootstrap task or install job that creates the first operator-admin only when none exists
+- a generated temporary credential or setup secret intended for one-time use at installation time
+- a forced password-rotation path so the bootstrap secret is not treated as a durable credential
+
+This keeps operator access platform-scoped and distinct from tenant membership. The first operator-admin can then create tenants, manage system-wide settings, and onboard tenant users through the normal application surface.
+
 ### Public API And API Keys
 Threadr exposes a public API for tenant-facing automation, bot management, and future integration points. This API is separate from internal operational endpoints and is intended for direct customer use.
 
 Authenticated users can mint and revoke their own API keys. API keys should be treated as credentials, shown in full only at creation time, and validated server-side without storing plaintext secrets.
+
+### Bazel-Driven Container Delivery
+Control-plane container delivery should use Bazel as the canonical build and push entrypoint instead of ad hoc local shell commands or a workflow-specific `docker build` invocation.
+
+The concrete contract is:
+- the control-plane image remains defined by the Phoenix release `Dockerfile`
+- Bazel targets are the supported interface for local build and GHCR push operations
+- CI invokes those Bazel targets rather than duplicating container build logic in GitHub Actions
+- after publish, CI resolves the pushed GHCR digest and updates the production overlay's image pin
+- Kubernetes overlays and ArgoCD applications reference the published GHCR image rather than the placeholder local image name
+
+This keeps the delivery path aligned across local use, CI, and GitOps without forcing the rewrite to solve a full hermetic Elixir toolchain migration in the same step.
+
+### Environment-Specific Deployment Overlay Contract
+The repository should carry a production-oriented Kustomize overlay and ArgoCD application definition that pin the externally visible hostname, TLS secret name, bootstrap operator email, and immutable image reference for the control plane.
+
+The secret material itself is not committed in Git as plaintext:
+- the runtime environment Secret is materialized in cluster as `threadr-control-plane-env`
+- operators generate that Secret through a Sealed Secrets workflow from a plain Secret manifest
+- the ingress TLS Secret remains external as `threadr-control-plane-tls`
+- the GitOps overlay documents those required Secret names explicitly
+- the operator-managed default LLM secret contract uses provider-neutral `THREADR_SYSTEM_LLM_*` naming rather than vendor-specific key names
+
+This keeps the deployment contract concrete without committing plaintext credentials, and it matches the current cluster capability rather than deferring the secret-manager decision indefinitely.
 
 ### Runtime Consolidation
 Elixir services handle ingestion, workflow orchestration, graph inference, user-facing APIs, and control-plane orchestration. Jido remains a candidate for agent-oriented orchestration, while local ML execution should remain flexible enough to compare Nx or Bumblebee with focused extraction models such as GLiNER2.
@@ -131,6 +167,8 @@ The initial graph exploration contract should therefore assume:
   Mitigation: enforce lifecycle rules with Ash state machines and route all operational state updates through explicit resource actions.
 - Public API access expands the security boundary materially.
   Mitigation: model user identity, tenant membership, and API key ownership as first-class resources, keep keys scoped to authenticated users, and store only non-recoverable credential material.
+- Install-time bootstrap credentials can become permanent if the rotation path is optional.
+  Mitigation: persist a first-login password-rotation flag and redirect bootstrap users to rotate credentials before they access the broader control plane.
 - Controller callbacks can become stale or race newer desired-state updates.
   Mitigation: version the desired-state contract with generations and reject stale controller reports that do not match the current desired generation.
 - Running local ML workloads on the BEAM can create resource pressure.

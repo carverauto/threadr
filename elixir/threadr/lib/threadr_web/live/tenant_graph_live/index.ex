@@ -33,7 +33,10 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
          |> assign(:zoom_mode, "auto")
          |> assign(:zoom_modes, @zoom_modes)
          |> assign(:schema_version, GraphSnapshot.schema_version())
-         |> assign(:socket_token, Phoenix.Token.sign(ThreadrWeb.Endpoint, "user socket", socket.assigns.current_user.id))}
+         |> assign(
+           :socket_token,
+           Phoenix.Token.sign(ThreadrWeb.Endpoint, "user socket", socket.assigns.current_user.id)
+         )}
 
       {:error, _reason} ->
         {:ok,
@@ -107,13 +110,15 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
                 Stream
               </h2>
               <div class="mt-2 text-sm text-base-content/70">
-                Tenant subject <span class="font-semibold text-base-content">{@tenant.subject_name}</span>
+                Tenant subject
+                <span class="font-semibold text-base-content">{@tenant.subject_name}</span>
               </div>
               <div class="text-sm text-base-content/70">
                 Schema <span class="font-semibold text-base-content">{@tenant.schema_name}</span>
               </div>
               <div class="text-sm text-base-content/70">
-                Graph schema version <span class="font-semibold text-base-content">{@schema_version}</span>
+                Graph schema version
+                <span class="font-semibold text-base-content">{@schema_version}</span>
               </div>
             </div>
 
@@ -177,14 +182,17 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
                   phx-value-key={Atom.to_string(key)}
                 >
                   <span>{label}</span>
-                  <span class="badge badge-outline">{if @edge_layers[key], do: "on", else: "off"}</span>
+                  <span class="badge badge-outline">
+                    {if @edge_layers[key], do: "on", else: "off"}
+                  </span>
                 </button>
               </div>
             </div>
 
             <div class="rounded-box bg-base-200 p-3 text-sm text-base-content/70">
               Click a node to inspect it. Filters apply locally in the client without forcing a
-              new snapshot.
+              new snapshot. Use the graph overlay to pin focus on a dossier while you browse
+              related nodes.
             </div>
           </aside>
 

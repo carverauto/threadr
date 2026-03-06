@@ -49,7 +49,7 @@ defmodule Threadr.TenantData.GraphInspectorTest do
     assert detail.summary.message_count == 2
     assert Enum.any?(detail.top_channels, &(&1.channel_name == "ops"))
     assert Enum.any?(detail.top_channels, &(&1.channel_name == "alerts"))
-    assert Enum.any?(detail.recent_messages, &(String.contains?(&1.body, "Carol")))
+    assert Enum.any?(detail.recent_messages, &String.contains?(&1.body, "Carol"))
     assert Enum.any?(detail.neighborhood.actors, &(&1.handle == "bob"))
     assert Enum.any?(detail.neighborhood.actors, &(&1.handle == "carol"))
     assert length(detail.top_relationships) >= 2

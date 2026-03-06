@@ -31,6 +31,10 @@ defmodule ThreadrWeb.Router do
     plug ThreadrWeb.Plugs.RequireControlPlaneToken
   end
 
+  pipeline :internal_metrics do
+    plug :accepts, ["txt", "text", "json"]
+  end
+
   scope "/", ThreadrWeb do
     pipe_through :browser
 
@@ -44,13 +48,36 @@ defmodule ThreadrWeb.Router do
       on_mount: [{ThreadrWeb.LiveUserAuth, :live_no_user}]
     )
 
-    ash_authentication_live_session :authenticated_routes,
+    ash_authentication_live_session :password_settings_routes,
       on_mount: [{ThreadrWeb.LiveUserAuth, :live_user_required}] do
+      live "/settings/password", PasswordSettingsLive.Index, :index
+    end
+
+    ash_authentication_live_session :authenticated_routes,
+      on_mount: [
+        {ThreadrWeb.LiveUserAuth, :live_user_required},
+        {ThreadrWeb.LiveUserAuth, :password_rotation_required}
+      ] do
+      live "/control-plane/admin/llm", SystemLlmSettingsLive.Index, :index
       live "/control-plane/tenants", TenantLive.Index, :index
       live "/control-plane/tenants/:subject_name/qa", TenantQaLive.Index, :index
       live "/control-plane/tenants/:subject_name/graph", TenantGraphLive.Index, :index
+      live "/control-plane/tenants/:subject_name/llm", TenantLlmSettingsLive.Index, :index
       live "/settings/api-keys", ApiKeyLive.Index, :index
     end
+  end
+
+  scope "/health", ThreadrWeb do
+    pipe_through :api
+
+    get "/live", HealthController, :live
+    get "/ready", HealthController, :ready
+  end
+
+  scope "/", ThreadrWeb do
+    pipe_through :internal_metrics
+
+    get "/metrics", MetricsController, :show
   end
 
   scope "/api/control-plane", ThreadrWeb do

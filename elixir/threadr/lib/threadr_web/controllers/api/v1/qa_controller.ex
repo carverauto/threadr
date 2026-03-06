@@ -26,6 +26,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
       {:error, :no_message_embeddings} ->
         unprocessable(conn, "No tenant message embeddings available")
 
+      {:error, :generation_provider_not_configured} ->
+        unprocessable(conn, "No LLM is configured for this tenant or the system default")
+
       {:error, reason} ->
         unprocessable(conn, inspect(reason))
     end
@@ -53,6 +56,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
 
       {:error, :no_message_embeddings} ->
         unprocessable(conn, "No tenant message embeddings available")
+
+      {:error, :generation_provider_not_configured} ->
+        unprocessable(conn, "No LLM is configured for this tenant or the system default")
 
       {:error, reason} ->
         unprocessable(conn, inspect(reason))
@@ -82,6 +88,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
       {:error, :no_message_embeddings} ->
         unprocessable(conn, "No tenant message embeddings available")
 
+      {:error, :generation_provider_not_configured} ->
+        unprocessable(conn, "No LLM is configured for this tenant or the system default")
+
       {:error, reason} ->
         unprocessable(conn, inspect(reason))
     end
@@ -109,6 +118,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
 
       {:error, :no_message_embeddings} ->
         unprocessable(conn, "No tenant message embeddings available")
+
+      {:error, :generation_provider_not_configured} ->
+        unprocessable(conn, "No LLM is configured for this tenant or the system default")
 
       {:error, reason} ->
         unprocessable(conn, inspect(reason))

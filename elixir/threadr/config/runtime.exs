@@ -123,6 +123,10 @@ normalize_module = fn
     end
 end
 
+env_or_legacy = fn primary, legacy ->
+  System.get_env(primary) || System.get_env(legacy)
+end
+
 config :threadr, Threadr.Messaging.Topology,
   pipeline_enabled: pipeline_enabled,
   connections: [
@@ -172,6 +176,68 @@ config :threadr,
        System.get_env("THREADR_TOKEN_SIGNING_SECRET") ||
          Application.get_env(:threadr, :token_signing_secret)
 
+dispatcher_defaults =
+  Application.get_env(:threadr, Threadr.ControlPlane.BotOperationDispatcher, [])
+
+dispatcher_config =
+  dispatcher_defaults
+  |> Keyword.merge(
+    enabled:
+      case System.get_env("THREADR_BOT_OPERATION_DISPATCHER_ENABLED") do
+        nil -> Keyword.get(dispatcher_defaults, :enabled)
+        value -> parse_bool.(value)
+      end,
+    poll_interval_ms:
+      parse_integer.(System.get_env("THREADR_BOT_OPERATION_DISPATCHER_POLL_INTERVAL_MS")) ||
+        Keyword.get(dispatcher_defaults, :poll_interval_ms),
+    batch_size:
+      parse_integer.(System.get_env("THREADR_BOT_OPERATION_DISPATCHER_BATCH_SIZE")) ||
+        Keyword.get(dispatcher_defaults, :batch_size),
+    max_attempts:
+      parse_integer.(System.get_env("THREADR_BOT_OPERATION_DISPATCHER_MAX_ATTEMPTS")) ||
+        Keyword.get(dispatcher_defaults, :max_attempts),
+    retry_backoff_ms:
+      parse_integer.(System.get_env("THREADR_BOT_OPERATION_DISPATCHER_RETRY_BACKOFF_MS")) ||
+        Keyword.get(dispatcher_defaults, :retry_backoff_ms)
+  )
+
+observer_defaults =
+  Application.get_env(:threadr, Threadr.ControlPlane.BotStatusObserver, [])
+
+observer_config =
+  observer_defaults
+  |> Keyword.merge(
+    enabled:
+      case System.get_env("THREADR_BOT_STATUS_OBSERVER_ENABLED") do
+        nil -> Keyword.get(observer_defaults, :enabled)
+        value -> parse_bool.(value)
+      end,
+    poll_interval_ms:
+      parse_integer.(System.get_env("THREADR_BOT_STATUS_OBSERVER_POLL_INTERVAL_MS")) ||
+        Keyword.get(observer_defaults, :poll_interval_ms),
+    batch_size:
+      parse_integer.(System.get_env("THREADR_BOT_STATUS_OBSERVER_BATCH_SIZE")) ||
+        Keyword.get(observer_defaults, :batch_size)
+  )
+
+reconciler_defaults =
+  Application.get_env(:threadr, Threadr.ControlPlane.KubernetesBotReconciler, [])
+
+reconciler_config =
+  reconciler_defaults
+  |> Keyword.merge(
+    default_image:
+      System.get_env("THREADR_BOT_DEFAULT_IMAGE") ||
+        Keyword.get(reconciler_defaults, :default_image),
+    container_name:
+      System.get_env("THREADR_BOT_CONTAINER_NAME") ||
+        Keyword.get(reconciler_defaults, :container_name)
+  )
+
+config :threadr, Threadr.ControlPlane.BotOperationDispatcher, dispatcher_config
+config :threadr, Threadr.ControlPlane.BotStatusObserver, observer_config
+config :threadr, Threadr.ControlPlane.KubernetesBotReconciler, reconciler_config
+
 ml_embeddings_config =
   Application.get_env(:threadr, Threadr.ML, [])
   |> Keyword.get(:embeddings, [])
@@ -206,56 +272,66 @@ ml_generation_config =
   Application.get_env(:threadr, Threadr.ML, [])
   |> Keyword.get(:generation, [])
   |> Keyword.merge(
-    provider:
-      normalize_module.(System.get_env("THREADR_GENERATION_PROVIDER")) ||
-        Keyword.get(
-          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
-          :provider
-        ),
-    endpoint:
-      System.get_env("THREADR_GENERATION_ENDPOINT") ||
-        Keyword.get(
-          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
-          :endpoint
-        ),
     provider_name:
-      System.get_env("THREADR_GENERATION_PROVIDER_NAME") ||
+      env_or_legacy.("THREADR_SYSTEM_LLM_PROVIDER", "THREADR_GENERATION_PROVIDER_NAME") ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :provider_name
         ),
+    endpoint:
+      env_or_legacy.("THREADR_SYSTEM_LLM_ENDPOINT", "THREADR_GENERATION_ENDPOINT") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :endpoint
+        ),
+    provider:
+      normalize_module.(env_or_legacy.("THREADR_SYSTEM_LLM_ADAPTER", "THREADR_GENERATION_PROVIDER")) ||
+        case Threadr.ML.Generation.ProviderResolver.resolve(
+               env_or_legacy.("THREADR_SYSTEM_LLM_PROVIDER", "THREADR_GENERATION_PROVIDER_NAME") ||
+                 Keyword.get(
+                   Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+                   :provider_name
+                 )
+             ) do
+          {:ok, provider} -> provider
+          {:error, _reason} -> nil
+        end ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :provider
+        ),
     model:
-      System.get_env("THREADR_GENERATION_MODEL") ||
+      env_or_legacy.("THREADR_SYSTEM_LLM_MODEL", "THREADR_GENERATION_MODEL") ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :model
         ),
     api_key:
-      System.get_env("THREADR_GENERATION_API_KEY") ||
+      env_or_legacy.("THREADR_SYSTEM_LLM_API_KEY", "THREADR_GENERATION_API_KEY") ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :api_key
         ),
     system_prompt:
-      System.get_env("THREADR_GENERATION_SYSTEM_PROMPT") ||
+      env_or_legacy.("THREADR_SYSTEM_LLM_SYSTEM_PROMPT", "THREADR_GENERATION_SYSTEM_PROMPT") ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :system_prompt
         ),
     temperature:
-      parse_float.(System.get_env("THREADR_GENERATION_TEMPERATURE")) ||
+      parse_float.(env_or_legacy.("THREADR_SYSTEM_LLM_TEMPERATURE", "THREADR_GENERATION_TEMPERATURE")) ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :temperature
         ),
     max_tokens:
-      parse_integer.(System.get_env("THREADR_GENERATION_MAX_TOKENS")) ||
+      parse_integer.(env_or_legacy.("THREADR_SYSTEM_LLM_MAX_TOKENS", "THREADR_GENERATION_MAX_TOKENS")) ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :max_tokens
         ),
     timeout:
-      parse_integer.(System.get_env("THREADR_GENERATION_TIMEOUT_MS")) ||
+      parse_integer.(env_or_legacy.("THREADR_SYSTEM_LLM_TIMEOUT_MS", "THREADR_GENERATION_TIMEOUT_MS")) ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :timeout

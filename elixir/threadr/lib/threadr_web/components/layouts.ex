@@ -4,6 +4,7 @@ defmodule ThreadrWeb.Layouts do
   used by your application.
   """
   use ThreadrWeb, :html
+  alias Threadr.ControlPlane.Service
 
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
@@ -31,42 +32,90 @@ defmodule ThreadrWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :current_user, :map, default: nil, doc: "the current authenticated user, when present"
+
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
+    <div class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.1),_transparent_22%),linear-gradient(180deg,_oklch(98%_0_0)_0%,_oklch(96%_0.001_286.375)_45%,_oklch(94%_0.003_286.32)_100%)] text-base-content dark:bg-[radial-gradient(circle_at_top,_rgba(251,146,60,0.1),_transparent_18%),linear-gradient(180deg,_oklch(24%_0.015_255)_0%,_oklch(20%_0.012_254.09)_100%)]">
+      <header class="sticky top-0 z-40 border-b border-base-300/60 bg-base-100/88 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4 sm:px-6 lg:px-8">
+          <div class="flex items-center gap-8">
+            <a href="/" class="flex items-center gap-3">
+              <img src={~p"/images/logo.svg"} width="34" />
+              <div>
+                <div class="text-sm font-black uppercase tracking-[0.24em] text-base-content">
+                  Threadr
+                </div>
+                <div class="text-xs text-base-content/55">Tenant-scoped intelligence graph</div>
+              </div>
             </a>
-          </li>
-        </ul>
-      </div>
-    </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
-        {render_slot(@inner_block)}
-      </div>
-    </main>
+            <nav class="hidden items-center gap-2 md:flex">
+              <.link
+                :if={@current_user}
+                navigate={~p"/control-plane/tenants"}
+                class="btn btn-ghost btn-sm"
+              >
+                Tenants
+              </.link>
+              <.link
+                :if={@current_user && Service.operator_admin?(@current_user)}
+                navigate={~p"/control-plane/admin/llm"}
+                class="btn btn-ghost btn-sm"
+              >
+                System LLM
+              </.link>
+              <.link
+                :if={@current_user}
+                navigate={~p"/settings/api-keys"}
+                class="btn btn-ghost btn-sm"
+              >
+                API Keys
+              </.link>
+              <.link href={~p"/"} class="btn btn-ghost btn-sm">
+                Overview
+              </.link>
+            </nav>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <div :if={@current_user} class="hidden text-right sm:block">
+              <div class="text-sm font-semibold text-base-content">
+                {@current_user.name || @current_user.email}
+              </div>
+              <div class="text-xs text-base-content/55">
+                {@current_user.email}
+              </div>
+            </div>
+
+            <.theme_toggle />
+
+            <div :if={@current_user} class="flex items-center gap-2">
+              <.link href={~p"/sign-out"} class="btn btn-outline btn-sm">
+                Sign out
+              </.link>
+            </div>
+
+            <div :if={!@current_user} class="flex items-center gap-2">
+              <.link href={~p"/sign-in"} class="btn btn-ghost btn-sm">
+                Sign in
+              </.link>
+              <.link href={~p"/register"} class="btn btn-primary btn-sm">
+                Register
+              </.link>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <div class="mx-auto max-w-7xl space-y-4">
+          {render_slot(@inner_block)}
+        </div>
+      </main>
+    </div>
 
     <.flash_group flash={@flash} />
     """

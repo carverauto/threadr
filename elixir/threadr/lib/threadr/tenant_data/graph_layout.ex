@@ -21,7 +21,8 @@ defmodule Threadr.TenantData.GraphLayout do
       nodes
       |> Enum.group_by(&component_id/1)
       |> Enum.sort_by(fn {component_id, component_nodes} ->
-        {-length(component_nodes), component_id, Enum.min_by(component_nodes, &sort_label/1).label}
+        {-length(component_nodes), component_id,
+         Enum.min_by(component_nodes, &sort_label/1).label}
       end)
 
     columns =
@@ -55,8 +56,8 @@ defmodule Threadr.TenantData.GraphLayout do
           {center_x, center_y}
         else
           {
-            center_x + (radius * :math.cos(angle)),
-            center_y + (radius * :math.sin(angle))
+            center_x + radius * :math.cos(angle),
+            center_y + radius * :math.sin(angle)
           }
         end
 
@@ -116,7 +117,8 @@ defmodule Threadr.TenantData.GraphLayout do
     count = length(neighbors)
 
     Enum.with_index(neighbors)
-    |> Enum.reduce({queue, levels}, fn {{neighbor_index, _neighbor}, sibling_index}, {queue, levels} ->
+    |> Enum.reduce({queue, levels}, fn {{neighbor_index, _neighbor}, sibling_index},
+                                       {queue, levels} ->
       if Map.has_key?(levels, neighbor_index) do
         {queue, levels}
       else
@@ -142,7 +144,9 @@ defmodule Threadr.TenantData.GraphLayout do
       |> Map.keys()
       |> Enum.reject(&Map.has_key?(levels, &1))
       |> Enum.map(fn index -> {index, Map.fetch!(nodes_by_index, index)} end)
-      |> Enum.sort_by(fn {_index, node} -> {-degree(node), kind_priority(node), sort_label(node)} end)
+      |> Enum.sort_by(fn {_index, node} ->
+        {-degree(node), kind_priority(node), sort_label(node)}
+      end)
 
     count = length(missing)
 
@@ -152,7 +156,7 @@ defmodule Threadr.TenantData.GraphLayout do
         if count <= 1 do
           0.0
         else
-          (2.0 * :math.pi() * missing_index) / count
+          2.0 * :math.pi() * missing_index / count
         end
 
       Map.put(acc, index, %{
@@ -170,7 +174,9 @@ defmodule Threadr.TenantData.GraphLayout do
     |> Map.get(index, [])
     |> Enum.reject(&(&1 == parent_index))
     |> Enum.uniq()
-    |> Enum.map(fn neighbor_index -> {neighbor_index, Map.fetch!(nodes_by_index, neighbor_index)} end)
+    |> Enum.map(fn neighbor_index ->
+      {neighbor_index, Map.fetch!(nodes_by_index, neighbor_index)}
+    end)
     |> Enum.sort_by(fn {_neighbor_index, node} ->
       {-degree(node), kind_priority(node), sort_label(node)}
     end)
@@ -190,8 +196,8 @@ defmodule Threadr.TenantData.GraphLayout do
 
   defp child_angle(parent_angle, sibling_index, sibling_count) do
     span = child_span(sibling_count)
-    start = parent_angle - (span / 2.0)
-    start + (((sibling_index + 0.5) / sibling_count) * span)
+    start = parent_angle - span / 2.0
+    start + (sibling_index + 0.5) / sibling_count * span
   end
 
   defp child_span(sibling_count) when sibling_count <= 1, do: :math.pi() / 2.8

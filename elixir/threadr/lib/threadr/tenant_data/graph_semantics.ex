@@ -20,7 +20,10 @@ defmodule Threadr.TenantData.GraphSemantics do
       neighbor_nodes = Enum.map(neighbor_indices, &Enum.at(nodes, &1)) |> Enum.reject(&is_nil/1)
 
       neighbor_kind_counts = Enum.frequencies_by(neighbor_nodes, &(&1.kind || "other"))
-      relationship_counts = Enum.frequencies_by(incident_edges, &(&1.label || &1.kind || "unknown"))
+
+      relationship_counts =
+        Enum.frequencies_by(incident_edges, &(&1.label || &1.kind || "unknown"))
+
       degree = length(incident_edges)
       branch_profile = Map.fetch!(branch_profiles, index)
       hop_counts = hop_counts(index, adjacency)
@@ -164,6 +167,7 @@ defmodule Threadr.TenantData.GraphSemantics do
       end)
 
     profiles = walk_branch_queue(queue, seeded, base, nodes, adjacency)
+
     fill_unassigned_branch_profiles(profiles, indices, anchor_index, component_id)
     |> assign_community_roles(indices, adjacency)
   end
@@ -186,7 +190,8 @@ defmodule Threadr.TenantData.GraphSemantics do
           end)
 
         {queue, assigned, profiles} =
-          Enum.reduce(neighbors, {queue, assigned, profiles}, fn neighbor_index, {queue, assigned, profiles} ->
+          Enum.reduce(neighbors, {queue, assigned, profiles}, fn neighbor_index,
+                                                                 {queue, assigned, profiles} ->
             if MapSet.member?(assigned, neighbor_index) do
               {queue, assigned, profiles}
             else
@@ -263,7 +268,9 @@ defmodule Threadr.TenantData.GraphSemantics do
     adjacency
     |> Map.get(index, [])
     |> Enum.map(&neighbor_index(&1, index))
-    |> Enum.map(fn neighbor_index -> profiles |> Map.fetch!(neighbor_index) |> Map.get(:community_id) end)
+    |> Enum.map(fn neighbor_index ->
+      profiles |> Map.fetch!(neighbor_index) |> Map.get(:community_id)
+    end)
     |> Enum.uniq()
     |> Enum.reject(&(&1 == own_community_id))
     |> Kernel.!=([])
@@ -291,7 +298,8 @@ defmodule Threadr.TenantData.GraphSemantics do
             |> Map.get(index, [])
             |> Enum.map(&neighbor_index(&1, index))
             |> Enum.uniq()
-            |> Enum.reduce({queue, visited, counts}, fn neighbor_index, {queue, visited, counts} ->
+            |> Enum.reduce({queue, visited, counts}, fn neighbor_index,
+                                                        {queue, visited, counts} ->
               if MapSet.member?(visited, neighbor_index) do
                 {queue, visited, counts}
               else

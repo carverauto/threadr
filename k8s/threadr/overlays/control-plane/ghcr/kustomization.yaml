@@ -1,0 +1,9 @@
+namespace: threadr
+
+resources:
+  - ../../../control-plane
+
+images:
+  - name: threadr-control-plane
+    newName: ghcr.io/carverauto/threadr/threadr-control-plane
+    newTag: main

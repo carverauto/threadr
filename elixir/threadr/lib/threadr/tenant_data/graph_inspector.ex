@@ -27,7 +27,8 @@ defmodule Threadr.TenantData.GraphInspector do
 
   defp describe_message(message_id, tenant_schema) do
     with {:ok, message} <- fetch_message(tenant_schema, message_id),
-         {:ok, neighborhood} <- Graph.neighborhood([message_id], tenant_schema, graph_message_limit: 8) do
+         {:ok, neighborhood} <-
+           Graph.neighborhood([message_id], tenant_schema, graph_message_limit: 8) do
       {:ok,
        %{
          type: "message",
@@ -46,7 +47,8 @@ defmodule Threadr.TenantData.GraphInspector do
   defp describe_actor(actor_id, tenant_schema) do
     with {:ok, actor} <- fetch_actor(tenant_schema, actor_id),
          message_ids <- fetch_actor_message_ids(tenant_schema, actor_id),
-         {:ok, neighborhood} <- Graph.neighborhood(message_ids, tenant_schema, graph_message_limit: 8) do
+         {:ok, neighborhood} <-
+           Graph.neighborhood(message_ids, tenant_schema, graph_message_limit: 8) do
       {:ok,
        %{
          type: "actor",
@@ -68,7 +70,8 @@ defmodule Threadr.TenantData.GraphInspector do
   defp describe_channel(channel_id, tenant_schema) do
     with {:ok, channel} <- fetch_channel(tenant_schema, channel_id),
          message_ids <- fetch_channel_message_ids(tenant_schema, channel_id),
-         {:ok, neighborhood} <- Graph.neighborhood(message_ids, tenant_schema, graph_message_limit: 8) do
+         {:ok, neighborhood} <-
+           Graph.neighborhood(message_ids, tenant_schema, graph_message_limit: 8) do
       {:ok,
        %{
          type: "channel",
@@ -284,7 +287,9 @@ defmodule Threadr.TenantData.GraphInspector do
         join: to_actor in "actors",
         on: to_actor.id == r.to_actor_id,
         prefix: ^tenant_schema,
-        where: r.from_actor_id == type(^actor_id, :binary_id) or r.to_actor_id == type(^actor_id, :binary_id),
+        where:
+          r.from_actor_id == type(^actor_id, :binary_id) or
+            r.to_actor_id == type(^actor_id, :binary_id),
         order_by: [desc: r.weight, asc: r.relationship_type],
         limit: @relationship_limit,
         select: %{

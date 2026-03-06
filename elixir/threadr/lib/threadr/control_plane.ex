@@ -6,6 +6,13 @@ defmodule Threadr.ControlPlane do
   use Ash.Domain
 
   resources do
+    resource Threadr.ControlPlane.SystemLlmConfig do
+      define :create_system_llm_config, action: :create
+      define :destroy_system_llm_config, action: :destroy
+      define :get_system_llm_config, action: :read, get_by: [:scope]
+      define :update_system_llm_config, action: :update
+    end
+
     resource Threadr.ControlPlane.Bot do
       define :create_bot, action: :create
       define :destroy_bot, action: :destroy
@@ -47,6 +54,13 @@ defmodule Threadr.ControlPlane do
       define :get_tenant_by_schema_name, action: :read, get_by: [:schema_name]
     end
 
+    resource Threadr.ControlPlane.TenantLlmConfig do
+      define :create_tenant_llm_config, action: :create
+      define :get_tenant_llm_config, action: :read, get_by: [:tenant_id]
+      define :update_tenant_llm_config, action: :update
+      define :destroy_tenant_llm_config, action: :destroy
+    end
+
     resource Threadr.ControlPlane.TenantMembership do
       define :create_tenant_membership, action: :create
       define :destroy_tenant_membership, action: :destroy
@@ -58,9 +72,12 @@ defmodule Threadr.ControlPlane do
     resource Threadr.ControlPlane.Token
 
     resource Threadr.ControlPlane.User do
+      define :change_password, action: :change_password
+      define :create_bootstrap_user, action: :create_bootstrap_user
       define :get_user_by_email, action: :read, get_by: [:email]
       define :get_user_by_id, action: :read, get_by: [:id]
       define :list_users, action: :read
+      define :list_operator_admins, action: :operator_admins
       define :register_user, action: :register_with_password
       define :sign_in_user_with_api_key, action: :sign_in_with_api_key
       define :sign_in_user_with_password, action: :sign_in_with_password

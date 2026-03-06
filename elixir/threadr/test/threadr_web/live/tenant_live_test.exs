@@ -63,6 +63,38 @@ defmodule ThreadrWeb.TenantLiveTest do
     assert migrated.tenant_migration_error == nil
   end
 
+  test "owner can create a tenant from the control plane UI", %{conn: conn} do
+    user = create_user!("tenant-create")
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, view, _html} = live(conn, ~p"/control-plane/tenants")
+
+    suffix = System.unique_integer([:positive])
+
+    view
+    |> form("form[phx-submit='create_tenant']",
+      tenant: %{
+        name: "Created Tenant #{suffix}",
+        subject_name: "created-tenant-#{suffix}"
+      }
+    )
+    |> render_submit()
+
+    assert render(view) =~ "Tenant created: created-tenant-#{suffix}"
+    assert render(view) =~ "Created Tenant #{suffix}"
+
+    {:ok, tenant} =
+      ControlPlane.get_tenant_by_subject_name("created-tenant-#{suffix}",
+        context: %{system: true}
+      )
+
+    assert tenant.schema_name == "tenant_created_tenant_#{suffix}"
+  end
+
   test "non-manager memberships do not see the migrate action", %{conn: conn} do
     owner = create_user!("tenant-owner")
     member = create_user!("tenant-member")

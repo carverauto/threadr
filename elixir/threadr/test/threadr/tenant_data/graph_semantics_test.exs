@@ -37,7 +37,9 @@ defmodule Threadr.TenantData.GraphSemanticsTest do
     assert branch_a.details.graph_profile.community_id in ["1:1", "1:2"]
     assert branch_a.details.graph_profile.distance_to_anchor == 1
 
-    assert leaf_a.details.graph_profile.community_id == branch_a.details.graph_profile.community_id
+    assert leaf_a.details.graph_profile.community_id ==
+             branch_a.details.graph_profile.community_id
+
     assert leaf_a.details.graph_profile.distance_to_anchor == 2
     assert leaf_a.details.graph_profile.community_role in ["branch", "peripheral"]
   end

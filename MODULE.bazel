@@ -1,0 +1,4 @@
+module(
+    name = "threadr",
+    version = "0.1.0",
+)
