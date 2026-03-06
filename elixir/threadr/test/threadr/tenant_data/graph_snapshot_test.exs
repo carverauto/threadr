@@ -29,10 +29,11 @@ defmodule Threadr.TenantData.GraphSnapshotTest do
     assert {:ok, %{snapshot: snapshot, payload: payload}} = GraphSnapshot.latest_snapshot(tenant)
 
     assert snapshot.schema_version == GraphSnapshot.schema_version()
-    assert snapshot.node_count == 4
-    assert snapshot.edge_count == 4
+    assert snapshot.node_count == 5
+    assert snapshot.edge_count == 5
     assert snapshot.bitmap_metadata.root_cause.count == 3
     assert snapshot.bitmap_metadata.affected.count == 1
+    assert snapshot.bitmap_metadata.healthy.count == 1
     assert is_binary(payload)
     assert byte_size(payload) > 0
   end

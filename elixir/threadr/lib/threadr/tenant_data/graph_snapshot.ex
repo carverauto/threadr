@@ -11,6 +11,7 @@ defmodule Threadr.TenantData.GraphSnapshot do
   @schema_version 1
   @actor_state 0
   @channel_state 1
+  @message_state 2
 
   def schema_version, do: @schema_version
 
@@ -39,6 +40,7 @@ defmodule Threadr.TenantData.GraphSnapshot do
   defp build_projection(prefix) do
     actors = actors(prefix)
     channels = channels(prefix)
+    messages = recent_messages(prefix)
     actor_message_counts = grouped_counts(prefix, "messages", :actor_id)
     channel_message_counts = grouped_counts(prefix, "messages", :channel_id)
     actor_relationship_weights = actor_relationship_weights(prefix)
@@ -59,17 +61,16 @@ defmodule Threadr.TenantData.GraphSnapshot do
           size: size,
           x: x,
           y: y,
-          details_json:
-            Jason.encode!(%{
-              id: actor.id,
-              type: "actor",
-              platform: actor.platform,
-              handle: actor.handle,
-              display_name: actor.display_name,
-              external_id: actor.external_id,
-              message_count: message_count,
-              last_seen_at: actor.last_seen_at
-            })
+          details: %{
+            id: actor.id,
+            type: "actor",
+            platform: actor.platform,
+            handle: actor.handle,
+            display_name: actor.display_name,
+            external_id: actor.external_id,
+            message_count: message_count,
+            last_seen_at: actor.last_seen_at
+          }
         }
       end)
 
@@ -88,27 +89,54 @@ defmodule Threadr.TenantData.GraphSnapshot do
           size: node_size(message_count),
           x: x,
           y: y,
-          details_json:
-            Jason.encode!(%{
-              id: channel.id,
-              type: "channel",
-              platform: channel.platform,
-              name: channel.name,
-              external_id: channel.external_id,
-              message_count: message_count
-            })
+          details: %{
+            id: channel.id,
+            type: "channel",
+            platform: channel.platform,
+            name: channel.name,
+            external_id: channel.external_id,
+            message_count: message_count
+          }
         }
       end)
 
-    nodes = actor_nodes ++ channel_nodes
+    message_nodes =
+      messages
+      |> Enum.sort_by(& &1.observed_at, {:desc, DateTime})
+      |> ring_layout(220.0)
+      |> Enum.map(fn {message, {x, y}} ->
+        %{
+          id: message.id,
+          label: message_label(message),
+          kind: "message",
+          state: @message_state,
+          size: node_size(1),
+          x: x,
+          y: y,
+          details: %{
+            id: message.id,
+            type: "message",
+            body: message.body,
+            external_id: message.external_id,
+            observed_at: message.observed_at,
+            actor_id: message.actor_id,
+            channel_id: message.channel_id
+          }
+        }
+      end)
+
+    nodes = actor_nodes ++ channel_nodes ++ message_nodes
     node_index = Map.new(Enum.with_index(nodes), fn {node, index} -> {node.id, index} end)
 
     relationship_edges = relationship_edges(prefix, node_index)
-    participation_edges = participation_edges(prefix, node_index)
+    authored_edges = authored_edges(messages, node_index)
+    in_channel_edges = in_channel_edges(messages, node_index)
+    edges = relationship_edges ++ authored_edges ++ in_channel_edges
+    nodes = enrich_nodes_with_graph_profiles(nodes, edges)
 
     %{
       nodes: nodes,
-      edges: relationship_edges ++ participation_edges
+      edges: edges
     }
   end
 
@@ -142,6 +170,32 @@ defmodule Threadr.TenantData.GraphSnapshot do
       )
     )
     |> Enum.map(fn channel -> %{channel | id: normalize_id(channel.id)} end)
+  end
+
+  defp recent_messages(prefix) do
+    Repo.all(
+      from(m in "messages",
+        prefix: ^prefix,
+        order_by: [desc: m.observed_at, desc: m.inserted_at],
+        limit: 120,
+        select: %{
+          id: m.id,
+          external_id: m.external_id,
+          body: m.body,
+          observed_at: m.observed_at,
+          actor_id: m.actor_id,
+          channel_id: m.channel_id
+        }
+      )
+    )
+    |> Enum.map(fn message ->
+      %{
+        message
+        | id: normalize_id(message.id),
+          actor_id: normalize_id(message.actor_id),
+          channel_id: normalize_id(message.channel_id)
+      }
+    end)
   end
 
   defp grouped_counts(prefix, table, key) do
@@ -210,28 +264,38 @@ defmodule Threadr.TenantData.GraphSnapshot do
     end)
   end
 
-  defp participation_edges(prefix, node_index) do
-    Repo.all(
-      from(m in "messages",
-        prefix: ^prefix,
-        group_by: [m.actor_id, m.channel_id],
-        select: %{
-          actor_id: m.actor_id,
-          channel_id: m.channel_id,
-          message_count: count("*")
-        }
-      )
-    )
+  defp authored_edges(messages, node_index) do
+    messages
     |> Enum.flat_map(fn edge ->
-      with {:ok, source} <- fetch_node_index(node_index, normalize_id(edge.actor_id)),
-           {:ok, target} <- fetch_node_index(node_index, normalize_id(edge.channel_id)) do
+      with {:ok, source} <- fetch_node_index(node_index, edge.actor_id),
+           {:ok, target} <- fetch_node_index(node_index, edge.id) do
         [
           %{
             source: source,
             target: target,
-            weight: edge.message_count,
-            label: "participates_in",
-            kind: "participation"
+            weight: 1,
+            label: "authored",
+            kind: "authored"
+          }
+        ]
+      else
+        _ -> []
+      end
+    end)
+  end
+
+  defp in_channel_edges(messages, node_index) do
+    messages
+    |> Enum.flat_map(fn edge ->
+      with {:ok, source} <- fetch_node_index(node_index, edge.id),
+           {:ok, target} <- fetch_node_index(node_index, edge.channel_id) do
+        [
+          %{
+            source: source,
+            target: target,
+            weight: 1,
+            label: "in_channel",
+            kind: "in_channel"
           }
         ]
       else
@@ -279,6 +343,12 @@ defmodule Threadr.TenantData.GraphSnapshot do
   defp display_label(%{name: name}) when is_binary(name) and name != "", do: name
   defp display_label(%{id: id}), do: id
 
+  defp message_label(%{body: body}) when is_binary(body) do
+    body
+    |> String.trim()
+    |> String.slice(0, 48)
+  end
+
   defp normalize_id(value) when is_binary(value) do
     case Ecto.UUID.load(value) do
       {:ok, uuid} -> uuid
@@ -287,6 +357,122 @@ defmodule Threadr.TenantData.GraphSnapshot do
   end
 
   defp normalize_id(value), do: value
+
+  defp enrich_nodes_with_graph_profiles(nodes, edges) do
+    adjacency =
+      edges
+      |> Enum.reduce(empty_adjacency(nodes), fn edge, acc ->
+        acc
+        |> Map.update!(edge.source, &[edge | &1])
+        |> Map.update!(edge.target, &[edge | &1])
+      end)
+
+    component_by_index = component_membership(nodes, adjacency)
+
+    Enum.with_index(nodes)
+    |> Enum.map(fn {node, index} ->
+      incident_edges = Map.get(adjacency, index, [])
+
+      neighbor_labels =
+        incident_edges
+        |> Enum.map(&neighbor_index(&1, index))
+        |> Enum.uniq()
+        |> Enum.map(fn neighbor_idx -> Enum.at(nodes, neighbor_idx) end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.map(&(&1.label || &1.id))
+
+      neighbor_kind_counts =
+        incident_edges
+        |> Enum.map(&neighbor_index(&1, index))
+        |> Enum.uniq()
+        |> Enum.map(fn neighbor_idx -> Enum.at(nodes, neighbor_idx) end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.frequencies_by(&(&1.kind || "other"))
+
+      relationship_counts =
+        incident_edges
+        |> Enum.frequencies_by(&(&1.label || &1.kind || "unknown"))
+
+      degree = length(incident_edges)
+      graph_profile = %{
+        degree: degree,
+        degree_band: degree_band(degree),
+        component_id: Map.get(component_by_index, index),
+        dominant_neighbor_kind: dominant_key(neighbor_kind_counts, "none"),
+        dominant_relationship: dominant_key(relationship_counts, "none"),
+        adjacent_labels: Enum.take(neighbor_labels, 5),
+        adjacent_count: length(Enum.uniq(Enum.map(incident_edges, &neighbor_index(&1, index)))),
+        relationship_counts: relationship_counts
+      }
+
+      Map.update!(node, :details, fn details ->
+        Map.put(details, :graph_profile, graph_profile)
+      end)
+    end)
+  end
+
+  defp empty_adjacency(nodes) do
+    Map.new(Enum.with_index(nodes), fn {_node, index} -> {index, []} end)
+  end
+
+  defp component_membership(nodes, adjacency) do
+    indices =
+      if nodes == [] do
+        []
+      else
+        Enum.to_list(0..(length(nodes) - 1))
+      end
+
+    {component_map, _visited, _next_component} =
+      Enum.reduce(indices, {%{}, MapSet.new(), 1}, fn index, {acc, visited, component_id} ->
+        if MapSet.member?(visited, index) do
+          {acc, visited, component_id}
+        else
+          {members, visited} = walk_component(index, adjacency, visited, [])
+
+          component_map =
+            Enum.reduce(members, acc, fn member, inner_acc ->
+              Map.put(inner_acc, member, component_id)
+            end)
+
+          {component_map, visited, component_id + 1}
+        end
+      end)
+
+    component_map
+  end
+
+  defp walk_component(index, adjacency, visited, members) do
+    if MapSet.member?(visited, index) do
+      {members, visited}
+    else
+      visited = MapSet.put(visited, index)
+      members = [index | members]
+
+      Map.get(adjacency, index, [])
+      |> Enum.map(&neighbor_index(&1, index))
+      |> Enum.uniq()
+      |> Enum.reduce({members, visited}, fn neighbor, {inner_members, inner_visited} ->
+        walk_component(neighbor, adjacency, inner_visited, inner_members)
+      end)
+    end
+  end
+
+  defp neighbor_index(edge, index) when edge.source == index, do: edge.target
+  defp neighbor_index(edge, _index), do: edge.source
+
+  defp degree_band(degree) when degree >= 8, do: "hub"
+  defp degree_band(degree) when degree >= 4, do: "mid"
+  defp degree_band(degree) when degree >= 1, do: "leaf"
+  defp degree_band(_degree), do: "isolated"
+
+  defp dominant_key(map, fallback) when map == %{}, do: fallback
+
+  defp dominant_key(map, _fallback) do
+    map
+    |> Enum.max_by(fn {_key, value} -> value end)
+    |> elem(0)
+  end
 
   defp build_bitmaps(nodes) do
     states = Enum.map(nodes, & &1.state)
@@ -315,7 +501,7 @@ defmodule Threadr.TenantData.GraphSnapshot do
   defp encode_payload(revision, projection, bitmaps) do
     nodes =
       Enum.map(projection.nodes, fn node ->
-        {node.x, node.y, node.state, node.label, node.kind, node.size, node.details_json}
+        {node.x, node.y, node.state, node.label, node.kind, node.size, Jason.encode!(node.details)}
       end)
 
     edges =

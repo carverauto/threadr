@@ -22,6 +22,9 @@ defmodule ThreadrWeb.TenantGraphLiveTest do
     assert html =~ "graph:#{tenant.subject_name}"
     assert html =~ "TenantGraphExplorer"
     assert html =~ "Arrow"
+    assert html =~ "Zoom"
+    assert html =~ "Relationships"
+    assert html =~ "Auto"
   end
 
   defp create_user!(prefix) do

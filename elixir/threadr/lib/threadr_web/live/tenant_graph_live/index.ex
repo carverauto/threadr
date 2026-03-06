@@ -7,9 +7,15 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
   @filter_labels %{
     root_cause: "Actors",
     affected: "Channels",
-    healthy: "Threads",
+    healthy: "Messages",
     unknown: "Other"
   }
+  @edge_layer_labels %{
+    relationship: "Relationships",
+    authored: "Authored",
+    in_channel: "Channel Links"
+  }
+  @zoom_modes ~w(auto global regional local)
 
   @impl true
   def mount(%{"subject_name" => subject_name}, _session, socket) do
@@ -22,6 +28,10 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
          |> assign(:page_title, "#{tenant.name} Graph")
          |> assign(:filters, %{root_cause: true, affected: true, healthy: true, unknown: true})
          |> assign(:filter_labels, @filter_labels)
+         |> assign(:edge_layers, %{relationship: true, authored: true, in_channel: true})
+         |> assign(:edge_layer_labels, @edge_layer_labels)
+         |> assign(:zoom_mode, "auto")
+         |> assign(:zoom_modes, @zoom_modes)
          |> assign(:schema_version, GraphSnapshot.schema_version())
          |> assign(:socket_token, Phoenix.Token.sign(ThreadrWeb.Endpoint, "user socket", socket.assigns.current_user.id))}
 
@@ -42,6 +52,30 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
      socket
      |> assign(:filters, filters)
      |> push_event("tenant_graph:set_filters", %{filters: stringify_keys(filters)})}
+  end
+
+  def handle_event("toggle_edge_layer", %{"key" => key}, socket) do
+    atom_key = String.to_existing_atom(key)
+    edge_layers = Map.update!(socket.assigns.edge_layers, atom_key, &(!&1))
+
+    {:noreply,
+     socket
+     |> assign(:edge_layers, edge_layers)
+     |> push_event("tenant_graph:set_edge_layers", %{layers: stringify_keys(edge_layers)})}
+  end
+
+  def handle_event("set_zoom_mode", %{"mode" => mode}, socket) do
+    zoom_mode =
+      if mode in @zoom_modes do
+        mode
+      else
+        "auto"
+      end
+
+    {:noreply,
+     socket
+     |> assign(:zoom_mode, zoom_mode)
+     |> push_event("tenant_graph:set_zoom_mode", %{mode: zoom_mode})}
   end
 
   @impl true
@@ -105,6 +139,49 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
               </div>
             </div>
 
+            <div>
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+                Zoom
+              </h2>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  :for={mode <- @zoom_modes}
+                  type="button"
+                  class={[
+                    "btn btn-sm",
+                    @zoom_mode == mode && "btn-secondary",
+                    @zoom_mode != mode && "btn-ghost"
+                  ]}
+                  phx-click="set_zoom_mode"
+                  phx-value-mode={mode}
+                >
+                  {String.capitalize(mode)}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+                Edge Layers
+              </h2>
+              <div class="mt-3 space-y-2">
+                <button
+                  :for={{key, label} <- @edge_layer_labels}
+                  type="button"
+                  class={[
+                    "btn btn-sm w-full justify-between",
+                    @edge_layers[key] && "btn-accent",
+                    !@edge_layers[key] && "btn-ghost"
+                  ]}
+                  phx-click="toggle_edge_layer"
+                  phx-value-key={Atom.to_string(key)}
+                >
+                  <span>{label}</span>
+                  <span class="badge badge-outline">{if @edge_layers[key], do: "on", else: "off"}</span>
+                </button>
+              </div>
+            </div>
+
             <div class="rounded-box bg-base-200 p-3 text-sm text-base-content/70">
               Click a node to inspect it. Filters apply locally in the client without forcing a
               new snapshot.
@@ -119,6 +196,8 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
               data-topic={"graph:#{@tenant.subject_name}"}
               data-filter-labels={Jason.encode!(@filter_labels)}
               data-initial-filters={Jason.encode!(stringify_keys(@filters))}
+              data-initial-zoom-mode={@zoom_mode}
+              data-initial-edge-layers={Jason.encode!(stringify_keys(@edge_layers))}
               class="h-[72vh] w-full"
             >
             </div>
