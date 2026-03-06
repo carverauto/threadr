@@ -21,6 +21,8 @@ This subtree is the initial Phoenix and Broadway foundation for the Threadr 2.0 
 - `mix threadr.smoke.ingest` to publish a tenant-scoped chat event and verify Broadway persistence
 - `mix threadr.smoke.bot_contract` to create a control-plane bot and emit a real `ThreadrBot` contract for operator smoke testing
 - `mix threadr.smoke.discord` to wait for a real Discord gateway `READY` event from the ingest runtime
+- `mix threadr.embeddings.generate` to generate and publish a local `processing.result` embedding event for an existing tenant message
+- `mix threadr.generation.complete` to run a prompt through the configured generation provider boundary
 - `mix threadr.smoke.operator` to run the Phoenix and Go operator smoke flow end to end
 
 ## Event Subjects
@@ -169,6 +171,8 @@ Then use the new auth and account surfaces:
 - `THREADR_IRC_SSL=true` enables TLS for IRC connections, which is typically required on `6697`
 - `THREADR_TOKEN_SIGNING_SECRET` should be set in real environments; local dev falls back to a static dev secret
 - `THREADR_CONTROL_PLANE_TOKEN` should be set for machine-to-machine controller callbacks
+- `THREADR_EMBEDDINGS_PROVIDER`, `THREADR_EMBEDDINGS_MODEL`, and related embedding env vars control the local embedding backend
+- `THREADR_GENERATION_PROVIDER`, `THREADR_GENERATION_ENDPOINT`, `THREADR_GENERATION_MODEL`, and related generation env vars control the general-purpose LLM backend
 - `Threadr.ControlPlane.BotOperationDispatcher` drains pending bot reconciliation operations asynchronously
 - dispatcher retries failed reconciliation attempts according to `max_attempts` and `retry_backoff_ms`
 - `Threadr.ControlPlane.KubernetesBotReconciler` now emits a concrete `ThreadrBot` custom resource contract that a Kubernetes controller can own
@@ -232,6 +236,21 @@ For Discord pods, set:
 The Discord runtime uses `Nostrum`, but the dependency is started on demand only
 when `THREADR_PLATFORM=discord`, so the Phoenix app no longer requires a
 Discord token just to boot.
+
+## ML Boundaries
+
+The rewrite now treats embeddings and general-purpose generation as separate
+boundaries:
+
+- `Threadr.ML.Embeddings` publishes local embedding results into the existing
+  `processing.result` JetStream path
+- `Threadr.ML.Generation` handles general prompt completion for future QA,
+  summarization, and Graph-RAG flows
+
+The default providers are disabled noops. Configure a real embedding provider,
+for example `Threadr.ML.Embeddings.BumblebeeProvider`, and a real generation
+provider, for example `Threadr.ML.Generation.ChatCompletionsProvider`, through
+runtime config before using those paths operationally.
 
 ## Multitenancy Shape
 

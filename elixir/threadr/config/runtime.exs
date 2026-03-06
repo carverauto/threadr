@@ -68,6 +68,22 @@ parse_bool = fn
   _value -> false
 end
 
+normalize_module = fn
+  nil ->
+    nil
+
+  value when is_binary(value) ->
+    value
+    |> String.trim()
+    |> case do
+      "" ->
+        nil
+
+      module_name ->
+        Module.concat([module_name])
+    end
+end
+
 config :threadr, Threadr.Messaging.Topology,
   pipeline_enabled: pipeline_enabled,
   connections: [
@@ -116,6 +132,76 @@ config :threadr,
        :token_signing_secret,
        System.get_env("THREADR_TOKEN_SIGNING_SECRET") ||
          Application.get_env(:threadr, :token_signing_secret)
+
+ml_embeddings_config =
+  Application.get_env(:threadr, Threadr.ML, [])
+  |> Keyword.get(:embeddings, [])
+  |> Keyword.merge(
+    provider:
+      normalize_module.(System.get_env("THREADR_EMBEDDINGS_PROVIDER")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:embeddings, []),
+          :provider
+        ),
+    model:
+      System.get_env("THREADR_EMBEDDINGS_MODEL") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:embeddings, []),
+          :model
+        ),
+    document_prefix:
+      System.get_env("THREADR_EMBEDDINGS_DOCUMENT_PREFIX") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:embeddings, []),
+          :document_prefix
+        ),
+    query_prefix:
+      System.get_env("THREADR_EMBEDDINGS_QUERY_PREFIX") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:embeddings, []),
+          :query_prefix
+        )
+  )
+
+ml_generation_config =
+  Application.get_env(:threadr, Threadr.ML, [])
+  |> Keyword.get(:generation, [])
+  |> Keyword.merge(
+    provider:
+      normalize_module.(System.get_env("THREADR_GENERATION_PROVIDER")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :provider
+        ),
+    endpoint:
+      System.get_env("THREADR_GENERATION_ENDPOINT") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :endpoint
+        ),
+    model:
+      System.get_env("THREADR_GENERATION_MODEL") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :model
+        ),
+    api_key:
+      System.get_env("THREADR_GENERATION_API_KEY") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :api_key
+        ),
+    system_prompt:
+      System.get_env("THREADR_GENERATION_SYSTEM_PROMPT") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
+          :system_prompt
+        )
+  )
+
+config :threadr, Threadr.ML,
+  embeddings: ml_embeddings_config,
+  generation: ml_generation_config
 
 if config_env() == :prod do
   database_url =

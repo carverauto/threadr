@@ -58,6 +58,21 @@ config :threadr, Threadr.Ingest,
     allow_bot_messages: false
   }
 
+config :threadr, Threadr.ML,
+  embeddings: [
+    provider: Threadr.ML.Embeddings.BumblebeeProvider,
+    model: "intfloat/e5-small-v2",
+    document_prefix: "passage: ",
+    query_prefix: "query: "
+  ],
+  generation: [
+    provider: Threadr.ML.Generation.NoopProvider,
+    endpoint: "http://localhost:11434/v1/chat/completions",
+    model: "llama3.1:8b-instruct",
+    api_key: nil,
+    system_prompt: nil
+  ]
+
 config :threadr, Threadr.Messaging.Topology,
   connection_name: :threadr_gnat,
   connection_retry_backoff: 2_000,
