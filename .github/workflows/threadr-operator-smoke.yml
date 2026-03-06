@@ -1,0 +1,90 @@
+name: Threadr Operator Smoke
+
+on:
+  push:
+    paths:
+      - ".github/workflows/threadr-operator-smoke.yml"
+      - "elixir/threadr/**"
+      - "k8s/operators/ircbot-operator/**"
+  pull_request:
+    paths:
+      - ".github/workflows/threadr-operator-smoke.yml"
+      - "elixir/threadr/**"
+      - "k8s/operators/ircbot-operator/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      THREADR_DB_HOST: localhost
+      THREADR_DB_PORT: "55432"
+      THREADR_DB_USER: postgres
+      THREADR_DB_PASSWORD: postgres
+      THREADR_DB_NAME: threadr_dev
+      THREADR_NATS_HOST: localhost
+      THREADR_NATS_PORT: "54222"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.17.3"
+          otp-version: "27.1.2"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: |
+            k8s/operators/ircbot-operator/go.sum
+
+      - name: Start local CNPG and NATS
+        working-directory: elixir/threadr
+        run: docker compose up -d
+
+      - name: Wait for infrastructure health
+        run: |
+          for container in threadr-cnpg threadr-nats; do
+            until [ "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = "healthy" ]; do
+              echo "waiting for $container to become healthy"
+              sleep 5
+            done
+          done
+
+      - name: Install Elixir dependencies
+        working-directory: elixir/threadr
+        run: mix deps.get
+
+      - name: Prepare database
+        working-directory: elixir/threadr
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+
+      - name: Prepare operator envtest assets
+        working-directory: k8s/operators/ircbot-operator
+        run: |
+          make envtest
+          ./bin/setup-envtest use 1.28.3 --bin-dir ./bin/k8s -p path >/dev/null
+
+      - name: Run Phoenix/operator smoke flow
+        working-directory: elixir/threadr
+        run: mix threadr.smoke.operator --tenant-subject threadr-ci-smoke --bot-name irc-main
+
+      - name: Dump infrastructure logs on failure
+        if: failure()
+        working-directory: elixir/threadr
+        run: docker compose logs --no-color
+
+      - name: Stop local infrastructure
+        if: always()
+        working-directory: elixir/threadr
+        run: docker compose down -v
