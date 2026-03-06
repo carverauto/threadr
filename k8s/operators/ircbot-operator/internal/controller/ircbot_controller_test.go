@@ -51,7 +51,15 @@ var _ = Describe("IRCBot Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: cachev1alpha1.IRCBotSpec{
+						Server:       "irc.example.com",
+						Port:         6697,
+						Channels:     []string{"#threadr"},
+						Nick:         "threadrbot",
+						HistoryLimit: 10,
+						ImageVersion: "latest",
+						InstanceID:   "test-instance",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -61,6 +69,10 @@ var _ = Describe("IRCBot Controller", func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &cachev1alpha1.IRCBot{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			if errors.IsNotFound(err) {
+				return
+			}
+
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleanup the specific resource instance IRCBot")

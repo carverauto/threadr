@@ -5,6 +5,21 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
   - deployments
@@ -20,6 +35,7 @@ rules:
   - cache.threadr.ai
   resources:
   - ircbots
+  - threadrbots
   verbs:
   - create
   - delete
@@ -32,28 +48,15 @@ rules:
   - cache.threadr.ai
   resources:
   - ircbots/finalizers
+  - threadrbots/finalizers
   verbs:
   - update
 - apiGroups:
   - cache.threadr.ai
   resources:
   - ircbots/status
+  - threadrbots/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
-  - watch

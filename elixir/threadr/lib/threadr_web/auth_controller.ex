@@ -1,0 +1,35 @@
+defmodule ThreadrWeb.AuthController do
+  use ThreadrWeb, :controller
+  use AshAuthentication.Phoenix.Controller
+
+  def success(conn, activity, user, _token) do
+    return_to = get_session(conn, :return_to) || ~p"/control-plane/tenants"
+
+    message =
+      case activity do
+        {:password, :reset} -> "Your password has been reset"
+        {:password, :register} -> "Your account has been created"
+        _ -> "You are now signed in"
+      end
+
+    conn
+    |> delete_session(:return_to)
+    |> store_in_session(user)
+    |> assign(:current_user, user)
+    |> put_flash(:info, message)
+    |> redirect(to: return_to)
+  end
+
+  def failure(conn, _activity, _reason) do
+    conn
+    |> put_flash(:error, "Incorrect email or password")
+    |> redirect(to: ~p"/sign-in")
+  end
+
+  def sign_out(conn, _params) do
+    conn
+    |> clear_session(:threadr)
+    |> put_flash(:info, "You are now signed out")
+    |> redirect(to: ~p"/")
+  end
+end

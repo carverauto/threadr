@@ -1,0 +1,32 @@
+apiVersion: cache.threadr.ai/v1alpha1
+kind: ThreadrBot
+metadata:
+  labels:
+    app.kubernetes.io/name: threadrbot
+    app.kubernetes.io/instance: threadrbot-sample
+    app.kubernetes.io/part-of: ircbot-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: ircbot-operator
+  name: threadrbot-sample
+  namespace: threadr
+spec:
+  controlPlane:
+    tenantId: 00000000-0000-0000-0000-000000000001
+    tenantSubject: acme-threat-intel
+    botId: 00000000-0000-0000-0000-000000000002
+    generation: 1
+  desiredState: running
+  platform: irc
+  channels:
+  - "#threadr"
+  workload:
+    deploymentName: threadr-acme-threat-intel-irc-main
+    image: ghcr.io/carverauto/threadr-bot:latest
+    replicas: 1
+    env:
+    - name: THREADR_BOT_ID
+      value: 00000000-0000-0000-0000-000000000002
+    - name: THREADR_TENANT_ID
+      value: 00000000-0000-0000-0000-000000000001
+    - name: THREADR_TENANT_SUBJECT
+      value: acme-threat-intel

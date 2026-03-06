@@ -1,0 +1,39 @@
+services:
+  cnpg:
+    image: ghcr.io/carverauto/serviceradar-cnpg:16.6.0-sr5
+    container_name: threadr-cnpg
+    platform: linux/amd64
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: threadr_dev
+    ports:
+      - "55432:5432"
+    volumes:
+      - threadr-cnpg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d threadr_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: threadr-nats
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "54222:4222"
+      - "56222:6222"
+      - "58222:8222"
+    volumes:
+      - threadr-nats-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8222/healthz >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  threadr-cnpg-data:
+  threadr-nats-data:
