@@ -39,7 +39,7 @@ export const threadrGraphLayoutClusterMethods = {
     graph.nodes.forEach((node, index) => {
       const profile = this.graphProfileForNode(node)
       const key =
-        `neighborhood:${node.kind}:${node.state}:${profile.component_id || "none"}:${profile.degree_band}:${profile.dominant_neighbor_kind}:${profile.dominant_relationship}`
+        `neighborhood:${node.kind}:${node.state}:${profile.component_id || "none"}:${profile.community_id || "none"}:${profile.community_role || "unknown"}:${profile.degree_band}:${profile.dominant_neighbor_kind}:${profile.dominant_relationship}`
       const existing = clusters.get(key) || this.emptyCluster(key)
       existing.profile = profile
       this.mergeNodeIntoCluster(existing, node)
@@ -135,6 +135,10 @@ export const threadrGraphLayoutClusterMethods = {
         dominant_relationship: cluster.profile?.dominant_relationship || null,
         degree_band: cluster.profile?.degree_band || null,
         component_id: cluster.profile?.component_id || null,
+        component_size: cluster.profile?.component_size || null,
+        community_id: cluster.profile?.community_id || null,
+        community_role: cluster.profile?.community_role || null,
+        distance_to_anchor: cluster.profile?.distance_to_anchor ?? null,
       },
     }
   },

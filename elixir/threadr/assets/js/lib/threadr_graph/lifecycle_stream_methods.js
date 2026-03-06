@@ -5,6 +5,8 @@ export const threadrGraphLifecycleStreamMethods = {
     const snapshot = this.parseSnapshotMessage(message)
     const graph = this.decodeArrowGraph(snapshot.payload)
     this.state.graph = graph
+    this.syncSelectionState(graph)
+    if (this.state.pinnedNodeId) this.centerOnFocusContext()
     this.updateSummary(
       `revision=${snapshot.revision} nodes=${graph.nodes.length} edges=${graph.edges.length} renderer=${this.rendererMode()}`,
     )

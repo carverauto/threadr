@@ -6,6 +6,8 @@ defmodule Threadr.TenantData.GraphSnapshot do
   import Ecto.Query
 
   alias Threadr.Repo
+  alias Threadr.TenantData.GraphLayout
+  alias Threadr.TenantData.GraphSemantics
   alias Threadr.TenantData.GraphSnapshot.Native
 
   @schema_version 1
@@ -48,19 +50,20 @@ defmodule Threadr.TenantData.GraphSnapshot do
     actor_nodes =
       actors
       |> Enum.sort_by(&display_label(&1))
-      |> ring_layout(320.0)
-      |> Enum.map(fn {actor, {x, y}} ->
+      |> Enum.with_index()
+      |> Enum.map(fn {actor, index} ->
         message_count = Map.get(actor_message_counts, actor.id, 0)
         size = node_size(message_count + Map.get(actor_relationship_weights, actor.id, 0))
 
         %{
+          index: index,
           id: actor.id,
           label: display_label(actor),
           kind: "actor",
           state: @actor_state,
           size: size,
-          x: x,
-          y: y,
+          x: 0.0,
+          y: 0.0,
           details: %{
             id: actor.id,
             type: "actor",
@@ -77,18 +80,19 @@ defmodule Threadr.TenantData.GraphSnapshot do
     channel_nodes =
       channels
       |> Enum.sort_by(& &1.name)
-      |> ring_layout(140.0)
-      |> Enum.map(fn {channel, {x, y}} ->
+      |> Enum.with_index(length(actor_nodes))
+      |> Enum.map(fn {channel, index} ->
         message_count = Map.get(channel_message_counts, channel.id, 0)
 
         %{
+          index: index,
           id: channel.id,
           label: channel.name,
           kind: "channel",
           state: @channel_state,
           size: node_size(message_count),
-          x: x,
-          y: y,
+          x: 0.0,
+          y: 0.0,
           details: %{
             id: channel.id,
             type: "channel",
@@ -103,16 +107,17 @@ defmodule Threadr.TenantData.GraphSnapshot do
     message_nodes =
       messages
       |> Enum.sort_by(& &1.observed_at, {:desc, DateTime})
-      |> ring_layout(220.0)
-      |> Enum.map(fn {message, {x, y}} ->
+      |> Enum.with_index(length(actor_nodes) + length(channel_nodes))
+      |> Enum.map(fn {message, index} ->
         %{
+          index: index,
           id: message.id,
           label: message_label(message),
           kind: "message",
           state: @message_state,
           size: node_size(1),
-          x: x,
-          y: y,
+          x: 0.0,
+          y: 0.0,
           details: %{
             id: message.id,
             type: "message",
@@ -132,7 +137,8 @@ defmodule Threadr.TenantData.GraphSnapshot do
     authored_edges = authored_edges(messages, node_index)
     in_channel_edges = in_channel_edges(messages, node_index)
     edges = relationship_edges ++ authored_edges ++ in_channel_edges
-    nodes = enrich_nodes_with_graph_profiles(nodes, edges)
+    nodes = GraphSemantics.enrich_nodes(nodes, edges)
+    nodes = GraphLayout.layout(nodes, edges)
 
     %{
       nodes: nodes,
@@ -311,22 +317,6 @@ defmodule Threadr.TenantData.GraphSnapshot do
     end
   end
 
-  defp ring_layout(items, radius) do
-    count = length(items)
-
-    Enum.with_index(items)
-    |> Enum.map(fn {item, index} ->
-      angle =
-        if count <= 1 do
-          0.0
-        else
-          2.0 * :math.pi() * index / count
-        end
-
-      {item, {radius * :math.cos(angle), radius * :math.sin(angle)}}
-    end)
-  end
-
   defp node_size(weight) do
     weight
     |> Kernel.+(1)
@@ -357,122 +347,6 @@ defmodule Threadr.TenantData.GraphSnapshot do
   end
 
   defp normalize_id(value), do: value
-
-  defp enrich_nodes_with_graph_profiles(nodes, edges) do
-    adjacency =
-      edges
-      |> Enum.reduce(empty_adjacency(nodes), fn edge, acc ->
-        acc
-        |> Map.update!(edge.source, &[edge | &1])
-        |> Map.update!(edge.target, &[edge | &1])
-      end)
-
-    component_by_index = component_membership(nodes, adjacency)
-
-    Enum.with_index(nodes)
-    |> Enum.map(fn {node, index} ->
-      incident_edges = Map.get(adjacency, index, [])
-
-      neighbor_labels =
-        incident_edges
-        |> Enum.map(&neighbor_index(&1, index))
-        |> Enum.uniq()
-        |> Enum.map(fn neighbor_idx -> Enum.at(nodes, neighbor_idx) end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.map(&(&1.label || &1.id))
-
-      neighbor_kind_counts =
-        incident_edges
-        |> Enum.map(&neighbor_index(&1, index))
-        |> Enum.uniq()
-        |> Enum.map(fn neighbor_idx -> Enum.at(nodes, neighbor_idx) end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.frequencies_by(&(&1.kind || "other"))
-
-      relationship_counts =
-        incident_edges
-        |> Enum.frequencies_by(&(&1.label || &1.kind || "unknown"))
-
-      degree = length(incident_edges)
-      graph_profile = %{
-        degree: degree,
-        degree_band: degree_band(degree),
-        component_id: Map.get(component_by_index, index),
-        dominant_neighbor_kind: dominant_key(neighbor_kind_counts, "none"),
-        dominant_relationship: dominant_key(relationship_counts, "none"),
-        adjacent_labels: Enum.take(neighbor_labels, 5),
-        adjacent_count: length(Enum.uniq(Enum.map(incident_edges, &neighbor_index(&1, index)))),
-        relationship_counts: relationship_counts
-      }
-
-      Map.update!(node, :details, fn details ->
-        Map.put(details, :graph_profile, graph_profile)
-      end)
-    end)
-  end
-
-  defp empty_adjacency(nodes) do
-    Map.new(Enum.with_index(nodes), fn {_node, index} -> {index, []} end)
-  end
-
-  defp component_membership(nodes, adjacency) do
-    indices =
-      if nodes == [] do
-        []
-      else
-        Enum.to_list(0..(length(nodes) - 1))
-      end
-
-    {component_map, _visited, _next_component} =
-      Enum.reduce(indices, {%{}, MapSet.new(), 1}, fn index, {acc, visited, component_id} ->
-        if MapSet.member?(visited, index) do
-          {acc, visited, component_id}
-        else
-          {members, visited} = walk_component(index, adjacency, visited, [])
-
-          component_map =
-            Enum.reduce(members, acc, fn member, inner_acc ->
-              Map.put(inner_acc, member, component_id)
-            end)
-
-          {component_map, visited, component_id + 1}
-        end
-      end)
-
-    component_map
-  end
-
-  defp walk_component(index, adjacency, visited, members) do
-    if MapSet.member?(visited, index) do
-      {members, visited}
-    else
-      visited = MapSet.put(visited, index)
-      members = [index | members]
-
-      Map.get(adjacency, index, [])
-      |> Enum.map(&neighbor_index(&1, index))
-      |> Enum.uniq()
-      |> Enum.reduce({members, visited}, fn neighbor, {inner_members, inner_visited} ->
-        walk_component(neighbor, adjacency, inner_visited, inner_members)
-      end)
-    end
-  end
-
-  defp neighbor_index(edge, index) when edge.source == index, do: edge.target
-  defp neighbor_index(edge, _index), do: edge.source
-
-  defp degree_band(degree) when degree >= 8, do: "hub"
-  defp degree_band(degree) when degree >= 4, do: "mid"
-  defp degree_band(degree) when degree >= 1, do: "leaf"
-  defp degree_band(_degree), do: "isolated"
-
-  defp dominant_key(map, fallback) when map == %{}, do: fallback
-
-  defp dominant_key(map, _fallback) do
-    map
-    |> Enum.max_by(fn {_key, value} -> value end)
-    |> elem(0)
-  end
 
   defp build_bitmaps(nodes) do
     states = Enum.map(nodes, & &1.state)

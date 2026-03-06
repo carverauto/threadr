@@ -2,6 +2,7 @@ defmodule ThreadrWeb.TenantGraphChannel do
   use ThreadrWeb, :channel
 
   alias Threadr.ControlPlane.Service
+  alias Threadr.TenantData.GraphInspector
   alias Threadr.TenantData.GraphSnapshot
 
   @tick_ms 5_000
@@ -39,6 +40,23 @@ defmodule ThreadrWeb.TenantGraphChannel do
 
     Process.send_after(self(), :tick, @tick_ms)
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_in("inspect_node", %{"id" => node_id, "kind" => node_kind}, socket) do
+    case GraphInspector.describe_node(node_id, node_kind, socket.assigns.tenant.schema_name) do
+      {:ok, detail} ->
+        {:reply, {:ok, %{detail: detail}}, socket}
+
+      {:error, :not_found} ->
+        {:reply, {:error, %{reason: "not_found"}}, socket}
+
+      {:error, {:unsupported_node_kind, _kind}} ->
+        {:reply, {:error, %{reason: "unsupported_node_kind"}}, socket}
+
+      {:error, _reason} ->
+        {:reply, {:error, %{reason: "detail_unavailable"}}, socket}
+    end
   end
 
   defp encode_snapshot_frame(snapshot, payload) do

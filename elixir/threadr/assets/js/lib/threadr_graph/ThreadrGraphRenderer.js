@@ -17,11 +17,20 @@ export default class ThreadrGraphRenderer {
       channel: null,
       socket: null,
       summaryEl: null,
+      focusEl: null,
+      focusStatusEl: null,
+      focusButtonEl: null,
       detailsEl: null,
       wasmEngine: null,
       wasmReady: false,
       selectedNodeIndex: null,
       selectedNode: null,
+      selectedNodeDetail: null,
+      pinnedNodeId: null,
+      pinnedNodeKind: null,
+      pinnedNodeLabel: null,
+      pinnedNodeDetail: null,
+      detailCache: {},
       zoomTier: "local",
       zoomMode: rootEl.dataset.initialZoomMode || "auto",
       edgeLayers: JSON.parse(rootEl.dataset.initialEdgeLayers || "{}"),
@@ -59,13 +68,24 @@ export default class ThreadrGraphRenderer {
     this.state.summaryEl = document.createElement("div")
     this.state.summaryEl.className =
       "absolute left-4 top-4 rounded-box bg-base-100/85 px-3 py-2 text-xs shadow-sm backdrop-blur"
+    this.state.focusEl = document.createElement("div")
+    this.state.focusEl.className =
+      "absolute right-4 top-4 rounded-box bg-base-100/88 px-3 py-2 text-xs shadow-sm backdrop-blur"
+    this.state.focusStatusEl = document.createElement("div")
+    this.state.focusStatusEl.className = "mb-2 font-medium"
+    this.state.focusButtonEl = document.createElement("button")
+    this.state.focusButtonEl.type = "button"
+    this.state.focusButtonEl.className = "btn btn-xs btn-accent"
+    this.state.focusButtonEl.addEventListener("click", () => this.togglePinFocus())
+    this.state.focusEl.replaceChildren(this.state.focusStatusEl, this.state.focusButtonEl)
     this.state.detailsEl = document.createElement("div")
     this.state.detailsEl.className =
       "absolute bottom-4 right-4 max-w-sm rounded-box bg-base-100/90 p-3 text-xs shadow-sm backdrop-blur"
 
-    this.rootEl.replaceChildren(this.canvasEl, this.state.summaryEl, this.state.detailsEl)
+    this.rootEl.replaceChildren(this.canvasEl, this.state.summaryEl, this.state.focusEl, this.state.detailsEl)
     this.updateSummary("Connecting graph stream...")
     this.updateSelectionDetails(null)
+    this.updateFocusControls()
   }
 
   initWasm() {
