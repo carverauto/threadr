@@ -9,4 +9,9 @@ defmodule Threadr.ML.Embeddings.NoopProvider do
   def embed_document(_text, _opts) do
     {:error, :embedding_provider_not_configured}
   end
+
+  @impl true
+  def embed_query(_text, _opts) do
+    {:error, :embedding_provider_not_configured}
+  end
 end

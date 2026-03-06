@@ -9,32 +9,12 @@ defmodule Threadr.ML.Embeddings.BumblebeeProvider do
 
   @impl true
   def embed_document(text, opts) when is_binary(text) do
-    text = String.trim(text)
+    embed(text, :document, opts)
+  end
 
-    if text == "" do
-      {:error, :blank_text}
-    else
-      config = config(opts)
-      serving = fetch_serving(config)
-      input = config[:document_prefix] <> text
-
-      case Nx.Serving.run(serving, input) do
-        %{embedding: embedding} ->
-          {:ok,
-           %{
-             embedding: Nx.to_flat_list(embedding),
-             model: config[:model],
-             provider: "bumblebee",
-             metadata: %{"document_prefix" => config[:document_prefix]}
-           }}
-
-        result ->
-          {:error, {:unexpected_embedding_result, result}}
-      end
-    end
-  rescue
-    error ->
-      {:error, {:embedding_failed, Exception.message(error)}}
+  @impl true
+  def embed_query(text, opts) when is_binary(text) do
+    embed(text, :query, opts)
   end
 
   defp fetch_serving(config) do
@@ -52,8 +32,7 @@ defmodule Threadr.ML.Embeddings.BumblebeeProvider do
   end
 
   defp load_serving!(config) do
-    {:ok, model_info} =
-      Bumblebee.load_model({:hf, config[:model]}, architecture: :for_embedding)
+    {:ok, model_info} = Bumblebee.load_model({:hf, config[:model]})
 
     {:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, config[:model]})
 
@@ -69,4 +48,39 @@ defmodule Threadr.ML.Embeddings.BumblebeeProvider do
     |> Keyword.fetch!(:embeddings)
     |> Keyword.merge(opts)
   end
+
+  defp embed(text, input_type, opts) do
+    text = String.trim(text)
+
+    if text == "" do
+      {:error, :blank_text}
+    else
+      config = config(opts)
+      prefix = input_prefix(config, input_type)
+      serving = fetch_serving(config)
+
+      case Nx.Serving.run(serving, prefix <> text) do
+        %{embedding: embedding} ->
+          {:ok,
+           %{
+             embedding: Nx.to_flat_list(embedding),
+             model: config[:model],
+             provider: "bumblebee",
+             metadata: %{
+               "input_type" => Atom.to_string(input_type),
+               "prefix" => prefix
+             }
+           }}
+
+        result ->
+          {:error, {:unexpected_embedding_result, result}}
+      end
+    end
+  rescue
+    error ->
+      {:error, {:embedding_failed, Exception.message(error)}}
+  end
+
+  defp input_prefix(config, :document), do: config[:document_prefix] || ""
+  defp input_prefix(config, :query), do: config[:query_prefix] || ""
 end

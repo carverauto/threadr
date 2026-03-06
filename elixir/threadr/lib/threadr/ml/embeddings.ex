@@ -9,6 +9,11 @@ defmodule Threadr.ML.Embeddings do
   alias Threadr.Events
   alias Threadr.TenantData.Message
 
+  def embed_query(text, opts \\ []) when is_binary(text) do
+    provider = Keyword.get(opts, :provider, provider())
+    provider.embed_query(text, provider_opts(opts))
+  end
+
   def generate_for_message(%Message{} = message, tenant_subject_name, opts \\ []) do
     provider = Keyword.get(opts, :provider, provider())
 

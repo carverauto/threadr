@@ -32,6 +32,21 @@ defmodule Threadr.ML.EmbeddingsTest do
     assert envelope.data.metrics["text_length"] == 18
   end
 
+  test "embeds query text through the provider boundary" do
+    assert {:ok, result} =
+             Embeddings.embed_query(
+               "who mentioned bob?",
+               provider: Threadr.TestEmbeddingProvider,
+               model: "test-query-model"
+             )
+
+    assert result.embedding == [0.4, 0.5, 0.6]
+    assert result.model == "test-query-model"
+    assert result.provider == "test"
+    assert result.metadata["input_type"] == "query"
+    assert result.metadata["text_length"] == 18
+  end
+
   test "returns a provider error when local embeddings are disabled" do
     message = %Message{id: Ecto.UUID.generate(), external_id: "msg-1", body: "hello"}
 
@@ -39,6 +54,14 @@ defmodule Threadr.ML.EmbeddingsTest do
              Embeddings.generate_for_message(
                message,
                "acme-threat-intel",
+               provider: Threadr.ML.Embeddings.NoopProvider
+             )
+  end
+
+  test "returns a provider error when query embeddings are disabled" do
+    assert {:error, :embedding_provider_not_configured} =
+             Embeddings.embed_query(
+               "hello",
                provider: Threadr.ML.Embeddings.NoopProvider
              )
   end

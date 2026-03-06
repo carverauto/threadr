@@ -11,6 +11,17 @@ defmodule Threadr.TestEmbeddingProvider do
        metadata: %{"text_length" => String.length(text)}
      }}
   end
+
+  @impl true
+  def embed_query(text, opts) do
+    {:ok,
+     %{
+       embedding: [0.4, 0.5, 0.6],
+       model: Keyword.get(opts, :model, "test-embedding-model"),
+       provider: "test",
+       metadata: %{"text_length" => String.length(text), "input_type" => "query"}
+     }}
+  end
 end
 
 defmodule Threadr.TestGenerationProvider do

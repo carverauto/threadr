@@ -242,15 +242,16 @@ Discord token just to boot.
 The rewrite now treats embeddings and general-purpose generation as separate
 boundaries:
 
-- `Threadr.ML.Embeddings` publishes local embedding results into the existing
-  `processing.result` JetStream path
+- `Threadr.ML.Embeddings` supports both document and query embeddings, and
+  publishes message embeddings into the existing `processing.result` JetStream
+  path
 - `Threadr.ML.Generation` handles general prompt completion for future QA,
   summarization, and Graph-RAG flows
 
-The default providers are disabled noops. Configure a real embedding provider,
-for example `Threadr.ML.Embeddings.BumblebeeProvider`, and a real generation
-provider, for example `Threadr.ML.Generation.ChatCompletionsProvider`, through
-runtime config before using those paths operationally.
+Embeddings default to `Threadr.ML.Embeddings.BumblebeeProvider` with
+`intfloat/e5-small-v2`. Generation still defaults to the noop provider until a
+real backend is configured, for example
+`Threadr.ML.Generation.ChatCompletionsProvider`.
 
 ## Multitenancy Shape
 
