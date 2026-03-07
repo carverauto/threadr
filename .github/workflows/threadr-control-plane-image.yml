@@ -24,6 +24,7 @@ permissions:
 jobs:
   build-and-push:
     runs-on: arc-runner-set
+    environment: main
     timeout-minutes: 45
     env:
       LANG: C.UTF-8
