@@ -181,19 +181,15 @@ is intentionally treated as a Linux CI path, because `bazel run` executes the
 generated push script on the host and the current `rules_oci` helper resolution
 is not portable for local macOS push execution.
 
-The canonical push path is the GitHub workflow on Linux. Only `main` publishes
-and updates the production digest pin:
+The canonical push path is the GitHub ARC runner set with BuildBuddy RBE. Only
+`main` publishes and updates the production digest pin:
 
 ```bash
 bazel run -c opt //docker/images:push_all --config=remote
 ```
 
-If `BUILDBUDDY_API_KEY` is configured in GitHub Actions, the workflow uses
-BuildBuddy RBE. If it is not configured, the same workflow falls back to local
-execution on the Linux GitHub runner, installs a current Rust toolchain,
-exposes wrapper scripts at `/opt/cargo/bin` that pin the runner `CARGO_HOME`
-and `RUSTUP_HOME` for the Bazel release rule, and builds only the control-plane
-release and image targets rather than `//...`.
+The image workflow requires `BUILDBUDDY_API_KEY` in GitHub Actions and runs on
+`arc-runner-set`. It always uses BuildBuddy RBE for build, test, and publish.
 
 On `main`, the image publish workflow also resolves the pushed GHCR digest and
 commits it back into

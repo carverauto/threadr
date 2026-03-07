@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
     timeout-minutes: 45
     env:
       LANG: C.UTF-8
@@ -41,15 +41,15 @@ jobs:
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
         run: |
-          if [ -n "${BUILDBUDDY_API_KEY}" ]; then
-            chmod +x tools/buildbuddy/write_remote_rc.sh
-            tools/buildbuddy/write_remote_rc.sh
-            echo "BAZEL_BUILD_CONFIG=remote" >> "${GITHUB_ENV}"
-            echo "Using BuildBuddy remote execution"
-          else
-            echo "BAZEL_BUILD_CONFIG=no_remote" >> "${GITHUB_ENV}"
-            echo "BUILDBUDDY_API_KEY is not configured; using local GitHub runner execution"
+          if [ -z "${BUILDBUDDY_API_KEY}" ]; then
+            echo "BUILDBUDDY_API_KEY must be configured for Threadr Bazel CI" >&2
+            exit 1
           fi
+
+          chmod +x tools/buildbuddy/write_remote_rc.sh
+          tools/buildbuddy/write_remote_rc.sh
+          echo "BAZEL_BUILD_CONFIG=remote" >> "${GITHUB_ENV}"
+          echo "Using BuildBuddy remote execution"
 
       - name: Configure Docker auth
         env:
@@ -58,30 +58,6 @@ jobs:
         run: |
           chmod +x buildbuddy_setup_docker_auth.sh
           ./buildbuddy_setup_docker_auth.sh
-
-      - name: Set up Rust toolchain
-        if: env.BAZEL_BUILD_CONFIG == 'no_remote'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Expose Rust toolchain at /opt/cargo/bin
-        if: env.BAZEL_BUILD_CONFIG == 'no_remote'
-        run: |
-          REAL_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
-          REAL_RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
-          sudo mkdir -p /opt/cargo/bin
-          sudo tee /opt/cargo/bin/cargo >/dev/null <<EOF
-          #!/usr/bin/env bash
-          export CARGO_HOME="${REAL_CARGO_HOME}"
-          export RUSTUP_HOME="${REAL_RUSTUP_HOME}"
-          exec "${REAL_CARGO_HOME}/bin/cargo" "\$@"
-          EOF
-          sudo tee /opt/cargo/bin/rustc >/dev/null <<EOF
-          #!/usr/bin/env bash
-          export CARGO_HOME="${REAL_CARGO_HOME}"
-          export RUSTUP_HOME="${REAL_RUSTUP_HOME}"
-          exec "${REAL_CARGO_HOME}/bin/rustc" "\$@"
-          EOF
-          sudo chmod +x /opt/cargo/bin/cargo /opt/cargo/bin/rustc
 
       - name: Build all Bazel targets
         run: |
@@ -103,8 +79,6 @@ jobs:
       - name: Build and push image via Bazel
         if: github.ref == 'refs/heads/main'
         run: |
-          # Keep push on Linux CI. `bazel run` executes the generated push script
-          # on the host, so local macOS is not the canonical push environment.
           bazel run -c opt //docker/images:push_all --config="${BAZEL_BUILD_CONFIG}"
 
       - name: Update production digest pin
