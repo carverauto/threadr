@@ -4,6 +4,17 @@ module(
     repo_name = "threadr",
 )
 
+archive_override(
+    module_name = "apple_support",
+    integrity = "sha256-xLsrc2fEhDgjAK7nW+WYuS+EeJb7MbvSLzojRq32aoA=",
+    patches = ["//third_party/patches/apple_support:module_dot_bazel_version.patch"],
+    patch_strip = 1,
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/apple_support/releases/download/1.15.1/apple_support.1.15.1.tar.gz",
+        "https://github.com/bazelbuild/apple_support/releases/download/1.15.1/apple_support.1.15.1.tar.gz",
+    ],
+)
+
 bazel_dep(name = "rules_oci", version = "2.2.6")
 bazel_dep(name = "rules_erlang", version = "3.16.0")
 bazel_dep(name = "rules_elixir", version = "1.1.0")
