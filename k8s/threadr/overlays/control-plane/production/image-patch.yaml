@@ -7,10 +7,10 @@ spec:
     spec:
       initContainers:
         - name: migrate
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:8a8103aaed94ebafe1ee4dccb0c7aaa2d0caa644adcd1ab2a6bb27972b150cb7
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:d7d6e7eaefd9165b4ea9d4264419c36ff97aa4f0bdccb151daa5f4413db4d7f8
       containers:
         - name: threadr-control-plane
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:8a8103aaed94ebafe1ee4dccb0c7aaa2d0caa644adcd1ab2a6bb27972b150cb7
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:d7d6e7eaefd9165b4ea9d4264419c36ff97aa4f0bdccb151daa5f4413db4d7f8
 ---
 apiVersion: batch/v1
 kind: Job
@@ -21,4 +21,4 @@ spec:
     spec:
       containers:
         - name: bootstrap-operator-admin
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:8a8103aaed94ebafe1ee4dccb0c7aaa2d0caa644adcd1ab2a6bb27972b150cb7
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:d7d6e7eaefd9165b4ea9d4264419c36ff97aa4f0bdccb151daa5f4413db4d7f8
