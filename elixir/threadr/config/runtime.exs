@@ -503,8 +503,7 @@ if config_env() == :prod do
 
   config :threadr, Threadr.Repo,
     url: database_url,
-    ssl: db_ssl_enabled,
-    ssl_opts: db_ssl_opts,
+    ssl: if(db_ssl_enabled, do: db_ssl_opts, else: false),
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,

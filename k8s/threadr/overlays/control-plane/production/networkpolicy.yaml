@@ -41,28 +41,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: demo
-      ports:
-        - protocol: TCP
-          port: 5432
-    - to:
-        - namespaceSelector:
-            matchLabels:
               kubernetes.io/metadata.name: threadr
-      ports:
-        - protocol: TCP
-          port: 4222
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: demo
-      ports:
-        - protocol: TCP
-          port: 4222
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: nats
       ports:
         - protocol: TCP
           port: 4222
