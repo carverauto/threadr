@@ -78,8 +78,8 @@ config :threadr, Threadr.ML,
     timeout: 30_000
   ],
   extraction: [
-    enabled: false,
-    provider: Threadr.ML.Extraction.NoopProvider,
+    enabled: true,
+    provider: Threadr.ML.Extraction.LlmProvider,
     provider_name: "openai",
     system_prompt: nil,
     temperature: 0.0,

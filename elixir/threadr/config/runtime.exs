@@ -480,7 +480,7 @@ ml_extraction_config =
           Keyword.get(
             Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
             :enabled,
-            false
+            true
           )
 
         value ->

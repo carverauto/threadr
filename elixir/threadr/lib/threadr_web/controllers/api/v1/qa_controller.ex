@@ -10,7 +10,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
              user,
              subject_name,
              question,
-             limit: parse_limit(params["limit"])
+             limit: parse_limit(params["limit"]),
+             since: parse_datetime(params["since"]),
+             until: parse_datetime(params["until"])
            ) do
       json(conn, %{data: search_json(result)})
     else
@@ -41,9 +43,46 @@ defmodule ThreadrWeb.Api.V1.QaController do
              user,
              subject_name,
              question,
-             limit: parse_limit(params["limit"])
+             limit: parse_limit(params["limit"]),
+             since: parse_datetime(params["since"]),
+             until: parse_datetime(params["until"])
            ) do
       json(conn, %{data: answer_json(result)})
+    else
+      {:error, :unauthorized} ->
+        unauthorized(conn)
+
+      {:error, {:tenant_not_found, _}} ->
+        not_found(conn, "Tenant not found")
+
+      {:error, :forbidden} ->
+        forbidden(conn)
+
+      {:error, :no_message_embeddings} ->
+        unprocessable(conn, "No tenant message embeddings available")
+
+      {:error, :generation_provider_not_configured} ->
+        unprocessable(conn, "No LLM is configured for this tenant or the system default")
+
+      {:error, reason} ->
+        unprocessable(conn, inspect(reason))
+    end
+  end
+
+  def compare(conn, %{"subject_name" => subject_name, "question" => question} = params) do
+    with {:ok, user} <- current_user(conn),
+         {:ok, result} <-
+           Service.compare_tenant_question_windows_for_user(
+             user,
+             subject_name,
+             question,
+             limit: parse_limit(params["limit"]),
+             since: parse_datetime(params["since"]),
+             until: parse_datetime(params["until"]),
+             compare_since: parse_datetime(params["compare_since"]),
+             compare_until: parse_datetime(params["compare_until"])
+           ) do
+      json(conn, %{data: compare_json(result)})
     else
       {:error, :unauthorized} ->
         unauthorized(conn)
@@ -138,6 +177,7 @@ defmodule ThreadrWeb.Api.V1.QaController do
       query: json_safe(result.query),
       matches: Enum.map(result.matches, &match_json/1),
       citations: Enum.map(Map.get(result, :citations, []), &citation_json/1),
+      facts_over_time: json_safe(Map.get(result, :facts_over_time, [])),
       context: result.context
     }
   end
@@ -160,6 +200,20 @@ defmodule ThreadrWeb.Api.V1.QaController do
     })
     |> Map.put(:semantic, search_json(result.semantic))
     |> Map.put(:graph, graph_json(result.graph))
+  end
+
+  defp compare_json(result) do
+    %{
+      tenant_subject_name: result.tenant_subject_name,
+      tenant_schema: result.tenant_schema,
+      question: result.question,
+      baseline: search_json(result.baseline),
+      comparison: search_json(result.comparison),
+      entity_delta: json_safe(Map.get(result, :entity_delta, %{})),
+      fact_delta: json_safe(Map.get(result, :fact_delta, %{})),
+      context: result.context,
+      answer: generation_json(result.answer)
+    }
   end
 
   defp summary_json(result) do
@@ -219,7 +273,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
       actor_handle: citation.actor_handle,
       actor_display_name: citation.actor_display_name,
       channel_name: citation.channel_name,
-      similarity: citation.similarity
+      similarity: citation.similarity,
+      extracted_entities: Map.get(citation, :extracted_entities, []),
+      extracted_facts: Map.get(citation, :extracted_facts, [])
     })
   end
 
@@ -234,6 +290,16 @@ defmodule ThreadrWeb.Api.V1.QaController do
   end
 
   defp parse_limit(_limit), do: 5
+
+  defp parse_datetime(nil), do: nil
+  defp parse_datetime(""), do: nil
+
+  defp parse_datetime(value) when is_binary(value) do
+    case NaiveDateTime.from_iso8601(value) do
+      {:ok, datetime} -> datetime
+      _ -> nil
+    end
+  end
 
   defp unauthorized(conn) do
     conn

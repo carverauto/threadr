@@ -81,6 +81,7 @@ defmodule Threadr.TenantData.Ingest do
           message_id: message.id,
           actor_id: actor.id,
           channel_id: channel.id,
+          observed_at: chat_message.observed_at,
           actor_ids: [actor.id | Enum.map(mention_result.mentioned_actors, & &1.id)]
         })
 
@@ -411,6 +412,12 @@ defmodule Threadr.TenantData.Ingest do
     if Extraction.enabled?() do
       case Extraction.extract_and_persist_message(message, tenant_subject_name, tenant_schema) do
         {:ok, _result} ->
+          :ok
+
+        {:error, :generation_provider_not_configured} ->
+          :ok
+
+        {:error, :extraction_provider_not_configured} ->
           :ok
 
         {:error, reason} ->

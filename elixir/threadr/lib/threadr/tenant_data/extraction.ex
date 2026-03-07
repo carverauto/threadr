@@ -51,6 +51,7 @@ defmodule Threadr.TenantData.Extraction do
 
       {:ok,
        generation_opts
+       |> normalize_generation_runtime_opts()
        |> Keyword.merge(
          [
            provider: Keyword.get(extraction_config, :provider),
@@ -66,6 +67,19 @@ defmodule Threadr.TenantData.Extraction do
        |> Keyword.merge(opts)}
     end
   end
+
+  defp normalize_generation_runtime_opts(generation_opts) do
+    []
+    |> maybe_put(:generation_provider, Keyword.get(generation_opts, :generation_provider))
+    |> maybe_put(:provider_name, Keyword.get(generation_opts, :generation_provider_name))
+    |> maybe_put(:endpoint, Keyword.get(generation_opts, :generation_endpoint))
+    |> maybe_put(:model, Keyword.get(generation_opts, :generation_model))
+    |> maybe_put(:api_key, Keyword.get(generation_opts, :generation_api_key))
+    |> maybe_put(:timeout, Keyword.get(generation_opts, :generation_timeout))
+  end
+
+  defp maybe_put(opts, _key, nil), do: opts
+  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp fetch_message(message_id, tenant_schema) do
     query =

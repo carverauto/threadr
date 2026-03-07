@@ -11,6 +11,7 @@ defmodule Threadr.TenantData.LiveUpdates do
           required(:message_id) => String.t(),
           required(:actor_id) => String.t(),
           required(:channel_id) => String.t(),
+          required(:observed_at) => DateTime.t() | NaiveDateTime.t() | String.t(),
           required(:actor_ids) => [String.t()]
         }
 
@@ -32,6 +33,7 @@ defmodule Threadr.TenantData.LiveUpdates do
       message_id: Map.fetch!(attrs, :message_id),
       actor_id: Map.fetch!(attrs, :actor_id),
       channel_id: Map.fetch!(attrs, :channel_id),
+      observed_at: Map.fetch!(attrs, :observed_at),
       actor_ids: actor_ids
     }
 

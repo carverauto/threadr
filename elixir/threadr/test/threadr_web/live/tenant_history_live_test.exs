@@ -8,7 +8,25 @@ defmodule ThreadrWeb.TenantHistoryLiveTest do
   alias Threadr.ControlPlane.Service
   alias Threadr.Events.{ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
-  alias Threadr.TenantData.Ingest
+  alias Threadr.TenantData.{Extraction, Ingest}
+
+  setup do
+    previous_ml_config = Application.get_env(:threadr, Threadr.ML, [])
+
+    Application.put_env(
+      :threadr,
+      Threadr.ML,
+      Keyword.merge(previous_ml_config,
+        generation: [provider: Threadr.TestGenerationProvider, model: "test-chat"]
+      )
+    )
+
+    on_exit(fn ->
+      Application.put_env(:threadr, Threadr.ML, previous_ml_config)
+    end)
+
+    :ok
+  end
 
   test "renders tenant history and filters messages", %{conn: conn} do
     user = create_user!("tenant-history")
@@ -96,6 +114,196 @@ defmodule ThreadrWeb.TenantHistoryLiveTest do
     end)
   end
 
+  test "renders extracted entities and facts for messages", %{conn: conn} do
+    user = create_user!("tenant-history-extraction")
+    tenant = create_tenant!("History Extraction Tenant", user)
+
+    {:ok, message} =
+      persist_message!(
+        tenant.subject_name,
+        "alice",
+        "ops",
+        "Alice told Bob that payroll access was limited on 2026-03-05.",
+        ["bob"],
+        ~U[2026-03-05 12:00:00Z]
+      )
+
+    assert {:ok, _result} =
+             Extraction.extract_and_persist_message(
+               message,
+               tenant.subject_name,
+               tenant.schema_name,
+               provider: Threadr.TestExtractionProvider,
+               generation_provider: Threadr.TestGenerationProvider,
+               model: "test-llm"
+             )
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, _view, html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/history")
+
+    assert html =~ "person: Alice"
+    assert html =~ "Bob"
+    assert html =~ "reported"
+    assert html =~ "payroll access was limited"
+    assert html =~ "Facts Over Time"
+    assert html =~ "Top fact: Bob reported payroll access was limited"
+  end
+
+  test "filters history by extracted entity and fact type", %{conn: conn} do
+    user = create_user!("tenant-history-filters")
+    tenant = create_tenant!("History Filter Tenant", user)
+
+    {:ok, message_one} =
+      persist_message!(
+        tenant.subject_name,
+        "alice",
+        "ops",
+        "Alice told Bob that payroll access was limited on 2026-03-05.",
+        ["bob"],
+        ~U[2026-03-05 12:00:00Z]
+      )
+
+    {:ok, _message_two} =
+      persist_message!(
+        tenant.subject_name,
+        "carol",
+        "intel",
+        "Carol reviewed the phishing timeline.",
+        [],
+        ~U[2026-03-05 13:00:00Z]
+      )
+
+    assert {:ok, _} =
+             Extraction.extract_and_persist_message(
+               message_one,
+               tenant.subject_name,
+               tenant.schema_name,
+               provider: Threadr.TestExtractionProvider,
+               generation_provider: Threadr.TestGenerationProvider,
+               model: "test-llm"
+             )
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, view, _html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/history")
+
+    view
+    |> form("#tenant-history-form", %{
+      "query" => "",
+      "actor_handle" => "",
+      "channel_name" => "",
+      "entity_name" => "Alice",
+      "entity_type" => "person",
+      "fact_type" => "access_statement",
+      "since" => "",
+      "until" => "",
+      "limit" => "50"
+    })
+    |> render_change()
+
+    rendered = render(view)
+    assert rendered =~ "Alice told Bob that payroll access was limited on 2026-03-05."
+    refute rendered =~ "Carol reviewed the phishing timeline."
+  end
+
+  test "compares two history windows", %{conn: conn} do
+    user = create_user!("tenant-history-compare")
+    tenant = create_tenant!("History Compare Tenant", user)
+
+    persist_message!(
+      tenant.subject_name,
+      "alice",
+      "ops",
+      "Alice opened the incident timeline.",
+      [],
+      ~U[2026-03-05 12:00:00Z]
+    )
+
+    persist_message!(
+      tenant.subject_name,
+      "bob",
+      "ops",
+      "Bob confirmed payroll access was narrowed.",
+      [],
+      ~U[2026-03-05 13:00:00Z]
+    )
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, view, _html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/history")
+
+    view
+    |> form("#tenant-history-form", %{
+      "query" => "",
+      "actor_handle" => "",
+      "channel_name" => "",
+      "entity_name" => "",
+      "entity_type" => "",
+      "fact_type" => "",
+      "since" => "2026-03-05T11:30:00",
+      "until" => "2026-03-05T12:30:00",
+      "compare_since" => "2026-03-05T12:30:00",
+      "compare_until" => "2026-03-05T13:30:00",
+      "limit" => "50"
+    })
+    |> render_change()
+
+    view
+    |> element("#tenant-history-compare-submit")
+    |> render_click()
+
+    rendered = render(view)
+    assert rendered =~ "Comparison Summary"
+    assert rendered =~ "Entity Delta"
+    assert rendered =~ "Fact Delta"
+    assert rendered =~ "New People"
+    assert rendered =~ "New Claims"
+    assert rendered =~ "Baseline Window"
+    assert rendered =~ "Comparison Window"
+    assert rendered =~ "Alice opened the incident timeline."
+    assert rendered =~ "Bob confirmed payroll access was narrowed."
+  end
+
+  test "renders a back link to QA when opened from a QA compare drill-down", %{conn: conn} do
+    user = create_user!("tenant-history-origin-qa")
+    tenant = create_tenant!("History Origin QA Tenant", user)
+
+    persist_message!(
+      tenant.subject_name,
+      "alice",
+      "ops",
+      "Alice opened the incident timeline.",
+      [],
+      ~U[2026-03-05 12:00:00Z]
+    )
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, _view, html} =
+      live(
+        conn,
+        ~p"/control-plane/tenants/#{tenant.subject_name}/history?#{%{entity_name: "Alice", entity_type: "person", since: "2026-03-05T11:30:00", until: "2026-03-05T12:30:00", origin_surface: "qa", origin_question: "What changed for Alice?", origin_since: "2026-03-05T11:30:00", origin_until: "2026-03-05T12:30:00", origin_compare_since: "2026-03-05T12:30:00", origin_compare_until: "2026-03-05T13:30:00"}}"
+      )
+
+    assert html =~ "Back to Comparison"
+    assert html =~ "/control-plane/tenants/#{tenant.subject_name}/qa?"
+    assert html =~ "question=What+changed+for+Alice%3F"
+    assert html =~ "compare_since=2026-03-05T12%3A30%3A00"
+  end
+
   defp create_user!(prefix) do
     suffix = System.unique_integer([:positive])
 
@@ -141,7 +349,7 @@ defmodule ThreadrWeb.TenantHistoryLiveTest do
         %{source: "discord", occurred_at: observed_at}
       )
 
-    {:ok, _message} = Ingest.persist_envelope(envelope)
+    Ingest.persist_envelope(envelope)
   end
 
   defp assert_eventually(fun, attempts \\ 20)

@@ -21,10 +21,57 @@ defmodule ThreadrWeb.TenantGraphLiveTest do
     assert html =~ "#{tenant.name} Graph"
     assert html =~ "graph:#{tenant.subject_name}"
     assert html =~ "TenantGraphExplorer"
-    assert html =~ "Arrow"
-    assert html =~ "Zoom"
-    assert html =~ "Relationships"
-    assert html =~ "Auto"
+    assert html =~ "Investigation Window"
+    assert html =~ "Legend"
+    assert html =~ "Show"
+    assert html =~ "Relationship Types"
+    assert html =~ "Messages"
+    assert html =~ "Co-mentioned"
+    assert html =~ "MENTIONED"
+    assert html =~ "/control-plane/tenants/#{tenant.subject_name}/history"
+    assert html =~ "/control-plane/tenants/#{tenant.subject_name}/qa"
+  end
+
+  test "hydrates graph time window from query params", %{conn: conn} do
+    user = create_user!("tenant-graph-window")
+    tenant = create_tenant!("Graph Window Tenant", user)
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, _view, html} =
+      live(
+        conn,
+        ~p"/control-plane/tenants/#{tenant.subject_name}/graph?#{%{since: "2026-03-05T11:30:00", until: "2026-03-05T12:30:00"}}"
+      )
+
+    assert html =~ ~s(value="2026-03-05T11:30:00")
+    assert html =~ ~s(value="2026-03-05T12:30:00")
+    assert html =~ ~s(data-since="2026-03-05T11:30:00")
+    assert html =~ ~s(data-until="2026-03-05T12:30:00")
+  end
+
+  test "hydrates graph compare context from query params without surfacing compare controls", %{conn: conn} do
+    user = create_user!("tenant-graph-compare-window")
+    tenant = create_tenant!("Graph Compare Window Tenant", user)
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, _view, html} =
+      live(
+        conn,
+        ~p"/control-plane/tenants/#{tenant.subject_name}/graph?#{%{since: "2026-03-05T11:30:00", until: "2026-03-05T12:30:00", compare_since: "2026-03-05T12:30:00", compare_until: "2026-03-05T13:30:00", node_kind: "actor", node_id: "123"}}"
+      )
+
+    assert html =~ ~s(data-compare-since="2026-03-05T12:30:00")
+    assert html =~ ~s(data-compare-until="2026-03-05T13:30:00")
+    refute html =~ ~s(id="graph-compare-since")
+    refute html =~ ~s(id="graph-compare-until")
   end
 
   defp create_user!(prefix) do

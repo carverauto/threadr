@@ -109,12 +109,21 @@ defmodule ThreadrWeb.Router do
     get "/tenants", TenantController, :index
     post "/tenants", TenantController, :create
     post "/tenants/:subject_name/migrate", TenantController, :migrate
+    get "/tenants/:subject_name/history", HistoryController, :index
+    post "/tenants/:subject_name/history/compare", HistoryController, :compare
     get "/tenants/:subject_name/bots", BotController, :index
     post "/tenants/:subject_name/bots", BotController, :create
     patch "/tenants/:subject_name/bots/:id", BotController, :update
     delete "/tenants/:subject_name/bots/:id", BotController, :delete
+    get "/tenants/:subject_name/dossiers/:node_kind/:node_id", DossierController, :show
+
+    post "/tenants/:subject_name/dossiers/:node_kind/:node_id/compare",
+         DossierController,
+         :compare
+
     post "/tenants/:subject_name/qa/search", QaController, :search
     post "/tenants/:subject_name/qa/answer", QaController, :answer
+    post "/tenants/:subject_name/qa/compare", QaController, :compare
     post "/tenants/:subject_name/qa/graph-answer", QaController, :graph_answer
     post "/tenants/:subject_name/qa/summarize", QaController, :summarize
     get "/tenants/:subject_name/memberships", MembershipController, :index

@@ -215,6 +215,7 @@ defmodule Threadr.TenantData.GraphLayout do
 
   defp kind_angle_bias("actor"), do: -0.08
   defp kind_angle_bias("channel"), do: 0.0
+  defp kind_angle_bias("conversation"), do: 0.04
   defp kind_angle_bias("message"), do: 0.08
   defp kind_angle_bias(_kind), do: 0.0
 

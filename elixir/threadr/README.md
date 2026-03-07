@@ -44,6 +44,9 @@ cd elixir/threadr
 docker compose up -d
 ```
 
+The local Compose stack uses the same ServiceRadar CNPG 18 image as the Threadr
+cluster manifests: `ghcr.io/carverauto/serviceradar-cnpg:18.3.0-sr2`.
+
 Then export the local env values or load them from `.env.local.example`:
 
 ```bash

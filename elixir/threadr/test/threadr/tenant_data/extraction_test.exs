@@ -9,6 +9,10 @@ defmodule Threadr.TenantData.ExtractionTest do
   alias Threadr.Messaging.Topology
   alias Threadr.TenantData.{ExtractedEntity, ExtractedFact, Extraction, Ingest}
 
+  test "extraction is enabled by default" do
+    assert Extraction.enabled?()
+  end
+
   test "extracts and persists structured entities and facts for a message" do
     tenant = create_tenant!("Extraction Tenant")
 

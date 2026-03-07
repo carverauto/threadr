@@ -114,6 +114,16 @@ export const threadrGraphLayoutClusterMethods = {
     const dominantState = [0, 1, 2, 3].sort(
       (a, b) => (cluster.dominantStateCount[b] || 0) - (cluster.dominantStateCount[a] || 0),
     )[0]
+    const sampleLabel = cluster.sampleNode?.label || null
+    const baseKind = this.kindDisplayName(cluster.kind)
+    const label =
+      scope === "global"
+        ? sampleLabel
+          ? `${baseKind} cluster: ${sampleLabel}`
+          : `${baseKind} cluster`
+        : sampleLabel
+          ? `${sampleLabel}`
+          : `${baseKind} cluster`
 
     return {
       id: cluster.id,
@@ -123,13 +133,14 @@ export const threadrGraphLayoutClusterMethods = {
       state: dominantState,
       kind: cluster.kind,
       size: Math.min(34, 12 + ((cluster.count - 1) * 0.75)),
-      label: `${this.kindDisplayName(cluster.kind)} ${labelSuffix}`,
+      label,
       clusterCount: cluster.count,
       details: {
         type: "cluster",
         cluster_scope: scope,
         cluster_count: cluster.count,
         cluster_kind: cluster.kind,
+        cluster_label_suffix: labelSuffix,
         sample_label: cluster.sampleNode?.label || null,
         dominant_neighbor_kind: cluster.profile?.dominant_neighbor_kind || null,
         dominant_relationship: cluster.profile?.dominant_relationship || null,

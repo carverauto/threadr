@@ -12,8 +12,21 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
   }
   @edge_layer_labels %{
     relationship: "Relationships",
+    conversation: "Conversation Links",
     authored: "Authored",
     in_channel: "Channel Links"
+  }
+  @node_kind_labels %{
+    actor: "Actors",
+    channel: "Channels",
+    conversation: "Conversations",
+    message: "Messages"
+  }
+  @relationship_type_labels %{
+    mentioned: "Mentioned",
+    co_mentioned: "Co-mentioned",
+    active_in: "Active in",
+    other: "Other Links"
   }
   @zoom_modes ~w(auto global regional local)
 
@@ -28,10 +41,20 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
          |> assign(:page_title, "#{tenant.name} Graph")
          |> assign(:filters, %{root_cause: true, affected: true, healthy: true, unknown: true})
          |> assign(:filter_labels, @filter_labels)
-         |> assign(:edge_layers, %{relationship: true, authored: true, in_channel: true})
+         |> assign(:edge_layers, %{relationship: false, conversation: false, authored: false, in_channel: false})
          |> assign(:edge_layer_labels, @edge_layer_labels)
-         |> assign(:zoom_mode, "auto")
+         |> assign(:node_kinds, %{actor: false, channel: true, conversation: false, message: false})
+         |> assign(:node_kind_labels, @node_kind_labels)
+         |> assign(:relationship_types, %{mentioned: true, co_mentioned: false, active_in: true, other: false})
+         |> assign(:relationship_type_labels, @relationship_type_labels)
+         |> assign(:zoom_mode, "local")
          |> assign(:zoom_modes, @zoom_modes)
+         |> assign(:since, "")
+         |> assign(:until, "")
+         |> assign(:compare_since, "")
+         |> assign(:compare_until, "")
+         |> assign(:focus_node_kind, nil)
+         |> assign(:focus_node_id, nil)
          |> assign(:schema_version, GraphSnapshot.schema_version())
          |> assign(
            :socket_token,
@@ -44,6 +67,24 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
          |> put_flash(:error, "You do not have access to that tenant graph")
          |> push_navigate(to: ~p"/control-plane/tenants")}
     end
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply,
+     socket
+     |> assign(:since, normalize_blank(Map.get(params, "since", socket.assigns.since)))
+     |> assign(:until, normalize_blank(Map.get(params, "until", socket.assigns.until)))
+     |> assign(
+       :compare_since,
+       normalize_blank(Map.get(params, "compare_since", socket.assigns.compare_since))
+     )
+     |> assign(
+       :compare_until,
+       normalize_blank(Map.get(params, "compare_until", socket.assigns.compare_until))
+     )
+     |> assign(:focus_node_kind, normalize_focus_value(Map.get(params, "node_kind")))
+     |> assign(:focus_node_id, normalize_focus_value(Map.get(params, "node_id")))}
   end
 
   @impl true
@@ -81,6 +122,54 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
      |> push_event("tenant_graph:set_zoom_mode", %{mode: zoom_mode})}
   end
 
+  def handle_event("toggle_node_kind", %{"key" => key}, socket) do
+    atom_key = String.to_existing_atom(key)
+    node_kinds = Map.update!(socket.assigns.node_kinds, atom_key, &(!&1))
+
+    {:noreply,
+     socket
+     |> assign(:node_kinds, node_kinds)
+     |> push_event("tenant_graph:set_node_kinds", %{node_kinds: stringify_keys(node_kinds)})}
+  end
+
+  def handle_event("toggle_relationship_type", %{"key" => key}, socket) do
+    atom_key = String.to_existing_atom(key)
+    relationship_types = Map.update!(socket.assigns.relationship_types, atom_key, &(!&1))
+
+    {:noreply,
+     socket
+     |> assign(:relationship_types, relationship_types)
+     |> push_event("tenant_graph:set_relationship_types", %{
+       relationship_types: stringify_keys(relationship_types)
+     })}
+  end
+
+  def handle_event("change_window", params, socket) do
+    {:noreply,
+     socket
+     |> assign(:since, normalize_blank(Map.get(params, "since")))
+     |> assign(:until, normalize_blank(Map.get(params, "until")))
+     |> assign(:compare_since, normalize_blank(Map.get(params, "compare_since")))
+     |> assign(:compare_until, normalize_blank(Map.get(params, "compare_until")))}
+  end
+
+  def handle_event("apply_window", _params, socket) do
+    params =
+      %{}
+      |> put_param_if_present("since", socket.assigns.since)
+      |> put_param_if_present("until", socket.assigns.until)
+      |> put_param_if_present("compare_since", socket.assigns.compare_since)
+      |> put_param_if_present("compare_until", socket.assigns.compare_until)
+      |> put_param_if_present("node_kind", socket.assigns.focus_node_kind)
+      |> put_param_if_present("node_id", socket.assigns.focus_node_id)
+
+    {:noreply,
+     push_patch(
+       socket,
+       to: ~p"/control-plane/tenants/#{socket.assigns.tenant.subject_name}/graph?#{params}"
+     )}
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -89,11 +178,14 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
         <.header>
           {@tenant.name} Graph
           <:subtitle>
-            Tenant-scoped relationship graph streamed as Arrow and rendered through deck.gl.
+            Investigate one bounded relationship neighborhood, then pivot into history, dossiers, or QA.
           </:subtitle>
           <:actions>
             <div class="flex gap-2">
-              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/qa"}>
+              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/history?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"}>
+                History
+              </.button>
+              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/qa?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"}>
                 QA Workspace
               </.button>
               <.button navigate={~p"/control-plane/tenants"}>
@@ -124,75 +216,134 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
 
             <div>
               <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-                Filters
+                Investigation Window
               </h2>
-              <div class="mt-3 space-y-2">
-                <button
-                  :for={{key, label} <- @filter_labels}
-                  type="button"
-                  class={[
-                    "btn btn-sm w-full justify-between",
-                    @filters[key] && "btn-primary",
-                    !@filters[key] && "btn-ghost"
-                  ]}
-                  phx-click="toggle_filter"
-                  phx-value-key={Atom.to_string(key)}
-                >
-                  <span>{label}</span>
-                  <span class="badge badge-outline">{if @filters[key], do: "on", else: "off"}</span>
-                </button>
+              <.form
+                id="graph-window-form"
+                class="mt-3 space-y-2"
+                for={%{}}
+                phx-change="change_window"
+                phx-submit="apply_window"
+              >
+                <input
+                  id="graph-since"
+                  name="since"
+                  type="datetime-local"
+                  class="input input-bordered w-full"
+                  value={@since}
+                />
+                <input
+                  id="graph-until"
+                  name="until"
+                  type="datetime-local"
+                  class="input input-bordered w-full"
+                  value={@until}
+                />
+                <.button id="graph-apply-window" class="btn-sm w-full">Apply Window</.button>
+              </.form>
+              <p class="mt-2 text-xs text-base-content/60">
+                Start from channels, then drill into one channel neighborhood and pivot into dossier or QA.
+              </p>
+            </div>
+
+            <div>
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+                Legend
+              </h2>
+              <div class="mt-3 space-y-3 rounded-box bg-base-200 p-3 text-sm text-base-content/75">
+                <div class="space-y-1">
+                  <div class="font-medium text-base-content">Nodes</div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-3 w-3 rounded-full bg-amber-400 ring-1 ring-white/70"></span>
+                    <span>Actor</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-3 w-3 rounded-full bg-sky-400 ring-1 ring-white/70"></span>
+                    <span>Channel</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-3 w-3 rounded-full bg-slate-200 ring-1 ring-white/70"></span>
+                    <span>Conversation</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-3 w-3 rounded-full bg-emerald-500 ring-1 ring-white/70"></span>
+                    <span>Message</span>
+                  </div>
+                </div>
+
+                <div class="space-y-1">
+                  <div class="font-medium text-base-content">Edges</div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-0.5 w-5 rounded bg-slate-200"></span>
+                    <span>Conversation link</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-0.5 w-5 rounded bg-red-400"></span>
+                    <span>MENTIONED</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-0.5 w-5 rounded bg-amber-300"></span>
+                    <span>CO_MENTIONED</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="h-0.5 w-5 rounded bg-fuchsia-400"></span>
+                    <span>Other relationship</span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div>
               <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-                Zoom
-              </h2>
-              <div class="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  :for={mode <- @zoom_modes}
-                  type="button"
-                  class={[
-                    "btn btn-sm",
-                    @zoom_mode == mode && "btn-secondary",
-                    @zoom_mode != mode && "btn-ghost"
-                  ]}
-                  phx-click="set_zoom_mode"
-                  phx-value-mode={mode}
-                >
-                  {String.capitalize(mode)}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-                Edge Layers
+                Show
               </h2>
               <div class="mt-3 space-y-2">
                 <button
-                  :for={{key, label} <- @edge_layer_labels}
+                  :for={{key, label} <- @node_kind_labels}
                   type="button"
                   class={[
                     "btn btn-sm w-full justify-between",
-                    @edge_layers[key] && "btn-accent",
-                    !@edge_layers[key] && "btn-ghost"
+                    @node_kinds[key] && "btn-info",
+                    !@node_kinds[key] && "btn-ghost"
                   ]}
-                  phx-click="toggle_edge_layer"
+                  phx-click="toggle_node_kind"
                   phx-value-key={Atom.to_string(key)}
                 >
                   <span>{label}</span>
                   <span class="badge badge-outline">
-                    {if @edge_layers[key], do: "on", else: "off"}
+                    {if @node_kinds[key], do: "on", else: "off"}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+                Relationship Types
+              </h2>
+              <div class="mt-3 space-y-2">
+                <button
+                  :for={{key, label} <- @relationship_type_labels}
+                  type="button"
+                  class={[
+                    "btn btn-sm w-full justify-between",
+                    @relationship_types[key] && "btn-warning",
+                    !@relationship_types[key] && "btn-ghost"
+                  ]}
+                  phx-click="toggle_relationship_type"
+                  phx-value-key={Atom.to_string(key)}
+                >
+                  <span>{label}</span>
+                  <span class="badge badge-outline">
+                    {if @relationship_types[key], do: "on", else: "off"}
                   </span>
                 </button>
               </div>
             </div>
 
             <div class="rounded-box bg-base-200 p-3 text-sm text-base-content/70">
-              Click a node to inspect it. Filters apply locally in the client without forcing a
-              new snapshot. Use the graph overlay to pin focus on a dossier while you browse
-              related nodes.
+              First load shows channels only. Click a channel to open its conversation neighborhood,
+              then use dossier, history, or QA for deeper analysis.
             </div>
           </aside>
 
@@ -202,10 +353,19 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
               phx-hook="TenantGraphExplorer"
               data-socket-token={@socket_token}
               data-topic={"graph:#{@tenant.subject_name}"}
+              data-subject-name={@tenant.subject_name}
+              data-focus-node-kind={@focus_node_kind}
+              data-focus-node-id={@focus_node_id}
+              data-since={@since}
+              data-until={@until}
+              data-compare-since={@compare_since}
+              data-compare-until={@compare_until}
               data-filter-labels={Jason.encode!(@filter_labels)}
               data-initial-filters={Jason.encode!(stringify_keys(@filters))}
               data-initial-zoom-mode={@zoom_mode}
               data-initial-edge-layers={Jason.encode!(stringify_keys(@edge_layers))}
+              data-initial-node-kinds={Jason.encode!(stringify_keys(@node_kinds))}
+              data-initial-relationship-types={Jason.encode!(stringify_keys(@relationship_types))}
               class="h-[72vh] w-full"
             >
             </div>
@@ -219,4 +379,28 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
   defp stringify_keys(map) do
     Map.new(map, fn {key, value} -> {Atom.to_string(key), value} end)
   end
+
+  defp normalize_focus_value(nil), do: nil
+
+  defp normalize_focus_value(value) do
+    value
+    |> to_string()
+    |> String.trim()
+    |> case do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp normalize_blank(nil), do: ""
+  defp normalize_blank(""), do: ""
+
+  defp normalize_blank(value) do
+    value
+    |> to_string()
+    |> String.trim()
+  end
+
+  defp put_param_if_present(params, _key, value) when value in [nil, ""], do: params
+  defp put_param_if_present(params, key, value), do: Map.put(params, key, value)
 end

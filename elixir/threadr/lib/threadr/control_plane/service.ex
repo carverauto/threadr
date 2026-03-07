@@ -296,6 +296,37 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
+  def compare_tenant_question_windows_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        question,
+        opts \\ []
+      )
+      when is_binary(subject_name) and is_binary(question) do
+    with {:ok, tenant, _membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
+         {:ok, result} <-
+           Threadr.ML.SemanticQA.compare_windows(
+             tenant.subject_name,
+             question,
+             %{
+               since: Keyword.get(opts, :since),
+               until: Keyword.get(opts, :until)
+             },
+             %{
+               since: Keyword.get(opts, :compare_since),
+               until: Keyword.get(opts, :compare_until)
+             },
+             runtime_opts
+           ) do
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
   def answer_tenant_graph_question_for_user(
         %{id: _user_id} = user,
         subject_name,
@@ -340,12 +371,50 @@ defmodule Threadr.ControlPlane.Service do
   def list_tenant_messages_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
       when is_binary(subject_name) do
     history_opts = history_runtime_opts(opts)
+    ash_opts = history_ash_opts(opts)
 
     with {:ok, tenant, membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, messages} <-
+           get_user_tenant_by_subject_name(user, subject_name, ash_opts),
+         {:ok, listing} <-
            Threadr.TenantData.History.list_messages(tenant.schema_name, history_opts) do
-      {:ok, %{tenant: tenant, membership: membership, messages: messages}}
+      {:ok, Map.merge(%{tenant: tenant, membership: membership}, listing)}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def compare_tenant_history_windows_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
+      when is_binary(subject_name) do
+    history_opts = history_runtime_opts(opts)
+    ash_opts = history_ash_opts(opts)
+
+    with {:ok, tenant, membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, ash_opts),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
+         {:ok, comparison} <-
+           Threadr.TenantData.History.compare_windows(
+             tenant.schema_name,
+             history_opts,
+             history_compare_runtime_opts(opts)
+           ),
+         {:ok, answer} <-
+           Threadr.ML.Generation.complete(
+             """
+             Compare the baseline and comparison history windows for this tenant.
+             Explain what changed in activity, participants, channels, and extracted facts using only the provided context.
+
+             #{comparison.context}
+             """,
+             runtime_opts
+           ) do
+      {:ok,
+       %{
+         tenant: tenant,
+         membership: membership,
+         comparison: comparison,
+         answer: answer
+       }}
     else
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
     end
@@ -364,6 +433,52 @@ defmodule Threadr.ControlPlane.Service do
          {:ok, dossier} <-
            Threadr.TenantData.GraphInspector.describe_node(node_id, node_kind, tenant.schema_name) do
       {:ok, %{tenant: tenant, membership: membership, dossier: dossier}}
+    else
+      {:error, :not_found} -> {:error, {:resource_not_found, node_kind, node_id}}
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def compare_tenant_dossier_windows_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        node_kind,
+        node_id,
+        opts \\ []
+      )
+      when is_binary(subject_name) and is_binary(node_kind) and is_binary(node_id) do
+    with {:ok, tenant, membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
+         {:ok, comparison} <-
+           Threadr.TenantData.GraphInspector.compare_node_windows(
+             node_id,
+             node_kind,
+             tenant.schema_name,
+             %{since: Keyword.get(opts, :since), until: Keyword.get(opts, :until)},
+             %{
+               since: Keyword.get(opts, :compare_since),
+               until: Keyword.get(opts, :compare_until)
+             }
+           ),
+         {:ok, answer} <-
+           Threadr.ML.Generation.complete(
+             """
+             Compare the baseline and comparison dossier windows for this #{node_kind}.
+             Explain what changed in relationships, activity, and extracted facts using only the provided context.
+
+             #{comparison.context}
+             """,
+             runtime_opts
+           ) do
+      {:ok,
+       %{
+         tenant: tenant,
+         membership: membership,
+         comparison: comparison,
+         answer: answer
+       }}
     else
       {:error, :not_found} -> {:error, {:resource_not_found, node_kind, node_id}}
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
@@ -1387,6 +1502,10 @@ defmodule Threadr.ControlPlane.Service do
         :embedding_model,
         :document_prefix,
         :query_prefix,
+        :since,
+        :until,
+        :compare_since,
+        :compare_until,
         :generation_provider,
         :generation_model,
         :generation_endpoint,
@@ -1410,6 +1529,8 @@ defmodule Threadr.ControlPlane.Service do
         :embedding_model,
         :document_prefix,
         :query_prefix,
+        :since,
+        :until,
         :generation_provider,
         :generation_model,
         :generation_endpoint,
@@ -1448,12 +1569,48 @@ defmodule Threadr.ControlPlane.Service do
         :query,
         :actor_handle,
         :channel_name,
+        :entity_name,
+        :entity_type,
+        :fact_type,
         :since,
         :until,
         :limit
       ]
     )
   end
+
+  defp history_ash_opts(opts) do
+    opts
+    |> Keyword.drop([
+      :query,
+      :actor_handle,
+      :channel_name,
+      :entity_name,
+      :entity_type,
+      :fact_type,
+      :since,
+      :until,
+      :limit
+    ])
+    |> semantic_ash_opts()
+  end
+
+  defp history_compare_runtime_opts(opts) do
+    []
+    |> put_if_present(:query, Keyword.get(opts, :query))
+    |> put_if_present(:actor_handle, Keyword.get(opts, :actor_handle))
+    |> put_if_present(:channel_name, Keyword.get(opts, :channel_name))
+    |> put_if_present(:entity_name, Keyword.get(opts, :entity_name))
+    |> put_if_present(:entity_type, Keyword.get(opts, :entity_type))
+    |> put_if_present(:fact_type, Keyword.get(opts, :fact_type))
+    |> put_if_present(:since, Keyword.get(opts, :compare_since))
+    |> put_if_present(:until, Keyword.get(opts, :compare_until))
+    |> put_if_present(:limit, Keyword.get(opts, :limit))
+  end
+
+  defp put_if_present(opts, _key, nil), do: opts
+  defp put_if_present(opts, _key, ""), do: opts
+  defp put_if_present(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp actor_ash_opts(user, opts) do
     opts

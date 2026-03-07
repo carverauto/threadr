@@ -15,8 +15,13 @@ defmodule ThreadrWeb.TenantQaLive.Index do
          |> assign(:membership_role, membership.role)
          |> assign(:question, "")
          |> assign(:limit, @default_limit)
+         |> assign(:since, "")
+         |> assign(:until, "")
+         |> assign(:compare_since, "")
+         |> assign(:compare_until, "")
          |> assign(:search_result, nil)
          |> assign(:answer_result, nil)
+         |> assign(:comparison_result, nil)
          |> assign(:graph_answer_result, nil)
          |> assign(:summary_result, nil)}
 
@@ -29,11 +34,33 @@ defmodule ThreadrWeb.TenantQaLive.Index do
   end
 
   @impl true
-  def handle_event("change", %{"question" => question, "limit" => limit}, socket) do
+  def handle_params(params, _uri, socket) do
+    {:noreply,
+     socket
+     |> assign(:question, normalize_blank(Map.get(params, "question", socket.assigns.question)))
+     |> assign(:limit, normalize_limit(Map.get(params, "limit", socket.assigns.limit)))
+     |> assign(:since, normalize_blank(Map.get(params, "since", socket.assigns.since)))
+     |> assign(:until, normalize_blank(Map.get(params, "until", socket.assigns.until)))
+     |> assign(
+       :compare_since,
+       normalize_blank(Map.get(params, "compare_since", socket.assigns.compare_since))
+     )
+     |> assign(
+       :compare_until,
+       normalize_blank(Map.get(params, "compare_until", socket.assigns.compare_until))
+     )}
+  end
+
+  @impl true
+  def handle_event("change", %{"question" => question, "limit" => limit} = params, socket) do
     {:noreply,
      socket
      |> assign(:question, question)
-     |> assign(:limit, normalize_limit(limit))}
+     |> assign(:limit, normalize_limit(limit))
+     |> assign(:since, normalize_blank(Map.get(params, "since")))
+     |> assign(:until, normalize_blank(Map.get(params, "until")))
+     |> assign(:compare_since, normalize_blank(Map.get(params, "compare_since")))
+     |> assign(:compare_until, normalize_blank(Map.get(params, "compare_until")))}
   end
 
   def handle_event("search", _params, socket) do
@@ -43,6 +70,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
          socket
          |> assign(:search_result, result)
          |> assign(:answer_result, nil)
+         |> assign(:comparison_result, nil)
          |> assign(:graph_answer_result, nil)
          |> assign(:summary_result, nil)
          |> clear_flash()}
@@ -59,6 +87,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
          socket
          |> assign(:answer_result, result)
          |> assign(:search_result, result)
+         |> assign(:comparison_result, nil)
          |> assign(:graph_answer_result, nil)
          |> assign(:summary_result, nil)
          |> clear_flash()}
@@ -76,6 +105,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
          |> assign(:graph_answer_result, result)
          |> assign(:search_result, result.semantic)
          |> assign(:answer_result, nil)
+         |> assign(:comparison_result, nil)
          |> assign(:summary_result, nil)
          |> clear_flash()}
 
@@ -92,7 +122,25 @@ defmodule ThreadrWeb.TenantQaLive.Index do
          |> assign(:summary_result, result)
          |> assign(:search_result, result.semantic)
          |> assign(:answer_result, nil)
+         |> assign(:comparison_result, nil)
          |> assign(:graph_answer_result, nil)
+         |> clear_flash()}
+
+      {:error, message} ->
+        {:noreply, put_flash(socket, :error, message)}
+    end
+  end
+
+  def handle_event("compare", _params, socket) do
+    case run_compare(socket) do
+      {:ok, result} ->
+        {:noreply,
+         socket
+         |> assign(:comparison_result, result)
+         |> assign(:search_result, nil)
+         |> assign(:answer_result, nil)
+         |> assign(:graph_answer_result, nil)
+         |> assign(:summary_result, nil)
          |> clear_flash()}
 
       {:error, message} ->
@@ -113,6 +161,12 @@ defmodule ThreadrWeb.TenantQaLive.Index do
           <:actions>
             <div class="flex gap-2">
               <.button navigate={~p"/control-plane/tenants"}>Tenants</.button>
+              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/history"}>
+                History
+              </.button>
+              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params(nil, nil, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"}>
+                Graph
+              </.button>
               <.button
                 :if={Service.manager_role?(@membership_role)}
                 navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/llm"}
@@ -154,12 +208,49 @@ defmodule ThreadrWeb.TenantQaLive.Index do
                   label="Retrieved Messages"
                   value={@limit}
                 />
+
+                <div class="grid gap-4 md:grid-cols-2">
+                  <.input
+                    id="tenant-qa-since"
+                    name="since"
+                    type="datetime-local"
+                    label="Since"
+                    value={@since}
+                  />
+                  <.input
+                    id="tenant-qa-until"
+                    name="until"
+                    type="datetime-local"
+                    label="Until"
+                    value={@until}
+                  />
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                  <.input
+                    id="tenant-qa-compare-since"
+                    name="compare_since"
+                    type="datetime-local"
+                    label="Compare Since"
+                    value={@compare_since}
+                  />
+                  <.input
+                    id="tenant-qa-compare-until"
+                    name="compare_until"
+                    type="datetime-local"
+                    label="Compare Until"
+                    value={@compare_until}
+                  />
+                </div>
               </form>
 
               <div class="flex flex-wrap gap-2">
                 <.button id="tenant-qa-search" phx-click="search">Search Context</.button>
                 <.button id="tenant-qa-answer" phx-click="answer" variant="primary">
                   Ask Tenant
+                </.button>
+                <.button id="tenant-qa-compare" phx-click="compare" variant="primary">
+                  Compare Windows
                 </.button>
                 <.button id="tenant-qa-graph-answer" phx-click="graph_answer" variant="primary">
                   Ask Graph
@@ -175,6 +266,78 @@ defmodule ThreadrWeb.TenantQaLive.Index do
                 Retrieved Context
               </div>
               <pre class="whitespace-pre-wrap text-sm leading-6 text-base-content/80">{context_text(assigns)}</pre>
+            </div>
+          </div>
+        </div>
+
+        <div
+          :if={@comparison_result}
+          class="card bg-base-100 border border-base-300 shadow-sm"
+        >
+          <div class="card-body gap-4">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <div class="text-sm text-base-content/60">Window Comparison</div>
+                <div class="font-semibold">
+                  {@comparison_result.answer.provider} / {@comparison_result.answer.model}
+                </div>
+              </div>
+              <div class="text-xs text-base-content/60">{@comparison_result.question}</div>
+            </div>
+            <div id="tenant-qa-compare-content" class="prose max-w-none text-base-content">
+              <p>{@comparison_result.answer.content}</p>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-2">
+              <div class="rounded-box border border-base-300 bg-base-200 p-4">
+                <div class="text-sm font-semibold text-base-content/70">Entity Delta</div>
+                <.entity_delta_panel
+                  id="tenant-qa-entity-delta"
+                  delta={@comparison_result.entity_delta}
+                  tenant_subject_name={@tenant.subject_name}
+                  baseline_window={%{since: @since, until: @until}}
+                  comparison_window={%{since: @compare_since, until: @compare_until}}
+                  origin_params={
+                    history_origin_params(
+                      @question,
+                      @since,
+                      @until,
+                      @compare_since,
+                      @compare_until
+                    )
+                  }
+                />
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200 p-4">
+                <div class="text-sm font-semibold text-base-content/70">Fact Delta</div>
+                <.fact_delta_panel
+                  id="tenant-qa-fact-delta"
+                  delta={@comparison_result.fact_delta}
+                  tenant_subject_name={@tenant.subject_name}
+                  baseline_window={%{since: @since, until: @until}}
+                  comparison_window={%{since: @compare_since, until: @compare_until}}
+                  origin_params={
+                    history_origin_params(
+                      @question,
+                      @since,
+                      @until,
+                      @compare_since,
+                      @compare_until
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-2">
+              <div class="rounded-box border border-base-300 bg-base-200 p-4">
+                <div class="text-sm font-semibold text-base-content/70">Baseline Window</div>
+                <pre class="mt-2 whitespace-pre-wrap text-xs leading-6 text-base-content/80">{@comparison_result.baseline.context}</pre>
+              </div>
+              <div class="rounded-box border border-base-300 bg-base-200 p-4">
+                <div class="text-sm font-semibold text-base-content/70">Comparison Window</div>
+                <pre class="mt-2 whitespace-pre-wrap text-xs leading-6 text-base-content/80">{@comparison_result.comparison.context}</pre>
+              </div>
             </div>
           </div>
         </div>
@@ -220,6 +383,58 @@ defmodule ThreadrWeb.TenantQaLive.Index do
                       - similarity {format_similarity(citation.similarity)}
                     </span>
                   </div>
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    <.link
+                      navigate={
+                        ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("message", citation.message_id, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                      }
+                      class="btn btn-ghost btn-xs"
+                    >
+                      Message in Graph
+                    </.link>
+                    <.link
+                      :if={Map.get(citation, :actor_id)}
+                      navigate={
+                        ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("actor", citation.actor_id, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                      }
+                      class="btn btn-ghost btn-xs"
+                    >
+                      Actor in Graph
+                    </.link>
+                    <.link
+                      :if={Map.get(citation, :channel_id)}
+                      navigate={
+                        ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("channel", citation.channel_id, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                      }
+                      class="btn btn-ghost btn-xs"
+                    >
+                      Channel in Graph
+                    </.link>
+                  </div>
+                  <div
+                    :if={Map.get(citation, :extracted_entities, []) != []}
+                    class="mt-2 flex flex-wrap gap-2"
+                  >
+                    <span
+                      :for={entity <- Map.get(citation, :extracted_entities, [])}
+                      class="badge badge-outline badge-sm"
+                    >
+                      {entity.entity_type}: {entity.canonical_name || entity.name}
+                    </span>
+                  </div>
+                  <div :if={Map.get(citation, :extracted_facts, []) != []} class="mt-2 space-y-1">
+                    <div
+                      :for={fact <- Map.get(citation, :extracted_facts, [])}
+                      class="rounded-box bg-base-100 px-3 py-2 text-xs text-base-content/80"
+                    >
+                      <span class="font-medium">{fact.subject}</span>
+                      <span>{fact.predicate}</span>
+                      <span class="font-medium">{fact.object}</span>
+                      <span class="text-base-content/50">
+                        ({fact.fact_type}{if fact.valid_at, do: " · " <> fact.valid_at, else: ""})
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -246,6 +461,34 @@ defmodule ThreadrWeb.TenantQaLive.Index do
                     <span>{"#" <> to_string(citation.channel_name)}</span>
                     <span>{citation.actor_handle}</span>
                   </div>
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    <.link
+                      navigate={
+                        ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("message", citation.message_id, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                      }
+                      class="btn btn-ghost btn-xs"
+                    >
+                      Message in Graph
+                    </.link>
+                    <.link
+                      :if={Map.get(citation, :actor_id)}
+                      navigate={
+                        ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("actor", citation.actor_id, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                      }
+                      class="btn btn-ghost btn-xs"
+                    >
+                      Actor in Graph
+                    </.link>
+                    <.link
+                      :if={Map.get(citation, :channel_id)}
+                      navigate={
+                        ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("channel", citation.channel_id, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                      }
+                      class="btn btn-ghost btn-xs"
+                    >
+                      Channel in Graph
+                    </.link>
+                  </div>
                 </div>
               </div>
             </div>
@@ -268,6 +511,26 @@ defmodule ThreadrWeb.TenantQaLive.Index do
             <:col :let={match} label="Actor">
               <div>{match.actor_handle}</div>
               <div class="text-xs text-base-content/60">{match.channel_name}</div>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <.link
+                  :if={Map.get(match, :actor_id)}
+                  navigate={
+                    ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("actor", Map.get(match, :actor_id), %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                  }
+                  class="btn btn-ghost btn-xs"
+                >
+                  Actor in Graph
+                </.link>
+                <.link
+                  :if={Map.get(match, :channel_id)}
+                  navigate={
+                    ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params("channel", Map.get(match, :channel_id), %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+                  }
+                  class="btn btn-ghost btn-xs"
+                >
+                  Channel in Graph
+                </.link>
+              </div>
             </:col>
             <:col :let={match} label="Observed">
               {format_datetime(match.observed_at)}
@@ -276,6 +539,31 @@ defmodule ThreadrWeb.TenantQaLive.Index do
               {format_similarity(match.similarity)}
             </:col>
           </.table>
+        </div>
+
+        <div
+          :if={qa_facts_over_time(assigns) != []}
+          class="card bg-base-100 border border-base-300 shadow-sm"
+        >
+          <div class="card-body">
+            <div class="text-sm font-semibold text-base-content/70">Facts Over Time</div>
+            <div class="space-y-2">
+              <div
+                :for={entry <- qa_facts_over_time(assigns)}
+                class="rounded-box border border-base-300 bg-base-200 px-4 py-3 text-sm"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div class="font-medium">{entry.day}</div>
+                  <div class="text-xs text-base-content/60">
+                    {entry.fact_count} facts · {entry.fact_type_count} types
+                  </div>
+                </div>
+                <div class="mt-1 text-xs text-base-content/70">
+                  Top fact: {entry.top_fact} ({entry.top_fact_count})
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </Layouts.app>
@@ -292,7 +580,9 @@ defmodule ThreadrWeb.TenantQaLive.Index do
         socket.assigns.current_user,
         socket.assigns.tenant.subject_name,
         question,
-        limit: socket.assigns.limit
+        limit: socket.assigns.limit,
+        since: parse_naive_datetime(socket.assigns.since),
+        until: parse_naive_datetime(socket.assigns.until)
       )
       |> normalize_result_error()
     end
@@ -308,9 +598,37 @@ defmodule ThreadrWeb.TenantQaLive.Index do
         socket.assigns.current_user,
         socket.assigns.tenant.subject_name,
         question,
-        limit: socket.assigns.limit
+        limit: socket.assigns.limit,
+        since: parse_naive_datetime(socket.assigns.since),
+        until: parse_naive_datetime(socket.assigns.until)
       )
       |> normalize_result_error()
+    end
+  end
+
+  defp run_compare(socket) do
+    question = String.trim(socket.assigns.question)
+
+    cond do
+      question == "" ->
+        {:error, "Question is required"}
+
+      parse_naive_datetime(socket.assigns.compare_since) == nil and
+          parse_naive_datetime(socket.assigns.compare_until) == nil ->
+        {:error, "Comparison window is required"}
+
+      true ->
+        Service.compare_tenant_question_windows_for_user(
+          socket.assigns.current_user,
+          socket.assigns.tenant.subject_name,
+          question,
+          limit: socket.assigns.limit,
+          since: parse_naive_datetime(socket.assigns.since),
+          until: parse_naive_datetime(socket.assigns.until),
+          compare_since: parse_naive_datetime(socket.assigns.compare_since),
+          compare_until: parse_naive_datetime(socket.assigns.compare_until)
+        )
+        |> normalize_result_error()
     end
   end
 
@@ -373,6 +691,60 @@ defmodule ThreadrWeb.TenantQaLive.Index do
 
   defp normalize_limit(_limit), do: @default_limit
 
+  defp normalize_blank(nil), do: ""
+  defp normalize_blank(value), do: value |> to_string() |> String.trim()
+
+  defp put_map_if_present(map, _key, nil), do: map
+  defp put_map_if_present(map, _key, ""), do: map
+  defp put_map_if_present(map, key, value), do: Map.put(map, key, value)
+
+  defp history_origin_params(question, since, until, compare_since, compare_until) do
+    %{}
+    |> put_map_if_present("origin_surface", "qa")
+    |> put_map_if_present("origin_question", question)
+    |> put_map_if_present("origin_since", since)
+    |> put_map_if_present("origin_until", until)
+    |> put_map_if_present("origin_compare_since", compare_since)
+    |> put_map_if_present("origin_compare_until", compare_until)
+  end
+
+  defp history_entity_params(window, entry, origin_params) do
+    %{}
+    |> put_map_if_present("entity_name", entry[:entity_name] || entry["entity_name"])
+    |> put_map_if_present("entity_type", entry[:entity_type] || entry["entity_type"])
+    |> put_map_if_present("since", window[:since] || window["since"])
+    |> put_map_if_present("until", window[:until] || window["until"])
+    |> Map.merge(origin_params)
+  end
+
+  defp history_fact_params(window, entry, origin_params) do
+    %{}
+    |> put_map_if_present("query", entry[:label] || entry["label"])
+    |> put_map_if_present("since", window[:since] || window["since"])
+    |> put_map_if_present("until", window[:until] || window["until"])
+    |> Map.merge(origin_params)
+  end
+
+  defp graph_focus_params(node_kind, node_id, window) do
+    %{}
+    |> put_map_if_present("node_kind", node_kind)
+    |> put_map_if_present("node_id", node_id)
+    |> put_map_if_present("since", window[:since] || window["since"])
+    |> put_map_if_present("until", window[:until] || window["until"])
+    |> put_map_if_present("compare_since", window[:compare_since] || window["compare_since"])
+    |> put_map_if_present("compare_until", window[:compare_until] || window["compare_until"])
+  end
+
+  defp parse_naive_datetime(""), do: nil
+  defp parse_naive_datetime(nil), do: nil
+
+  defp parse_naive_datetime(value) when is_binary(value) do
+    case NaiveDateTime.from_iso8601(value) do
+      {:ok, datetime} -> datetime
+      _ -> nil
+    end
+  end
+
   defp context_text(%{answer_result: %{context: context}}) when is_binary(context), do: context
 
   defp context_text(%{graph_answer_result: %{context: context}}) when is_binary(context),
@@ -399,6 +771,10 @@ defmodule ThreadrWeb.TenantQaLive.Index do
 
   defp graph_citation_rows(%{summary_result: %{graph: %{citations: citations}}}), do: citations
   defp graph_citation_rows(_assigns), do: []
+
+  defp qa_facts_over_time(%{answer_result: %{facts_over_time: entries}}), do: entries
+  defp qa_facts_over_time(%{search_result: %{facts_over_time: entries}}), do: entries
+  defp qa_facts_over_time(_assigns), do: []
 
   defp graph_context_text(%{graph_answer_result: %{graph: %{context: context}}})
        when is_binary(context),
@@ -449,4 +825,120 @@ defmodule ThreadrWeb.TenantQaLive.Index do
     do: :erlang.float_to_binary(value, decimals: 4)
 
   defp format_similarity(value), do: to_string(value)
+
+  attr(:id, :string, required: true)
+  attr(:delta, :map, required: true)
+  attr(:tenant_subject_name, :string, required: true)
+  attr(:baseline_window, :map, required: true)
+  attr(:comparison_window, :map, required: true)
+  attr(:origin_params, :map, required: true)
+
+  defp entity_delta_panel(assigns) do
+    ~H"""
+    <div id={@id} class="mt-2 space-y-2 text-sm">
+      <div class="text-xs text-base-content/60">Unchanged: {@delta.unchanged}</div>
+      <div>
+        <div class="text-xs font-semibold text-success">New People</div>
+        <div :if={@delta.highlights.new_people == []} class="text-xs text-base-content/60">none</div>
+        <.link
+          :for={entry <- @delta.highlights.new_people}
+          navigate={
+            ~p"/control-plane/tenants/#{@tenant_subject_name}/history?#{history_entity_params(@comparison_window, entry, @origin_params)}"
+          }
+          class="block text-xs link link-hover"
+        >
+          {entry.label} ({entry.count})
+        </.link>
+      </div>
+      <div>
+        <div class="text-xs font-semibold text-error">Removed People</div>
+        <div :if={@delta.highlights.removed_people == []} class="text-xs text-base-content/60">
+          none
+        </div>
+        <.link
+          :for={entry <- @delta.highlights.removed_people}
+          navigate={
+            ~p"/control-plane/tenants/#{@tenant_subject_name}/history?#{history_entity_params(@baseline_window, entry, @origin_params)}"
+          }
+          class="block text-xs link link-hover"
+        >
+          {entry.label} ({entry.count})
+        </.link>
+      </div>
+      <div>
+        <div class="text-xs font-semibold">Entity Types</div>
+        <div
+          :if={@delta.added_by_type == [] and @delta.removed_by_type == []}
+          class="text-xs text-base-content/60"
+        >
+          none
+        </div>
+        <div :for={entry <- @delta.added_by_type} class="text-xs text-success">
+          + {entry.type} ({entry.count})
+        </div>
+        <div :for={entry <- @delta.removed_by_type} class="text-xs text-error">
+          - {entry.type} ({entry.count})
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:delta, :map, required: true)
+  attr(:tenant_subject_name, :string, required: true)
+  attr(:baseline_window, :map, required: true)
+  attr(:comparison_window, :map, required: true)
+  attr(:origin_params, :map, required: true)
+
+  defp fact_delta_panel(assigns) do
+    ~H"""
+    <div id={@id} class="mt-2 space-y-2 text-sm">
+      <div class="text-xs text-base-content/60">Unchanged: {@delta.unchanged}</div>
+      <div>
+        <div class="text-xs font-semibold text-success">New Claims</div>
+        <div :if={@delta.highlights.new_claims == []} class="text-xs text-base-content/60">none</div>
+        <.link
+          :for={entry <- @delta.highlights.new_claims}
+          navigate={
+            ~p"/control-plane/tenants/#{@tenant_subject_name}/history?#{history_fact_params(@comparison_window, entry, @origin_params)}"
+          }
+          class="block text-xs link link-hover"
+        >
+          {entry.label} ({entry.count})
+        </.link>
+      </div>
+      <div>
+        <div class="text-xs font-semibold text-error">Dropped Claims</div>
+        <div :if={@delta.highlights.dropped_claims == []} class="text-xs text-base-content/60">
+          none
+        </div>
+        <.link
+          :for={entry <- @delta.highlights.dropped_claims}
+          navigate={
+            ~p"/control-plane/tenants/#{@tenant_subject_name}/history?#{history_fact_params(@baseline_window, entry, @origin_params)}"
+          }
+          class="block text-xs link link-hover"
+        >
+          {entry.label} ({entry.count})
+        </.link>
+      </div>
+      <div>
+        <div class="text-xs font-semibold">By Subject</div>
+        <div
+          :if={@delta.added_by_subject == [] and @delta.removed_by_subject == []}
+          class="text-xs text-base-content/60"
+        >
+          none
+        </div>
+        <div :for={entry <- @delta.added_by_subject} class="text-xs text-success">
+          + {entry.subject} ({entry.count})
+        </div>
+        <div :for={entry <- @delta.removed_by_subject} class="text-xs text-error">
+          - {entry.subject} ({entry.count})
+        </div>
+      </div>
+    </div>
+    """
+  end
 end

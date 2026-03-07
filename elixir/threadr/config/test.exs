@@ -38,3 +38,17 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+config :threadr, Threadr.ML,
+  extraction: [
+    enabled: true,
+    provider: Threadr.ML.Extraction.NoopProvider,
+    provider_name: "openai",
+    system_prompt: nil,
+    temperature: 0.0,
+    max_tokens: 600,
+    timeout: 30_000
+  ]
+
+config :threadr, Threadr.ControlPlane.BotOperationDispatcher, enabled: false
+config :threadr, Threadr.ControlPlane.BotStatusObserver, enabled: false
