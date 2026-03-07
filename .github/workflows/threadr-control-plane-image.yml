@@ -54,11 +54,9 @@ jobs:
           chmod +x buildbuddy_setup_docker_auth.sh
           ./buildbuddy_setup_docker_auth.sh
 
-      - name: Install local runner toolchains
+      - name: Set up Rust toolchain
         if: env.BAZEL_BUILD_CONFIG == 'no_remote'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cargo rustc
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build all Bazel targets
         run: |
