@@ -31,6 +31,7 @@ nats_token = System.get_env("THREADR_NATS_TOKEN")
 nats_ca_cert_file = System.get_env("THREADR_NATS_CA_CERT_FILE")
 nats_client_cert_file = System.get_env("THREADR_NATS_CLIENT_CERT_FILE")
 nats_client_key_file = System.get_env("THREADR_NATS_CLIENT_KEY_FILE")
+nats_tls_server_name = System.get_env("THREADR_NATS_TLS_SERVER_NAME")
 
 nats_tls_verify =
   case System.get_env("THREADR_NATS_TLS_VERIFY") do
@@ -42,6 +43,32 @@ nats_ssl_opts =
   if nats_tls_enabled do
     []
     |> Keyword.put(:verify, nats_tls_verify)
+    |> then(fn opts ->
+      server_name =
+        cond do
+          is_binary(nats_tls_server_name) and nats_tls_server_name != "" ->
+            nats_tls_server_name
+
+          match?({:ok, _address}, :inet.parse_address(String.to_charlist(nats_host))) ->
+            nil
+
+          true ->
+            nats_host
+        end
+
+      case server_name do
+        nil ->
+          opts
+
+        hostname ->
+          opts
+          |> Keyword.put(:server_name_indication, String.to_charlist(hostname))
+          |> Keyword.put(
+            :customize_hostname_check,
+            [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)]
+          )
+      end
+    end)
     |> then(fn opts ->
       case nats_ca_cert_file do
         nil -> opts

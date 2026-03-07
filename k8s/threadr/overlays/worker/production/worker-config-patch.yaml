@@ -12,6 +12,7 @@ data:
   THREADR_NATS_PORT: "4222"
   THREADR_NATS_TLS: "true"
   THREADR_NATS_TLS_VERIFY: verify_peer
+  THREADR_NATS_TLS_SERVER_NAME: nats.threadr.svc.cluster.local
   THREADR_NATS_CA_CERT_FILE: /etc/threadr/nats/ca/tls.crt
   THREADR_NATS_CLIENT_CERT_FILE: /etc/threadr/nats/client/tls.crt
   THREADR_NATS_CLIENT_KEY_FILE: /etc/threadr/nats/client/tls.key
