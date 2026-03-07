@@ -68,12 +68,14 @@ parse_bool = fn
   _value -> false
 end
 
-config :threadr,
-       :web_enabled,
-       case System.get_env("THREADR_WEB_ENABLED") do
-         nil -> Application.get_env(:threadr, :web_enabled, true)
-         value -> parse_bool.(value)
-       end
+Application.put_env(
+  :threadr,
+  :web_enabled,
+  case System.get_env("THREADR_WEB_ENABLED") do
+    nil -> Application.get_env(:threadr, :web_enabled, true)
+    value -> parse_bool.(value)
+  end
+)
 
 parse_integer = fn
   nil ->
