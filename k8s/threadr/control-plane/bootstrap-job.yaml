@@ -1,0 +1,97 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: threadr-bootstrap-operator-admin
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: threadr-bootstrap-operator-admin
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: threadr-bootstrap
+      volumes:
+        - name: bootstrap-shared
+          emptyDir: {}
+      initContainers:
+        - name: bootstrap-secret
+          image: bitnami/kubectl:1.32
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              namespace="${POD_NAMESPACE}"
+              secret_name="${THREADR_BOOTSTRAP_SECRET_NAME:-threadr-bootstrap-admin}"
+
+              existing_password="$(kubectl -n "$namespace" get secret "$secret_name" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)"
+              existing_email="$(kubectl -n "$namespace" get secret "$secret_name" -o jsonpath='{.data.email}' 2>/dev/null | base64 -d || true)"
+              existing_name="$(kubectl -n "$namespace" get secret "$secret_name" -o jsonpath='{.data.name}' 2>/dev/null | base64 -d || true)"
+
+              email="${existing_email:-$THREADR_BOOTSTRAP_ADMIN_EMAIL}"
+              name="${existing_name:-$THREADR_BOOTSTRAP_ADMIN_NAME}"
+
+              if [ -z "$email" ]; then
+                echo "THREADR_BOOTSTRAP_ADMIN_EMAIL must be set in threadr-bootstrap-admin-config"
+                exit 1
+              fi
+
+              password="$existing_password"
+              if [ -z "$password" ]; then
+                password="$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)"
+              fi
+
+              printf '%s' "$email" > /bootstrap/email
+              printf '%s' "$password" > /bootstrap/password
+
+              if [ -n "$name" ]; then
+                printf '%s' "$name" > /bootstrap/name
+                kubectl -n "$namespace" create secret generic "$secret_name" \
+                  --from-literal=email="$email" \
+                  --from-literal=password="$password" \
+                  --from-literal=name="$name" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              else
+                rm -f /bootstrap/name
+                kubectl -n "$namespace" create secret generic "$secret_name" \
+                  --from-literal=email="$email" \
+                  --from-literal=password="$password" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              fi
+          envFrom:
+            - configMapRef:
+                name: threadr-bootstrap-admin-config
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: bootstrap-shared
+              mountPath: /bootstrap
+      containers:
+        - name: bootstrap-operator-admin
+          image: threadr-control-plane:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              export THREADR_BOOTSTRAP_ADMIN_EMAIL="$(cat /bootstrap/email)"
+              export THREADR_BOOTSTRAP_ADMIN_PASSWORD="$(cat /bootstrap/password)"
+              if [ -f /bootstrap/name ]; then
+                export THREADR_BOOTSTRAP_ADMIN_NAME="$(cat /bootstrap/name)"
+              fi
+              bin/threadr eval 'Threadr.ReleaseTasks.migrate()'
+              bin/threadr eval 'Threadr.ReleaseTasks.bootstrap_operator_admin_from_env()'
+          envFrom:
+            - configMapRef:
+                name: threadr-control-plane-config
+            - secretRef:
+                name: threadr-control-plane-env
+          env:
+            - name: PHX_SERVER
+              value: "false"
+          volumeMounts:
+            - name: bootstrap-shared
+              mountPath: /bootstrap

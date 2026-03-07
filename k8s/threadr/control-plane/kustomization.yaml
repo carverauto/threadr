@@ -1,0 +1,12 @@
+namespace: threadr
+
+resources:
+  - namespace.yaml
+  - control-plane-config.yaml
+  - serviceaccount.yaml
+  - service.yaml
+  - ingress.yaml
+  - deployment.yaml
+  - bootstrap-admin-config.yaml
+  - bootstrap-rbac.yaml
+  - bootstrap-job.yaml

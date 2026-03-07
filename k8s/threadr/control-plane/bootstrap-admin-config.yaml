@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: threadr-bootstrap-admin-config
+data:
+  THREADR_BOOTSTRAP_ADMIN_EMAIL: ""
+  THREADR_BOOTSTRAP_ADMIN_NAME: ""
+  THREADR_BOOTSTRAP_SECRET_NAME: "threadr-bootstrap-admin"

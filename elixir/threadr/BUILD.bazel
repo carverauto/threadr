@@ -1,0 +1,40 @@
+load("//build:mix_release.bzl", "mix_release")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(
+        ["**"],
+        exclude = [
+            "bazel-*",
+            "_build/**",
+            "deps/**",
+            "node_modules/**",
+            "tmp/**",
+            ".git/**",
+        ],
+    ),
+)
+
+mix_release(
+    name = "release_tar",
+    srcs = [":srcs"],
+    hex_cache = select({
+        "//build:use_hex_cache": "//build:hex_cache",
+        "//conditions:default": None,
+    }),
+    out = "threadr-release.tar.gz",
+    src_dir = "elixir/threadr",
+    run_assets = True,
+)
+
+alias(
+    name = "control_plane_image_build",
+    actual = "//docker/images:control_plane_image_amd64_tar",
+)
+
+alias(
+    name = "control_plane_image_push",
+    actual = "//docker/images:control_plane_image_push",
+)

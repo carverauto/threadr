@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: threadr-control-plane-config
+data:
+  PHX_HOST: threadr.example.com
+  THREADR_BOT_STATUS_OBSERVER_ENABLED: "true"

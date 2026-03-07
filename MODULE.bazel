@@ -1,0 +1,98 @@
+module(
+    name = "threadr",
+    version = "0.1.0",
+    repo_name = "threadr",
+)
+
+bazel_dep(name = "rules_oci", version = "2.2.6")
+bazel_dep(name = "rules_erlang", version = "3.16.0")
+bazel_dep(name = "rules_elixir", version = "1.1.0")
+bazel_dep(name = "rules_cc", version = "0.2.16")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(
+    name = "toolchains_buildbuddy",
+    version = "0.0.4",
+    repo_name = "io_buildbuddy_buildbuddy_toolchain",
+)
+
+single_version_override(
+    module_name = "rules_erlang",
+    patch_strip = 1,
+    patches = [
+        "//third_party/patches/rules_erlang:skip_system_erlang.patch",
+        "//third_party/patches/rules_erlang:add_bzlmod_build.patch",
+    ],
+)
+
+single_version_override(
+    module_name = "rules_elixir",
+    patch_strip = 1,
+    patches = [
+        "//third_party/patches/rules_elixir:skip_system_elixir.patch",
+    ],
+)
+
+erlang_config_ext = use_extension("@rules_erlang//bzlmod:extensions.bzl", "erlang_config")
+erlang_config_ext.internal_erlang_from_github_release(
+    name = "otp_28_1",
+    sha256 = "c7c6fe06a3bf0031187d4cb10d30e11de119b38bdba7cd277898f75d53bdb218",
+    version = "28.1",
+)
+use_repo(erlang_config_ext, "erlang_config")
+
+elixir_config_ext = use_extension("@rules_elixir//bzlmod:extensions.bzl", "elixir_config")
+elixir_config_ext.internal_elixir_from_github_release(
+    name = "elixir_1_19_4",
+    sha256 = "a2df9d5411fc53d97ec17c069765c8fb781f8dc36c4e06ec1cd4b189340d364b",
+    version = "1.19.4",
+)
+use_repo(elixir_config_ext, "elixir_config")
+
+register_toolchains(
+    "@erlang_config//otp_28_1:toolchain_major",
+    "@erlang_config//otp_28_1:toolchain_major_minor",
+    "@elixir_config//elixir_1_19_4:toolchain",
+)
+
+cc_configure_ext = use_extension("@rules_cc//cc:extensions.bzl", "cc_configure_extension")
+use_repo(cc_configure_ext, "local_config_cc", "local_config_cc_toolchains")
+
+cc_compat_ext = use_extension("@rules_cc//cc:extensions.bzl", "compatibility_proxy")
+use_repo(cc_compat_ext, "cc_compatibility_proxy")
+
+buildbuddy_toolchain_ext = use_extension(
+    "@io_buildbuddy_buildbuddy_toolchain//:extensions.bzl",
+    "buildbuddy",
+)
+buildbuddy_toolchain_ext.gcc_toolchain(
+    extra_cxx_builtin_include_directories = [
+        "/opt/rh/gcc-toolset-13/root/usr/include/c++/13",
+        "/opt/rh/gcc-toolset-13/root/usr/include/c++/13/x86_64-redhat-linux",
+        "/opt/rh/gcc-toolset-13/root/usr/include/c++/13/backward",
+        "/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13/include",
+        "/opt/rh/gcc-toolset-13/root/usr/lib/gcc/x86_64-redhat-linux/13/include-fixed",
+        "/usr/lib/gcc/x86_64-linux-gnu/10/include",
+        "/usr/lib/gcc/x86_64-linux-gnu/10/include-fixed",
+        "/usr/lib/gcc/x86_64-linux-gnu/11/include",
+        "/usr/lib/gcc/x86_64-linux-gnu/11/include-fixed",
+        "/usr/lib/gcc/x86_64-linux-gnu/5/include",
+        "/usr/lib/gcc/x86_64-linux-gnu/5/include-fixed",
+    ],
+    gcc_major_version = "13",
+)
+buildbuddy_toolchain_ext.platform(
+    container_image = "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20",
+)
+use_repo(buildbuddy_toolchain_ext, "buildbuddy_toolchain")
+
+register_execution_platforms("//:rbe_platform")
+register_toolchains("//build/toolchains:rbe_cc_toolchain")
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "hexpm_elixir_runtime_linux_amd64",
+    digest = "sha256:cdacd4041282e534b4fd6d96eabc78b24cb334d80efe56936e88f0f3d6c8eb49",
+    image = "docker.io/hexpm/elixir",
+    platforms = ["linux/amd64"],
+)
+use_repo(oci, "hexpm_elixir_runtime_linux_amd64", "hexpm_elixir_runtime_linux_amd64_linux_amd64")

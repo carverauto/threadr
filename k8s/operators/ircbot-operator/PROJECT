@@ -20,4 +20,13 @@ resources:
   kind: IRCBot
   path: github.com/carverauto/threadr/k8s/operator/ircbot-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: threadr.ai
+  group: cache
+  kind: ThreadrBot
+  path: github.com/carverauto/threadr/k8s/operator/ircbot-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

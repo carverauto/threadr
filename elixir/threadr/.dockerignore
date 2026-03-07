@@ -1,0 +1,12 @@
+_build
+deps
+cover
+tmp
+.elixir_ls
+.git
+.github
+node_modules
+Dockerfile.*
+erl_crash.dump
+*.ez
+test

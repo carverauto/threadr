@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: threadr-control-plane
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: threadr.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: threadr-control-plane
+                port:
+                  number: 80

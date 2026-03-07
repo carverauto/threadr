@@ -1,0 +1,88 @@
+name: Threadr Control Plane Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/threadr-control-plane-image.yml"
+      - ".bazelrc"
+      - ".bazelversion"
+      - "MODULE.bazel"
+      - "elixir/threadr/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Configure BuildBuddy remote access
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        run: |
+          chmod +x tools/buildbuddy/write_remote_rc.sh
+          tools/buildbuddy/write_remote_rc.sh
+
+      - name: Configure Docker auth
+        env:
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x buildbuddy_setup_docker_auth.sh
+          ./buildbuddy_setup_docker_auth.sh
+
+      - name: Build all Bazel targets
+        run: |
+          bazel build -c opt //... --config=remote
+
+      - name: Run Bazel tests
+        run: |
+          TEST_TARGETS="$(bazel query 'tests(//...)' | tr '\n' ' ')"
+          if [ -z "${TEST_TARGETS}" ]; then
+            echo "No Bazel test targets defined; skipping bazel test"
+            exit 0
+          fi
+
+          bazel test -c opt --config=remote ${TEST_TARGETS}
+
+      - name: Build and push image via Bazel
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Keep push on Linux CI. `bazel run` executes the generated push script
+          # on the host, so local macOS is not the canonical push environment.
+          bazel run -c opt //docker/images:push_all --config=remote
+
+      - name: Update production digest pin
+        if: github.ref == 'refs/heads/main'
+        run: |
+          chmod +x elixir/threadr/tools/bazel/update_production_digest.sh
+          elixir/threadr/tools/bazel/update_production_digest.sh \
+            --image ghcr.io/carverauto/threadr/threadr-control-plane \
+            --tag main \
+            --file k8s/threadr/overlays/control-plane/production/image-patch.yaml
+
+      - name: Commit production digest pin
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- k8s/threadr/overlays/control-plane/production/image-patch.yaml; then
+            echo "production digest pin already current"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s/threadr/overlays/control-plane/production/image-patch.yaml
+          git commit -m "ci: update control-plane production digest pin"
+          git push

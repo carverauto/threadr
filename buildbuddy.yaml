@@ -1,0 +1,29 @@
+remote_execution:
+  enabled: true
+  endpoint: "grpcs://remote.buildbuddy.io"
+
+remote_cache:
+  enabled: true
+  endpoint: "grpcs://carverauto.buildbuddy.io"
+  compression_enabled: true
+  upload_enabled: true
+  download_enabled: true
+  max_size_gb: 100
+  ttl_hours: 168
+
+build_event_streaming:
+  enabled: true
+  endpoint: "grpcs://carverauto.buildbuddy.io"
+
+execution_config:
+  platform_properties:
+    container-image: "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20"
+    OSFamily: "linux"
+    Arch: "amd64"
+  max_execution_timeout_seconds: 3600
+  default_exec_properties:
+    Pool: "default"
+
+# Authentication is expected through:
+# - .bazelrc.remote with x-buildbuddy-api-key
+# - or BUILDBUDDY_API_KEY / BUILDBUDDY_ORG_API_KEY via tools/buildbuddy/write_remote_rc.sh

@@ -1,0 +1,129 @@
+<Layouts.flash_group flash={@flash} />
+
+<main class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(249,115,22,0.2),_transparent_28%),linear-gradient(180deg,_oklch(98%_0_0)_0%,_oklch(96%_0.001_286.375)_48%,_oklch(92%_0.004_286.32)_100%)] text-base-content dark:bg-[radial-gradient(circle_at_top_left,_rgba(251,146,60,0.14),_transparent_24%),linear-gradient(180deg,_oklch(24%_0.015_255)_0%,_oklch(20%_0.012_254.09)_100%)]">
+  <section class="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-10">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-[0.3em] text-base-content/50">
+          Threadr
+        </div>
+        <div class="mt-2 text-sm text-base-content/70">
+          Multi-tenant intelligence graph for IRC and Discord operations
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <Layouts.theme_toggle />
+        <a href={~p"/sign-in"} class="btn btn-ghost btn-sm">Sign in</a>
+        <a href={~p"/register"} class="btn btn-primary btn-sm">Register</a>
+      </div>
+    </div>
+
+    <div class="grid flex-1 gap-10 py-14 lg:grid-cols-[minmax(0,1.15fr)_26rem] lg:items-center">
+      <div class="space-y-8">
+        <div class="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+          JetStream + Broadway + Ash + AGE
+        </div>
+
+        <div class="space-y-6">
+          <h1 class="max-w-4xl text-5xl font-black leading-none tracking-[-0.04em] text-balance sm:text-6xl">
+            Build tenant-scoped intelligence graphs from live chat streams.
+          </h1>
+
+          <p class="max-w-3xl text-lg leading-8 text-base-content/70">
+            Threadr ingests IRC and Discord traffic, persists tenant-isolated graph state in
+            Postgres, and gives analysts search, QA, and graph exploration without leaving the web
+            UI.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+          <a href={~p"/register"} class="btn btn-primary btn-lg">Create an account</a>
+          <a href={~p"/sign-in"} class="btn btn-outline btn-lg">Sign in</a>
+          <a href={~p"/control-plane/tenants"} class="btn btn-ghost btn-lg">Control plane</a>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3">
+          <article class="rounded-3xl border border-base-300/70 bg-base-100/85 p-5 shadow-sm backdrop-blur">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+              Ingest
+            </div>
+            <div class="mt-3 text-xl font-semibold">IRC and Discord to JetStream</div>
+            <p class="mt-3 text-sm leading-6 text-base-content/70">
+              Normalized tenant subjects, Broadway consumers, idempotent persistence, and durable
+              replay semantics.
+            </p>
+          </article>
+
+          <article class="rounded-3xl border border-base-300/70 bg-base-100/85 p-5 shadow-sm backdrop-blur">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+              Intelligence
+            </div>
+            <div class="mt-3 text-xl font-semibold">Semantic QA and graph context</div>
+            <p class="mt-3 text-sm leading-6 text-base-content/70">
+              pgvector embeddings, AGE neighborhoods, Graph-RAG summaries, and tenant-scoped
+              retrieval APIs.
+            </p>
+          </article>
+
+          <article class="rounded-3xl border border-base-300/70 bg-base-100/85 p-5 shadow-sm backdrop-blur">
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+              SaaS
+            </div>
+            <div class="mt-3 text-xl font-semibold">Schema multitenancy with control plane</div>
+            <p class="mt-3 text-sm leading-6 text-base-content/70">
+              Ash resources, API keys, memberships, bot reconciliation, and Kubernetes operator
+              contracts for shared-cluster deployment.
+            </p>
+          </article>
+        </div>
+      </div>
+
+      <aside class="rounded-[2rem] border border-base-300/70 bg-base-100/90 p-6 shadow-xl backdrop-blur">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+              Analyst Workflow
+            </div>
+            <div class="mt-2 text-2xl font-semibold">What is already live</div>
+          </div>
+          <div class="badge badge-secondary badge-outline">alpha</div>
+        </div>
+
+        <div class="mt-6 space-y-4">
+          <div class="rounded-2xl bg-base-200/70 p-4">
+            <div class="text-sm font-semibold">Tenant control plane</div>
+            <div class="mt-1 text-sm text-base-content/70">
+              Provision tenants, manage memberships, issue API keys, and operate bot definitions.
+            </div>
+          </div>
+
+          <div class="rounded-2xl bg-base-200/70 p-4">
+            <div class="text-sm font-semibold">QA workspace</div>
+            <div class="mt-1 text-sm text-base-content/70">
+              Ask grounded questions over tenant history with semantic retrieval and graph-aware
+              summaries.
+            </div>
+          </div>
+
+          <div class="rounded-2xl bg-base-200/70 p-4">
+            <div class="text-sm font-semibold">Graph explorer</div>
+            <div class="mt-1 text-sm text-base-content/70">
+              Arrow snapshots, deck.gl rendering, backend-owned graph semantics, and pinned dossier
+              focus.
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-base-300/80 bg-base-100 p-4">
+          <div class="text-xs font-semibold uppercase tracking-[0.2em] text-base-content/50">
+            Next step
+          </div>
+          <div class="mt-2 text-sm leading-6 text-base-content/75">
+            Register a user, create a tenant, then open the graph and QA workspaces from the
+            control plane.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>

@@ -1,4 +1,7 @@
 .idea
+.bazelrc.local
+.bazelrc.remote
+.bazelrc.swp
 .env
 *.pem
 tf/terraform.tfstate.backup
@@ -13,3 +16,6 @@ threadr-secrets.yaml
 *.crt
 *.key
 natsctl
+.claude
+.gemini
+.DS_Store

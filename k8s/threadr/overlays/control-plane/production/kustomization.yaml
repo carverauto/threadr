@@ -1,0 +1,12 @@
+namespace: threadr
+
+resources:
+  - ../../../control-plane
+  - servicemonitor.yaml
+  - networkpolicy.yaml
+
+patches:
+  - path: ingress-patch.yaml
+  - path: control-plane-config-patch.yaml
+  - path: bootstrap-admin-config-patch.yaml
+  - path: image-patch.yaml

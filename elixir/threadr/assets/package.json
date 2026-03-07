@@ -1,0 +1,10 @@
+{
+  "name": "threadr-assets",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@deck.gl/core": "^9.2.2",
+    "@deck.gl/layers": "^9.2.2",
+    "apache-arrow": "^16.1.0"
+  }
+}

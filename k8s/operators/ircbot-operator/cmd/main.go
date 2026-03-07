@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -36,6 +37,7 @@ import (
 
 	cachev1alpha1 "github.com/carverauto/threadr/k8s/operator/ircbot-operator/api/v1alpha1"
 	"github.com/carverauto/threadr/k8s/operator/ircbot-operator/internal/controller"
+	"github.com/carverauto/threadr/k8s/operator/ircbot-operator/internal/controlplane"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -57,6 +59,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var statusReporter controlplane.StatusReporter
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -128,6 +131,45 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IRCBot")
+		os.Exit(1)
+	}
+
+	if controlPlaneConfig, configErr := controlplane.ConfigFromEnv(); configErr != nil {
+		setupLog.Error(configErr, "invalid control plane sync configuration")
+		os.Exit(1)
+	} else if controlPlaneConfig.Enabled() {
+		contractClient, clientErr := controlplane.NewHTTPClient(controlPlaneConfig)
+		if clientErr != nil {
+			setupLog.Error(clientErr, "unable to create control plane client")
+			os.Exit(1)
+		}
+
+		statusReporter = contractClient
+
+		syncInterval := controlPlaneConfig.SyncInterval
+		if syncInterval <= 0 {
+			syncInterval = 15 * time.Second
+		}
+
+		if err := mgr.Add(&controller.ThreadrBotContractSyncer{
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			ContractClient: contractClient,
+			SyncInterval:   syncInterval,
+		}); err != nil {
+			setupLog.Error(err, "unable to add ThreadrBot contract syncer")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("ThreadrBot control plane integration disabled", "reason", "missing THREADR_CONTROL_PLANE_BASE_URL or THREADR_CONTROL_PLANE_TOKEN")
+	}
+
+	if err = (&controller.ThreadrBotReconciler{
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		StatusReporter: statusReporter,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ThreadrBot")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
