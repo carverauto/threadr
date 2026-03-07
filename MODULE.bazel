@@ -92,7 +92,7 @@ buildbuddy_toolchain_ext.gcc_toolchain(
     gcc_major_version = "13",
 )
 buildbuddy_toolchain_ext.platform(
-    container_image = "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20",
+    container_image = "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.21",
 )
 use_repo(buildbuddy_toolchain_ext, "buildbuddy_toolchain")
 

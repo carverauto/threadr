@@ -19,7 +19,7 @@ platform(
         "@elixir_config//:elixir_internal",
     ],
     exec_properties = {
-        "container-image": "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20",
+        "container-image": "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.21",
         "OSFamily": "linux",
         "Arch": "amd64",
         "dockerNetwork": "host",

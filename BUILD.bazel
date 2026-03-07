@@ -17,7 +17,7 @@ platform(
     exec_properties = {
         "OSFamily": "Linux",
         "dockerNetwork": "host",
-        "container-image": "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20",
+        "container-image": "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.21",
     },
 )
 

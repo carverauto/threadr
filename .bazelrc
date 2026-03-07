@@ -37,7 +37,7 @@ build:remote_base --bes_backend=grpcs://carverauto.buildbuddy.io
 build:remote_base --remote_cache=grpcs://carverauto.buildbuddy.io
 build:remote_base --remote_executor=grpcs://remote.buildbuddy.io
 build:remote_base --remote_timeout=15m
-build:remote_base --remote_default_exec_properties=container-image=docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20
+build:remote_base --remote_default_exec_properties=container-image=docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.21
 build:remote_base --remote_default_exec_properties=OSFamily=Linux
 build:remote_base --remote_default_exec_properties=Arch=amd64
 build:remote_base --remote_default_exec_properties=Pool=default

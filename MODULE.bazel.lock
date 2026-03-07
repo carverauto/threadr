@@ -14,10 +14,6 @@
     "https://bcr.bazel.build/modules/abseil-cpp/20250512.1/MODULE.bazel": "d209fdb6f36ffaf61c509fcc81b19e81b411a999a934a032e10cd009a0226215",
     "https://bcr.bazel.build/modules/abseil-cpp/20250814.0/MODULE.bazel": "c43c16ca2c432566cdb78913964497259903ebe8fb7d9b57b38e9f1425b427b8",
     "https://bcr.bazel.build/modules/abseil-cpp/20250814.0/source.json": "b88bff599ceaf0f56c264c749b1606f8485cec3b8c38ba30f88a4df9af142861",
-    "https://bcr.bazel.build/modules/apple_support/1.11.1/MODULE.bazel": "1843d7cd8a58369a444fc6000e7304425fba600ff641592161d9f15b179fb896",
-    "https://bcr.bazel.build/modules/apple_support/1.15.1/MODULE.bazel": "a0556fefca0b1bb2de8567b8827518f94db6a6e7e7d632b4c48dc5f865bc7c85",
-    "https://bcr.bazel.build/modules/apple_support/1.15.1/source.json": "517f2b77430084c541bc9be2db63fdcbb7102938c5f64c17ee60ffda2e5cf07b",
-    "https://bcr.bazel.build/modules/apple_support/1.5.0/MODULE.bazel": "50341a62efbc483e8a2a6aec30994a58749bd7b885e18dd96aa8c33031e558ef",
     "https://bcr.bazel.build/modules/aspect_bazel_lib/2.7.2/MODULE.bazel": "780d1a6522b28f5edb7ea09630748720721dfe27690d65a2d33aa7509de77e07",
     "https://bcr.bazel.build/modules/aspect_bazel_lib/2.7.2/source.json": "a9ee2898e86eb8106e67b2adcd63de788cd922dd82f90f6775f13b0bf2248d75",
     "https://bcr.bazel.build/modules/bazel_features/1.1.1/MODULE.bazel": "27b8c79ef57efe08efccbd9dd6ef70d61b4798320b8d3c134fd571f78963dbcd",
@@ -195,7 +191,7 @@
     "@@apple_support~//crosstool:setup.bzl%apple_cc_configure_extension": {
       "general": {
         "bzlTransitiveDigest": "ltCGFbl/LQQZXn/LEMXfKX7pGwyqNiOCHcmiQW0tmjM=",
-        "usagesDigest": "eXsWd8YDJDt7+F94YtjKuTAIRMWBi9JLS8hUiqynRIY=",
+        "usagesDigest": "BDfCj3I/UVThPchZon8p6fFGAXmJSpThJKAI6S3WTk4=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -1208,7 +1204,7 @@
     "@@toolchains_buildbuddy~//:extensions.bzl%buildbuddy": {
       "general": {
         "bzlTransitiveDigest": "YThiSErJv+jiCHJzZIEyk0yegQRS/x+T/ce309eGTvA=",
-        "usagesDigest": "loa1F8meirbRN60SeFo4p+jGEdwvnl8mmXcm25/X7YY=",
+        "usagesDigest": "S/RxnSAthYo9wXaHSPpOZcujAKS4bgPlCqHITisCqJc=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -1217,7 +1213,7 @@
             "bzlFile": "@@toolchains_buildbuddy~//:rules.bzl",
             "ruleClassName": "_buildbuddy_toolchain",
             "attributes": {
-              "container_image": "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.20",
+              "container_image": "docker://ghcr.io/carverauto/serviceradar/rbe-executor:v1.0.21",
               "llvm": false,
               "java_version": "",
               "gcc_version": "13",
