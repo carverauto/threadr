@@ -28,12 +28,19 @@ jobs:
       - name: Set up Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
 
-      - name: Configure BuildBuddy remote access
+      - name: Configure Bazel execution mode
         env:
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
         run: |
-          chmod +x tools/buildbuddy/write_remote_rc.sh
-          tools/buildbuddy/write_remote_rc.sh
+          if [ -n "${BUILDBUDDY_API_KEY}" ]; then
+            chmod +x tools/buildbuddy/write_remote_rc.sh
+            tools/buildbuddy/write_remote_rc.sh
+            echo "BAZEL_BUILD_CONFIG=remote" >> "${GITHUB_ENV}"
+            echo "Using BuildBuddy remote execution"
+          else
+            echo "BAZEL_BUILD_CONFIG=no_remote" >> "${GITHUB_ENV}"
+            echo "BUILDBUDDY_API_KEY is not configured; using local GitHub runner execution"
+          fi
 
       - name: Configure Docker auth
         env:
@@ -45,7 +52,7 @@ jobs:
 
       - name: Build all Bazel targets
         run: |
-          bazel build -c opt //... --config=remote
+          bazel build -c opt //... --config="${BAZEL_BUILD_CONFIG}"
 
       - name: Run Bazel tests
         run: |
@@ -55,14 +62,14 @@ jobs:
             exit 0
           fi
 
-          bazel test -c opt --config=remote ${TEST_TARGETS}
+          bazel test -c opt --config="${BAZEL_BUILD_CONFIG}" ${TEST_TARGETS}
 
       - name: Build and push image via Bazel
         if: github.ref == 'refs/heads/main'
         run: |
           # Keep push on Linux CI. `bazel run` executes the generated push script
           # on the host, so local macOS is not the canonical push environment.
-          bazel run -c opt //docker/images:push_all --config=remote
+          bazel run -c opt //docker/images:push_all --config="${BAZEL_BUILD_CONFIG}"
 
       - name: Update production digest pin
         if: github.ref == 'refs/heads/main'

@@ -188,6 +188,10 @@ and updates the production digest pin:
 bazel run -c opt //docker/images:push_all --config=remote
 ```
 
+If `BUILDBUDDY_API_KEY` is configured in GitHub Actions, the workflow uses
+BuildBuddy RBE. If it is not configured, the same workflow falls back to local
+execution on the Linux GitHub runner.
+
 On `main`, the image publish workflow also resolves the pushed GHCR digest and
 commits it back into
 [image-patch.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/production/image-patch.yaml#L1),
