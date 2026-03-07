@@ -103,13 +103,14 @@ Authenticated users can mint and revoke their own API keys. API keys should be t
 Control-plane container delivery should use Bazel as the canonical build and push entrypoint instead of ad hoc local shell commands or a workflow-specific `docker build` invocation.
 
 The concrete contract is:
-- the control-plane image remains defined by the Phoenix release `Dockerfile`
+- the control-plane image is assembled through Bazel-native release and OCI targets
 - Bazel targets are the supported interface for local build and GHCR push operations
-- CI invokes those Bazel targets rather than duplicating container build logic in GitHub Actions
+- CI uses `-c opt` for Bazel build and test execution and routes those actions through BuildBuddy remote execution and caching
+- CI invokes Bazel targets rather than duplicating container build logic in GitHub Actions
 - after publish, CI resolves the pushed GHCR digest and updates the production overlay's image pin
 - Kubernetes overlays and ArgoCD applications reference the published GHCR image rather than the placeholder local image name
 
-This keeps the delivery path aligned across local use, CI, and GitOps without forcing the rewrite to solve a full hermetic Elixir toolchain migration in the same step.
+This keeps the delivery path aligned across local use, CI, and GitOps. The desired model is a Bazel-native Elixir release artifact feeding a Bazel-native OCI image assembly and push path, rather than host-side `docker buildx` wrapping.
 
 ### Environment-Specific Deployment Overlay Contract
 The repository should carry a production-oriented Kustomize overlay and ArgoCD application definition that pin the externally visible hostname, TLS secret name, bootstrap operator email, and immutable image reference for the control plane.

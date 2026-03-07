@@ -1,11 +1,36 @@
-sh_binary(
-    name = "control_plane_image_build",
-    srcs = ["tools/bazel/control_plane_image.sh"],
-    args = ["build"],
+load("//build:mix_release.bzl", "mix_release")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(
+        ["**"],
+        exclude = [
+            "bazel-*",
+            "_build/**",
+            "deps/**",
+            "node_modules/**",
+            "tmp/**",
+            ".git/**",
+        ],
+    ),
 )
 
-sh_binary(
+mix_release(
+    name = "release_tar",
+    srcs = [":srcs"],
+    out = "threadr-release.tar.gz",
+    src_dir = "elixir/threadr",
+    run_assets = True,
+)
+
+alias(
+    name = "control_plane_image_build",
+    actual = "//docker/images:control_plane_image_amd64_tar",
+)
+
+alias(
     name = "control_plane_image_push",
-    srcs = ["tools/bazel/control_plane_image.sh"],
-    args = ["push"],
+    actual = "//docker/images:control_plane_image_push",
 )

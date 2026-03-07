@@ -164,17 +164,16 @@ kubectl apply -k k8s/threadr/overlays/control-plane/prometheus-servicemonitor
 kubectl apply -k k8s/threadr/overlays/control-plane/restricted-network
 ```
 
-The release image is built from
-[Dockerfile](/Users/mfreeman/src/threadr/elixir/threadr/Dockerfile#L1), and GitHub
-Actions publishes it to `ghcr.io/carverauto/threadr/threadr-control-plane` through
+The control-plane image is published to
+`ghcr.io/carverauto/threadr/threadr-control-plane` through
 [threadr-control-plane-image.yml](/Users/mfreeman/src/threadr/.github/workflows/threadr-control-plane-image.yml#L1).
 The image override overlay for GHCR is
 [ghcr/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/ghcr/kustomization.yaml#L1).
-The canonical local build and push entrypoints are Bazel targets:
+The canonical build, load, and push entrypoints are Bazel targets:
 
 ```bash
-bazel run //elixir/threadr:control_plane_image_build -- --tag dev
-bazel run //elixir/threadr:control_plane_image_push -- --tag main --tag sha-$(git rev-parse --short HEAD)
+bazel run //elixir/threadr:control_plane_image_build
+bazel run //:push --config=remote
 ```
 
 On `main`, the image publish workflow also resolves the pushed GHCR digest and

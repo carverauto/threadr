@@ -1,4 +1,7 @@
 .idea
+.bazelrc.local
+.bazelrc.remote
+.bazelrc.swp
 .env
 *.pem
 tf/terraform.tfstate.backup

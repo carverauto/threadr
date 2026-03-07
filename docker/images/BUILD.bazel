@@ -1,0 +1,50 @@
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+
+package(default_visibility = ["//visibility:public"])
+
+genrule(
+    name = "control_plane_release_rootfs_amd64",
+    srcs = ["//elixir/threadr:release_tar"],
+    outs = ["control_plane_release_rootfs_amd64.tar"],
+    cmd = """
+set -euo pipefail
+TAR=$(location //elixir/threadr:release_tar)
+ROOT=$(@D)/rootfs
+rm -rf "$${ROOT}"
+mkdir -p "$${ROOT}/app"
+tar -xzf "$${TAR}" -C "$${ROOT}/app"
+tar -czf "$@" -C "$${ROOT}" .
+""",
+)
+
+oci_image(
+    name = "control_plane_image_amd64",
+    base = "@hexpm_elixir_runtime_linux_amd64//:hexpm_elixir_runtime_linux_amd64",
+    tars = [":control_plane_release_rootfs_amd64"],
+    entrypoint = ["/app/bin/threadr"],
+    cmd = ["start"],
+    env = {
+        "HOME": "/app",
+        "MIX_ENV": "prod",
+        "PATH": "/app/bin:/usr/local/bin:/usr/bin:/bin",
+        "PHX_SERVER": "true",
+    },
+    workdir = "/app",
+    exposed_ports = ["4000/tcp"],
+    labels = {
+        "org.opencontainers.image.title": "threadr-control-plane",
+    },
+)
+
+oci_load(
+    name = "control_plane_image_amd64_tar",
+    image = ":control_plane_image_amd64",
+    repo_tags = ["ghcr.io/carverauto/threadr/threadr-control-plane:local"],
+)
+
+oci_push(
+    name = "control_plane_image_push",
+    image = ":control_plane_image_amd64",
+    repository = "ghcr.io/carverauto/threadr/threadr-control-plane",
+    remote_tags = ["main"],
+)

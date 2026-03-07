@@ -68,12 +68,13 @@ Threadr 2.0 SHALL use Bazel entrypoints as the canonical interface for building 
 
 #### Scenario: A maintainer builds a local control-plane image
 - **WHEN** a maintainer needs a local control-plane release image
-- **THEN** the repository provides a Bazel target that builds that image from the Phoenix release `Dockerfile`
+- **THEN** the repository provides a Bazel target that assembles that image from a Bazel-built Phoenix release artifact
 - **AND** the maintainer does not need a separate handwritten shell recipe outside the repository
 
 #### Scenario: CI publishes the control-plane image
 - **WHEN** CI publishes the control-plane image to GHCR
-- **THEN** the workflow invokes the Bazel push entrypoint
+- **THEN** the workflow runs Bazel build and test steps in `opt` mode using the configured remote execution and cache backend
+- **AND** the workflow invokes the Bazel push entrypoint
 - **AND** the published image is the same artifact shape the Kubernetes deployment overlays expect
 - **AND** the workflow does not duplicate the image build logic in an ad hoc `docker build` step
 
