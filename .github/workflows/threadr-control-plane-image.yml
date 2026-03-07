@@ -58,6 +58,13 @@ jobs:
         if: env.BAZEL_BUILD_CONFIG == 'no_remote'
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Expose Rust toolchain at /opt/cargo/bin
+        if: env.BAZEL_BUILD_CONFIG == 'no_remote'
+        run: |
+          sudo mkdir -p /opt/cargo/bin
+          sudo ln -sf "$(command -v cargo)" /opt/cargo/bin/cargo
+          sudo ln -sf "$(command -v rustc)" /opt/cargo/bin/rustc
+
       - name: Build all Bazel targets
         run: |
           bazel build -c opt \
