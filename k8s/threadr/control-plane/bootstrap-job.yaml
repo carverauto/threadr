@@ -17,7 +17,7 @@ spec:
           emptyDir: {}
       initContainers:
         - name: bootstrap-secret
-          image: rancher/kubectl:v1.32.2
+          image: alpine/k8s:1.32.2
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-ec"]
           args:
@@ -82,7 +82,6 @@ spec:
               if [ -f /bootstrap/name ]; then
                 export THREADR_BOOTSTRAP_ADMIN_NAME="$(cat /bootstrap/name)"
               fi
-              bin/threadr eval 'Threadr.ReleaseTasks.migrate()'
               bin/threadr eval 'Threadr.ReleaseTasks.bootstrap_operator_admin_from_env()'
           envFrom:
             - configMapRef:
