@@ -11,7 +11,7 @@ defmodule Threadr.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: listeners()
     ]
   end
 
@@ -29,6 +29,14 @@ defmodule Threadr.MixProject do
     [
       preferred_envs: [precommit: :test]
     ]
+  end
+
+  defp listeners do
+    if Mix.env() == :dev do
+      [Phoenix.CodeReloader]
+    else
+      []
+    end
   end
 
   # Specifies which paths to compile per environment.

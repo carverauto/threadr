@@ -1,17 +1,20 @@
-FROM hexpm/elixir:1.17.3-erlang-27.1.2-debian-bookworm-20241016 AS builder
+FROM hexpm/elixir:1.19.5-erlang-28.4-debian-bookworm-20260223 AS builder
 
 ENV MIX_ENV=prod \
+    ERL_FLAGS="+JPperf true" \
     LANG=C.UTF-8
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       build-essential \
       ca-certificates \
-      cargo \
       curl \
-      git \
-      rustc && \
+      git && \
     rm -rf /var/lib/apt/lists/*
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable
+
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
 
@@ -22,7 +25,6 @@ COPY mix.exs mix.lock ./
 COPY config config
 
 RUN mix deps.get --only prod
-RUN mix deps.compile
 
 COPY priv priv
 COPY assets assets
