@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: threadr-nats-worker-client
+spec:
+  secretName: threadr-nats-worker-client
+  commonName: threadr-worker
+  issuerRef:
+    name: threadr-nats-ca-issuer
+    kind: Issuer
+  usages:
+    - client auth

@@ -5,6 +5,7 @@ defmodule Threadr.ReleaseTasks do
 
   alias Ecto.Migrator
   alias Threadr.ControlPlane.Service
+  alias Threadr.Messaging.{Setup, Topology}
 
   @otp_app :threadr
 
@@ -27,6 +28,18 @@ defmodule Threadr.ReleaseTasks do
       name: System.get_env("THREADR_BOOTSTRAP_ADMIN_NAME"),
       password: required_env!("THREADR_BOOTSTRAP_ADMIN_PASSWORD")
     )
+  end
+
+  def setup_nats do
+    load_app()
+    start_supporting_apps()
+
+    {:ok, _pid} =
+      Gnat.ConnectionSupervisor.start_link(Topology.connection_supervisor_config())
+
+    Setup.ensure_topology()
+    IO.puts("nats setup complete")
+    :ok
   end
 
   def bootstrap_operator_admin(opts) when is_list(opts) do
@@ -77,6 +90,7 @@ defmodule Threadr.ReleaseTasks do
     for app <- [
           :crypto,
           :ssl,
+          :gnat,
           :postgrex,
           :ecto_sql,
           :ash,

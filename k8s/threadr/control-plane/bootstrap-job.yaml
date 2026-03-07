@@ -70,6 +70,29 @@ spec:
           volumeMounts:
             - name: bootstrap-shared
               mountPath: /bootstrap
+        - name: migrate
+          image: threadr-control-plane:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              export DATABASE_URL="ecto://postgres:${THREADR_BOOTSTRAP_PG_SUPERUSER_PASSWORD}@${THREADR_BOOTSTRAP_MIGRATE_DB_HOST:-cnpg-rw.threadr.svc.cluster.local}/${THREADR_BOOTSTRAP_MIGRATE_DB_NAME:-threadr_prod}?ssl=true"
+              bin/threadr eval 'Threadr.ReleaseTasks.migrate()'
+          envFrom:
+            - configMapRef:
+                name: threadr-control-plane-config
+            - secretRef:
+                name: threadr-control-plane-env
+          env:
+            - name: PHX_SERVER
+              value: "false"
+            - name: THREADR_BOOTSTRAP_PG_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-cnpg-superuser
+                  key: password
+            - name: THREADR_BOOTSTRAP_MIGRATE_DB_NAME
+              value: threadr_prod
       containers:
         - name: bootstrap-operator-admin
           image: threadr-control-plane:latest

@@ -1,0 +1,31 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cnpg
+spec:
+  imageName: ghcr.io/carverauto/serviceradar-cnpg:18.3.0-sr2
+  instances: 3
+  enableSuperuserAccess: true
+
+  postgresql:
+    shared_preload_libraries:
+      - timescaledb
+    parameters:
+      shared_buffers: 256MB
+      max_connections: "100"
+      password_encryption: scram-sha-256
+
+  storage:
+    size: 15Gi
+    storageClass: local-path
+
+  superuserSecret:
+    name: threadr-cnpg-superuser
+
+  bootstrap:
+    initdb:
+      database: threadr_prod
+      owner: threadr
+
+  monitoring:
+    enablePodMonitor: true

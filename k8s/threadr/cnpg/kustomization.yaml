@@ -1,0 +1,4 @@
+namespace: threadr
+
+resources:
+  - cluster.yaml

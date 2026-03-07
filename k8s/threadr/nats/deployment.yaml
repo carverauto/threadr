@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadr-nats
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: threadr-nats
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: threadr-nats
+    spec:
+      volumes:
+        - name: nats-data
+          persistentVolumeClaim:
+            claimName: threadr-nats-data
+        - name: nats-ca
+          secret:
+            secretName: threadr-nats-ca
+        - name: nats-server
+          secret:
+            secretName: threadr-nats-server
+      containers:
+        - name: nats
+          image: nats:2.10.26-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              cat > /tmp/nats.conf <<EOF
+              port: 4222
+              http_port: 8222
+              server_name: threadr-nats
+              jetstream {
+                store_dir: /data/jetstream
+              }
+              tls {
+                cert_file: "/etc/nats/server/tls.crt"
+                key_file: "/etc/nats/server/tls.key"
+                ca_file: "/etc/nats/ca/tls.crt"
+                verify: true
+              }
+              authorization {
+                token: "${THREADR_NATS_TOKEN}"
+              }
+              EOF
+              exec nats-server -c /tmp/nats.conf
+          envFrom:
+            - secretRef:
+                name: threadr-nats-auth
+          ports:
+            - name: nats
+              containerPort: 4222
+            - name: monitor
+              containerPort: 8222
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: nats-data
+              mountPath: /data
+            - name: nats-ca
+              mountPath: /etc/nats/ca
+              readOnly: true
+            - name: nats-server
+              mountPath: /etc/nats/server
+              readOnly: true

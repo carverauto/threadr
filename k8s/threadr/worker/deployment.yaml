@@ -16,6 +16,75 @@ spec:
         app.kubernetes.io/component: messaging
     spec:
       serviceAccountName: threadr-worker
+      volumes:
+        - name: nats-ca
+          secret:
+            secretName: threadr-nats-ca
+        - name: nats-client
+          secret:
+            secretName: threadr-nats-worker-client
+      initContainers:
+        - name: nats-setup
+          image: threadr-control-plane:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              bin/threadr eval '
+              Application.load(:threadr)
+
+              for app <- [:crypto, :ssl, :gnat] do
+                case Application.ensure_all_started(app) do
+                  {:ok, _started} -> :ok
+                  {:error, {:already_started, _app}} -> :ok
+                  {:error, reason} -> raise("failed to start dependency #{inspect(app)}: #{inspect(reason)}")
+                end
+              end
+
+              alias Gnat.Jetstream.API.{Consumer, Stream}
+              alias Threadr.Messaging.Topology
+
+              connection_settings =
+                case Topology.connection_settings() do
+                  [settings | _rest] -> settings
+                  [] -> raise("no NATS connection settings configured")
+                end
+
+              {:ok, _pid} =
+                Gnat.start_link(connection_settings, name: Topology.connection_name())
+
+              case Stream.info(Topology.connection_name(), Topology.stream_name()) do
+                {:ok, _stream} -> :ok
+                {:error, _reason} ->
+                  case Stream.create(Topology.connection_name(), Topology.stream_spec()) do
+                    {:ok, _stream} -> :ok
+                    {:error, reason} -> raise("failed to create JetStream stream: #{inspect(reason)}")
+                  end
+              end
+
+              case Consumer.info(Topology.connection_name(), Topology.stream_name(), Topology.consumer_name()) do
+                {:ok, _consumer} -> :ok
+                {:error, _reason} ->
+                  case Consumer.create(Topology.connection_name(), Topology.consumer_spec()) do
+                    {:ok, _consumer} -> :ok
+                    {:error, reason} -> raise("failed to create JetStream consumer: #{inspect(reason)}")
+                  end
+              end
+              '
+          envFrom:
+            - configMapRef:
+                name: threadr-worker-config
+            - secretRef:
+                name: threadr-control-plane-env
+            - secretRef:
+                name: threadr-nats-auth
+          volumeMounts:
+            - name: nats-ca
+              mountPath: /etc/threadr/nats/ca
+              readOnly: true
+            - name: nats-client
+              mountPath: /etc/threadr/nats/client
+              readOnly: true
       containers:
         - name: threadr-worker
           image: threadr-control-plane:latest
@@ -26,6 +95,15 @@ spec:
                 name: threadr-worker-config
             - secretRef:
                 name: threadr-control-plane-env
+            - secretRef:
+                name: threadr-nats-auth
+          volumeMounts:
+            - name: nats-ca
+              mountPath: /etc/threadr/nats/ca
+              readOnly: true
+            - name: nats-client
+              mountPath: /etc/threadr/nats/client
+              readOnly: true
           resources:
             requests:
               cpu: 250m

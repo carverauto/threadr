@@ -1,0 +1,11 @@
+namespace: threadr
+
+resources:
+  - issuer-selfsigned.yaml
+  - certificate-ca.yaml
+  - issuer-ca.yaml
+  - certificate-server.yaml
+  - certificate-worker-client.yaml
+  - service.yaml
+  - pvc.yaml
+  - deployment.yaml

@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: threadr-nats-server
+spec:
+  secretName: threadr-nats-server
+  commonName: nats.threadr.svc.cluster.local
+  dnsNames:
+    - nats
+    - nats.threadr
+    - nats.threadr.svc
+    - nats.threadr.svc.cluster.local
+  issuerRef:
+    name: threadr-nats-ca-issuer
+    kind: Issuer
+  usages:
+    - server auth

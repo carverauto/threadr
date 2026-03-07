@@ -22,7 +22,86 @@ end
 
 nats_host = System.get_env("THREADR_NATS_HOST") || "localhost"
 nats_port = String.to_integer(System.get_env("THREADR_NATS_PORT") || "4222")
-pipeline_enabled = System.get_env("THREADR_BROADWAY_ENABLED") in ~w(true 1 TRUE)
+truthy_env? = fn value -> value in ~w(true 1 TRUE) end
+pipeline_enabled = truthy_env?.(System.get_env("THREADR_BROADWAY_ENABLED"))
+nats_tls_enabled = truthy_env?.(System.get_env("THREADR_NATS_TLS"))
+nats_username = System.get_env("THREADR_NATS_USERNAME")
+nats_password = System.get_env("THREADR_NATS_PASSWORD")
+nats_token = System.get_env("THREADR_NATS_TOKEN")
+nats_ca_cert_file = System.get_env("THREADR_NATS_CA_CERT_FILE")
+nats_client_cert_file = System.get_env("THREADR_NATS_CLIENT_CERT_FILE")
+nats_client_key_file = System.get_env("THREADR_NATS_CLIENT_KEY_FILE")
+
+nats_tls_verify =
+  case System.get_env("THREADR_NATS_TLS_VERIFY") do
+    "verify_none" -> :verify_none
+    _ -> :verify_peer
+  end
+
+nats_ssl_opts =
+  if nats_tls_enabled do
+    []
+    |> Keyword.put(:verify, nats_tls_verify)
+    |> then(fn opts ->
+      case nats_ca_cert_file do
+        nil -> opts
+        "" -> opts
+        path -> Keyword.put(opts, :cacertfile, path)
+      end
+    end)
+    |> then(fn opts ->
+      case nats_client_cert_file do
+        nil -> opts
+        "" -> opts
+        path -> Keyword.put(opts, :certfile, path)
+      end
+    end)
+    |> then(fn opts ->
+      case nats_client_key_file do
+        nil -> opts
+        "" -> opts
+        path -> Keyword.put(opts, :keyfile, path)
+      end
+    end)
+  else
+    []
+  end
+
+nats_connection =
+  %{host: nats_host, port: nats_port}
+  |> then(fn settings ->
+    if nats_tls_enabled do
+      settings
+      |> Map.put(:tls, true)
+      |> Map.put(:ssl_opts, nats_ssl_opts)
+    else
+      settings
+    end
+  end)
+  |> then(fn settings ->
+    case {nats_username, nats_password} do
+      {username, password}
+      when is_binary(username) and username != "" and is_binary(password) and password != "" ->
+        settings
+        |> Map.put(:auth_required, true)
+        |> Map.put(:username, username)
+        |> Map.put(:password, password)
+
+      _ ->
+        settings
+    end
+  end)
+  |> then(fn settings ->
+    case nats_token do
+      token when is_binary(token) and token != "" ->
+        settings
+        |> Map.put(:auth_required, true)
+        |> Map.put(:token, token)
+
+      _ ->
+        settings
+    end
+  end)
 
 normalize_platform = fn
   nil ->
@@ -148,12 +227,7 @@ messaging_enabled =
 config :threadr, Threadr.Messaging.Topology,
   messaging_enabled: messaging_enabled,
   pipeline_enabled: pipeline_enabled,
-  connections: [
-    %{
-      host: nats_host,
-      port: nats_port
-    }
-  ]
+  connections: [nats_connection]
 
 ingest_platform = normalize_platform.(System.get_env("THREADR_PLATFORM"))
 ingest_channels = parse_channels.(System.get_env("THREADR_CHANNELS"))
