@@ -19,6 +19,10 @@ defmodule Threadr.Messaging.Topology do
     config!(:connection_retry_backoff)
   end
 
+  def messaging_enabled? do
+    config!(:messaging_enabled)
+  end
+
   def pipeline_enabled? do
     config!(:pipeline_enabled)
   end

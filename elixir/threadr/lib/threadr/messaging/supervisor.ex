@@ -14,8 +14,12 @@ defmodule Threadr.Messaging.Supervisor do
   @impl true
   def init(_opts) do
     children =
-      [{Gnat.ConnectionSupervisor, Topology.connection_supervisor_config()}] ++
-        pipeline_children()
+      if Topology.messaging_enabled?() do
+        [{Gnat.ConnectionSupervisor, Topology.connection_supervisor_config()}] ++
+          pipeline_children()
+      else
+        []
+      end
 
     Supervisor.init(children, strategy: :one_for_one)
   end

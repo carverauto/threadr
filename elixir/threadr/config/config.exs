@@ -78,6 +78,7 @@ config :threadr, Threadr.ML,
   ]
 
 config :threadr, Threadr.Messaging.Topology,
+  messaging_enabled: true,
   connection_name: :threadr_gnat,
   connection_retry_backoff: 2_000,
   pipeline_enabled: false,
