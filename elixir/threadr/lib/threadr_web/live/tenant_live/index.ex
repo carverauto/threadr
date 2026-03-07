@@ -177,6 +177,14 @@ defmodule ThreadrWeb.TenantLive.Index do
             <:action :let={tenant}>
               <.button
                 class="btn btn-sm"
+                navigate={~p"/control-plane/tenants/#{tenant.subject_name}/history"}
+              >
+                History
+              </.button>
+            </:action>
+            <:action :let={tenant}>
+              <.button
+                class="btn btn-sm"
                 navigate={~p"/control-plane/tenants/#{tenant.subject_name}/graph"}
               >
                 Graph

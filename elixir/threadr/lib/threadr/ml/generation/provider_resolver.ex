@@ -28,8 +28,7 @@ defmodule Threadr.ML.Generation.ProviderResolver do
   def default_endpoint("anthropic"), do: "https://api.anthropic.com/v1/messages"
 
   def default_endpoint("gemini"),
-    do:
-      "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    do: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
   def default_endpoint(_provider_name), do: nil
 end

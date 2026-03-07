@@ -140,8 +140,8 @@ defmodule ThreadrWeb.SystemLlmSettingsLive.Index do
                   placeholder={@provider_meta.endpoint}
                 />
                 <p class="text-sm text-base-content/70">
-                  Leave blank to use the default <code>{@provider_meta.provider}</code> endpoint:
-                  <code>{@provider_meta.endpoint}</code>
+                  Leave blank to use the default <code>{@provider_meta.provider}</code>
+                  endpoint: <code>{@provider_meta.endpoint}</code>
                 </p>
 
                 <.input
@@ -199,7 +199,7 @@ defmodule ThreadrWeb.SystemLlmSettingsLive.Index do
                 or replace it with a tenant-specific override.
               </p>
 
-                <div class="rounded-box bg-base-100 p-4 text-sm">
+              <div class="rounded-box bg-base-100 p-4 text-sm">
                 <div class="font-semibold">Current saved provider</div>
                 <div class="mt-1">{@settings_form["provider_name"]}</div>
                 <div class="mt-2 text-base-content/70">
@@ -251,7 +251,8 @@ defmodule ThreadrWeb.SystemLlmSettingsLive.Index do
     provider = merged["provider_name"] || "openai"
 
     endpoint =
-      case {Map.get(params, "endpoint"), Map.get(existing, "endpoint"), previous_provider != provider} do
+      case {Map.get(params, "endpoint"), Map.get(existing, "endpoint"),
+            previous_provider != provider} do
         {"", _existing_endpoint, true} ->
           provider_meta(provider).endpoint
 

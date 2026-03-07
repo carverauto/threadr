@@ -76,6 +76,15 @@ config :threadr, Threadr.ML,
     temperature: nil,
     max_tokens: nil,
     timeout: 30_000
+  ],
+  extraction: [
+    enabled: false,
+    provider: Threadr.ML.Extraction.NoopProvider,
+    provider_name: "openai",
+    system_prompt: nil,
+    temperature: 0.0,
+    max_tokens: 600,
+    timeout: 30_000
   ]
 
 config :threadr, Threadr.Messaging.Topology,

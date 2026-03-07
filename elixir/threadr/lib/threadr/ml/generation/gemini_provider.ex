@@ -46,7 +46,8 @@ defmodule Threadr.ML.Generation.GeminiProvider do
 
   defp request_body(config, request) do
     %{
-      system_instruction: maybe_system_instruction(request.system_prompt || config[:system_prompt]),
+      system_instruction:
+        maybe_system_instruction(request.system_prompt || config[:system_prompt]),
       contents: [
         %{
           role: "user",

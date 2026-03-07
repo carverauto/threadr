@@ -105,6 +105,7 @@ defmodule ThreadrWeb.TenantLlmSettingsLiveTest do
 
     assert {:ok, settings} = Service.get_tenant_llm_config_for_user(user, tenant.subject_name)
     assert settings.provider_name == "gemini"
+
     assert settings.endpoint ==
              "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
   end

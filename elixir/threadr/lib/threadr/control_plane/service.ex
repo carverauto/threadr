@@ -337,6 +337,50 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
+  def list_tenant_messages_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
+      when is_binary(subject_name) do
+    history_opts = history_runtime_opts(opts)
+
+    with {:ok, tenant, membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, messages} <-
+           Threadr.TenantData.History.list_messages(tenant.schema_name, history_opts) do
+      {:ok, %{tenant: tenant, membership: membership, messages: messages}}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def get_tenant_dossier_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        node_kind,
+        node_id,
+        opts \\ []
+      )
+      when is_binary(subject_name) and is_binary(node_kind) and is_binary(node_id) do
+    with {:ok, tenant, membership} <-
+           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         {:ok, dossier} <-
+           Threadr.TenantData.GraphInspector.describe_node(node_id, node_kind, tenant.schema_name) do
+      {:ok, %{tenant: tenant, membership: membership, dossier: dossier}}
+    else
+      {:error, :not_found} -> {:error, {:resource_not_found, node_kind, node_id}}
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def generation_runtime_opts_for_tenant_subject(subject_name, opts \\ [])
+      when is_binary(subject_name) do
+    with {:ok, tenant} <-
+           Threadr.ControlPlane.get_tenant_by_subject_name(
+             subject_name,
+             generation_ash_opts(opts)
+           ) do
+      tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts))
+    end
+  end
+
   def get_tenant_llm_config_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
       when is_binary(subject_name) do
     with {:ok, tenant, membership} <- get_user_tenant_by_subject_name(user, subject_name, opts),
@@ -1219,7 +1263,8 @@ defmodule Threadr.ControlPlane.Service do
     |> put_runtime_opt(:generation_provider_name, config.provider_name)
     |> put_runtime_opt(
       :generation_endpoint,
-      config.endpoint || Threadr.ML.Generation.ProviderResolver.default_endpoint(config.provider_name)
+      config.endpoint ||
+        Threadr.ML.Generation.ProviderResolver.default_endpoint(config.provider_name)
     )
     |> put_runtime_opt(:generation_model, config.model)
     |> put_runtime_opt(:generation_api_key, config.api_key)
@@ -1262,13 +1307,18 @@ defmodule Threadr.ControlPlane.Service do
 
   defp normalize_endpoint(provider_name, endpoint) do
     normalize_blank(endpoint) ||
-      Threadr.ML.Generation.ProviderResolver.default_endpoint(normalize_provider_name(provider_name))
+      Threadr.ML.Generation.ProviderResolver.default_endpoint(
+        normalize_provider_name(provider_name)
+      )
   end
 
   defp resolve_generation_provider!(provider_name) do
     case Threadr.ML.Generation.ProviderResolver.resolve(provider_name) do
-      {:ok, provider} -> provider
-      {:error, _reason} -> raise ArgumentError, "unsupported generation provider #{inspect(provider_name)}"
+      {:ok, provider} ->
+        provider
+
+      {:error, _reason} ->
+        raise ArgumentError, "unsupported generation provider #{inspect(provider_name)}"
     end
   end
 
@@ -1326,7 +1376,12 @@ defmodule Threadr.ControlPlane.Service do
     Keyword.drop(
       opts,
       [
+        :query,
         :limit,
+        :actor_handle,
+        :channel_name,
+        :since,
+        :until,
         :graph_message_limit,
         :embedding_provider,
         :embedding_model,
@@ -1364,6 +1419,38 @@ defmodule Threadr.ControlPlane.Service do
         :generation_temperature,
         :generation_max_tokens,
         :generation_timeout
+      ]
+    )
+  end
+
+  defp generation_ash_opts(opts) do
+    opts
+    |> system_ash_opts()
+    |> Keyword.drop([
+      :provider,
+      :provider_name,
+      :endpoint,
+      :model,
+      :api_key,
+      :system_prompt,
+      :temperature,
+      :max_tokens,
+      :timeout,
+      :generation_provider
+    ])
+    |> semantic_ash_opts()
+  end
+
+  defp history_runtime_opts(opts) do
+    Keyword.take(
+      opts,
+      [
+        :query,
+        :actor_handle,
+        :channel_name,
+        :since,
+        :until,
+        :limit
       ]
     )
   end

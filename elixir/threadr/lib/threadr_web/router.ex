@@ -60,8 +60,14 @@ defmodule ThreadrWeb.Router do
       ] do
       live "/control-plane/admin/llm", SystemLlmSettingsLive.Index, :index
       live "/control-plane/tenants", TenantLive.Index, :index
+      live "/control-plane/tenants/:subject_name/history", TenantHistoryLive.Index, :index
       live "/control-plane/tenants/:subject_name/qa", TenantQaLive.Index, :index
       live "/control-plane/tenants/:subject_name/graph", TenantGraphLive.Index, :index
+
+      live "/control-plane/tenants/:subject_name/dossiers/:node_kind/:node_id",
+           TenantDossierLive.Show,
+           :show
+
       live "/control-plane/tenants/:subject_name/llm", TenantLlmSettingsLive.Index, :index
       live "/settings/api-keys", ApiKeyLive.Index, :index
     end

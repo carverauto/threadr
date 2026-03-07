@@ -10,7 +10,7 @@ The SaaS rewrite also needs a first-class user access model. Tenant users need a
 The platform also needs a deterministic first-install onboarding path. The control plane cannot depend on ad hoc manual database edits or ephemeral email allowlists to establish the first operator administrator.
 
 ## What Changes
-- Define Threadr 2.0 as a BEAM-native rewrite centered on Elixir, Phoenix, LiveView, Ash, and a local-model strategy that evaluates Nx/Bumblebee alongside candidate extraction models such as GLiNER2.
+- Define Threadr 2.0 as an Elixir-owned rewrite centered on Elixir, Phoenix, LiveView, Ash, and ML execution that stays in Elixir orchestration instead of reintroducing Python-based extraction services.
 - Preserve NATS JetStream as the durable transport for normalized chat events and asynchronous workloads.
 - Establish Broadway-based consumers as the default message processing pattern for embeddings, graph inference, summarization, and similar pipelines.
 - Establish Ash and AshPostgres as the primary application and data modeling framework.
@@ -23,7 +23,7 @@ The platform also needs a deterministic first-install onboarding path. The contr
 - Define bot lifecycle transitions through Ash state machines instead of ad hoc status mutation.
 - Define an explicit controller-owned desired-state contract for bot workloads and a machine-authenticated status callback path.
 - Define Bazel-driven build and publish entrypoints for control-plane OCI images, with GHCR as the default published registry target.
-- Keep local ML backend selection open long enough to compare Nx/Bumblebee and GLiNER2 for the rewrite's actual embedding and schema-based extraction needs, rather than prematurely locking the design to one stack.
+- Keep embeddings and structured extraction on an Elixir-owned path, preferring BEAM-native inference where it fits and using remote providers only through Elixir rather than reintroducing Python model services.
 - Define graph exploration around the same high-density pipeline proven in ServiceRadar: versioned Arrow snapshot transport, roaring bitmap overlays, `deck.gl` rendering, and a Wasm client compute layer.
 - Define PostgreSQL with Apache AGE, pgvector, TimescaleDB, and ParadeDB as the replacement for Neo4j and other specialized stores.
 - Capture the rewrite scope in an approved OpenSpec change so later implementation work can proceed against a corrected architecture.

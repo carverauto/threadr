@@ -26,7 +26,8 @@ defmodule Threadr.ML.AnthropicProviderTest do
                  "content" => [
                    %{
                      "type" => "text",
-                     "text" => "Context:\nAlice mentioned Bob.\n\nQuestion:\nWho did Alice mention?"
+                     "text" =>
+                       "Context:\nAlice mentioned Bob.\n\nQuestion:\nWho did Alice mention?"
                    }
                  ]
                }

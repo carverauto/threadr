@@ -44,3 +44,46 @@ defmodule Threadr.TestGenerationProvider do
      }}
   end
 end
+
+defmodule Threadr.TestExtractionProvider do
+  @behaviour Threadr.ML.Extraction.Provider
+
+  alias Threadr.ML.Extraction.Result
+
+  @impl true
+  def extract(_request, opts) do
+    {:ok,
+     %Result{
+       entities: [
+         %{
+           entity_type: "person",
+           name: "Alice",
+           canonical_name: "Alice",
+           confidence: 0.98,
+           metadata: %{}
+         },
+         %{
+           entity_type: "person",
+           name: "Bob",
+           canonical_name: "Bob",
+           confidence: 0.97,
+           metadata: %{}
+         }
+       ],
+       facts: [
+         %{
+           fact_type: "access_statement",
+           subject: "Bob",
+           predicate: "reported",
+           object: "payroll access was limited",
+           confidence: 0.94,
+           valid_at: "2026-03-05T12:00:00Z",
+           metadata: %{"topic" => "payroll"}
+         }
+       ],
+       model: Keyword.get(opts, :model, "test-llm"),
+       provider: "test",
+       metadata: %{}
+     }}
+  end
+end

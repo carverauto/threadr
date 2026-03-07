@@ -26,7 +26,12 @@ defmodule Threadr.ML.GeminiProviderTest do
       assert payload["contents"] == [
                %{
                  "role" => "user",
-                 "parts" => [%{"text" => "Context:\nAlice mentioned Bob.\n\nQuestion:\nWho did Alice mention?"}]
+                 "parts" => [
+                   %{
+                     "text" =>
+                       "Context:\nAlice mentioned Bob.\n\nQuestion:\nWho did Alice mention?"
+                   }
+                 ]
                }
              ]
 
