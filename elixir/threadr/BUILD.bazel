@@ -20,6 +20,10 @@ filegroup(
 mix_release(
     name = "release_tar",
     srcs = [":srcs"],
+    hex_cache = select({
+        "//build:use_hex_cache": "//build:hex_cache",
+        "//conditions:default": None,
+    }),
     out = "threadr-release.tar.gz",
     src_dir = "elixir/threadr",
     run_assets = True,

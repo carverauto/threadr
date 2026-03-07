@@ -1,1 +1,24 @@
+package(default_visibility = ["//visibility:public"])
+
 exports_files(["mix_release.bzl"])
+
+genrule(
+    name = "hex_cache_tar",
+    outs = ["hex_cache.tar.gz"],
+    cmd = """
+set -euo pipefail
+tmpdir=$$(mktemp -d)
+trap 'rm -rf "$$tmpdir"' EXIT
+tar -czf "$@" -C "$$tmpdir" .
+""",
+)
+
+filegroup(
+    name = "hex_cache",
+    srcs = [":hex_cache_tar"],
+)
+
+config_setting(
+    name = "use_hex_cache",
+    define_values = {"use_hex_cache": "true"},
+)

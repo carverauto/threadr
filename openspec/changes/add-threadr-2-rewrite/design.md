@@ -106,6 +106,7 @@ The concrete contract is:
 - the control-plane image is assembled through Bazel-native release and OCI targets
 - Bazel targets are the supported interface for local build and GHCR push operations
 - CI uses `-c opt` for Bazel build and test execution and routes those actions through BuildBuddy remote execution and caching
+- the remote Bazel profile resolves Linux amd64 host tools and OCI tooling through the BuildBuddy RBE platform rather than relying on macOS host-tool fallbacks
 - CI invokes Bazel targets rather than duplicating container build logic in GitHub Actions
 - after publish, CI resolves the pushed GHCR digest and updates the production overlay's image pin
 - Kubernetes overlays and ArgoCD applications reference the published GHCR image rather than the placeholder local image name

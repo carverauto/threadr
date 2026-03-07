@@ -19,7 +19,7 @@ tar -czf "$@" -C "$${ROOT}" .
 
 oci_image(
     name = "control_plane_image_amd64",
-    base = "@hexpm_elixir_runtime_linux_amd64//:hexpm_elixir_runtime_linux_amd64",
+    base = "@hexpm_elixir_runtime_linux_amd64_linux_amd64//:hexpm_elixir_runtime_linux_amd64_linux_amd64",
     tars = [":control_plane_release_rootfs_amd64"],
     entrypoint = ["/app/bin/threadr"],
     cmd = ["start"],
@@ -47,4 +47,9 @@ oci_push(
     image = ":control_plane_image_amd64",
     repository = "ghcr.io/carverauto/threadr/threadr-control-plane",
     remote_tags = ["main"],
+)
+
+alias(
+    name = "push_all",
+    actual = ":control_plane_image_push",
 )

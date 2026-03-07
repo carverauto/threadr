@@ -75,6 +75,7 @@ Threadr 2.0 SHALL use Bazel entrypoints as the canonical interface for building 
 - **WHEN** CI publishes the control-plane image to GHCR
 - **THEN** the workflow runs Bazel build and test steps in `opt` mode using the configured remote execution and cache backend
 - **AND** the workflow invokes the Bazel push entrypoint
+- **AND** the remote Bazel profile resolves Linux amd64 OCI helper binaries rather than reusing macOS host-tool binaries on the remote executor
 - **AND** the published image is the same artifact shape the Kubernetes deployment overlays expect
 - **AND** the workflow does not duplicate the image build logic in an ad hoc `docker build` step
 

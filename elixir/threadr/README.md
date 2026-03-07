@@ -173,7 +173,7 @@ The canonical build, load, and push entrypoints are Bazel targets:
 
 ```bash
 bazel run //elixir/threadr:control_plane_image_build
-bazel run //:push --config=remote
+bazel run //docker/images:push_all --config=remote
 ```
 
 On `main`, the image publish workflow also resolves the pushed GHCR digest and

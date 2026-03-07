@@ -1,0 +1,4 @@
+exports_files([
+    "add_bzlmod_build.patch",
+    "skip_system_erlang.patch",
+])
