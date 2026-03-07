@@ -17,9 +17,21 @@ filegroup(
     ),
 )
 
+filegroup(
+    name = "frontend_node_modules",
+    srcs = glob(
+        ["assets/node_modules/**"],
+        allow_empty = True,
+    ),
+)
+
 mix_release(
     name = "release_tar",
     srcs = [":srcs"],
+    extra_dirs = [
+        "elixir/threadr/assets/node_modules",
+    ],
+    extra_dir_srcs = [":frontend_node_modules"],
     hex_cache = select({
         "//build:use_hex_cache": "//build:hex_cache",
         "//conditions:default": None,

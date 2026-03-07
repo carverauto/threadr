@@ -35,6 +35,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: elixir/threadr/assets/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd elixir/threadr/assets
+          npm ci --no-audit --no-fund
+
       - name: Set up Bazelisk
         uses: bazelbuild/setup-bazelisk@v3
 

@@ -130,15 +130,19 @@ mix compile
 
 if [ "{run_assets}" = "true" ]; then
   if [ -f "$WORKDIR/assets/package.json" ]; then
-    if ! command -v npm >/dev/null 2>&1; then
-      echo "npm not found in PATH; required to install frontend dependencies for assets.deploy" >&2
-      exit 1
-    fi
-
-    if [ -f "$WORKDIR/assets/package-lock.json" ]; then
-      (cd "$WORKDIR/assets" && npm ci --no-audit --no-fund)
+    if [ -d "$WORKDIR/assets/node_modules" ]; then
+      echo "Using preinstalled frontend dependencies from assets/node_modules"
     else
-      (cd "$WORKDIR/assets" && npm install --no-audit --no-fund)
+      if ! command -v npm >/dev/null 2>&1; then
+        echo "npm not found in PATH; required to install frontend dependencies for assets.deploy" >&2
+        exit 1
+      fi
+
+      if [ -f "$WORKDIR/assets/package-lock.json" ]; then
+        (cd "$WORKDIR/assets" && npm ci --no-audit --no-fund)
+      else
+        (cd "$WORKDIR/assets" && npm install --no-audit --no-fund)
+      fi
     fi
   fi
 
