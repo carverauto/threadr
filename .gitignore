@@ -16,3 +16,6 @@ threadr-secrets.yaml
 *.crt
 *.key
 natsctl
+.claude
+.gemini
+.DS_Store

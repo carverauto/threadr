@@ -58,6 +58,7 @@ jobs:
           bazel test -c opt --config=remote ${TEST_TARGETS}
 
       - name: Build and push image via Bazel
+        if: github.ref == 'refs/heads/main'
         run: |
           # Keep push on Linux CI. `bazel run` executes the generated push script
           # on the host, so local macOS is not the canonical push environment.

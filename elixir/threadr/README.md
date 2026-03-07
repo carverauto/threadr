@@ -181,7 +181,8 @@ is intentionally treated as a Linux CI path, because `bazel run` executes the
 generated push script on the host and the current `rules_oci` helper resolution
 is not portable for local macOS push execution.
 
-The canonical push path is the GitHub workflow on Linux:
+The canonical push path is the GitHub workflow on Linux. Only `main` publishes
+and updates the production digest pin:
 
 ```bash
 bazel run -c opt //docker/images:push_all --config=remote
