@@ -20,6 +20,10 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      ELIXIR_ERL_OPTIONS: +fnu
 
     steps:
       - name: Check out repository
@@ -50,9 +54,18 @@ jobs:
           chmod +x buildbuddy_setup_docker_auth.sh
           ./buildbuddy_setup_docker_auth.sh
 
+      - name: Install local runner toolchains
+        if: env.BAZEL_BUILD_CONFIG == 'no_remote'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cargo rustc
+
       - name: Build all Bazel targets
         run: |
-          bazel build -c opt //... --config="${BAZEL_BUILD_CONFIG}"
+          bazel build -c opt \
+            //elixir/threadr:release_tar \
+            //docker/images:control_plane_image_amd64 \
+            --config="${BAZEL_BUILD_CONFIG}"
 
       - name: Run Bazel tests
         run: |

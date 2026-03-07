@@ -190,7 +190,8 @@ bazel run -c opt //docker/images:push_all --config=remote
 
 If `BUILDBUDDY_API_KEY` is configured in GitHub Actions, the workflow uses
 BuildBuddy RBE. If it is not configured, the same workflow falls back to local
-execution on the Linux GitHub runner.
+execution on the Linux GitHub runner, installs the local Rust toolchain, and
+builds only the control-plane release and image targets rather than `//...`.
 
 On `main`, the image publish workflow also resolves the pushed GHCR digest and
 commits it back into
