@@ -405,7 +405,7 @@ For IRC pods, set:
 - optional `THREADR_IRC_REALNAME`
 - optional `THREADR_IRC_PASSWORD`
 
-The IRC runtime uses `ExIRC` and joins the configured `THREADR_CHANNELS` on
+The IRC runtime uses `ExIRC` via the `exirc_next` package and joins the configured `THREADR_CHANNELS` on
 successful logon.
 
 For Discord pods, set:
