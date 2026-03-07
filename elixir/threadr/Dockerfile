@@ -35,7 +35,7 @@ RUN mix compile
 RUN mix assets.deploy
 RUN mix release
 
-FROM debian:bookworm-slim AS runner
+FROM debian:trixie-slim AS runner
 
 ENV LANG=C.UTF-8 \
     MIX_ENV=prod \
