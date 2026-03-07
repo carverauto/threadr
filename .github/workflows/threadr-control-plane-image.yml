@@ -59,6 +59,8 @@ jobs:
 
       - name: Build and push image via Bazel
         run: |
+          # Keep push on Linux CI. `bazel run` executes the generated push script
+          # on the host, so local macOS is not the canonical push environment.
           bazel run -c opt //docker/images:push_all --config=remote
 
       - name: Update production digest pin

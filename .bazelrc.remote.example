@@ -1,0 +1,5 @@
+# BuildBuddy remote configuration for local development.
+# Copy to .bazelrc.remote and replace the API key value, or run:
+#   BUILDBUDDY_API_KEY=... ./tools/buildbuddy/write_remote_rc.sh
+
+common --remote_header=x-buildbuddy-api-key=REPLACE_ME

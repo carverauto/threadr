@@ -169,11 +169,22 @@ The control-plane image is published to
 [threadr-control-plane-image.yml](/Users/mfreeman/src/threadr/.github/workflows/threadr-control-plane-image.yml#L1).
 The image override overlay for GHCR is
 [ghcr/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/ghcr/kustomization.yaml#L1).
-The canonical build, load, and push entrypoints are Bazel targets:
+The canonical Bazel entrypoints are split by environment:
 
 ```bash
-bazel run //elixir/threadr:control_plane_image_build
-bazel run //docker/images:push_all --config=remote
+bazel build -c opt //elixir/threadr:release_tar --config=remote
+bazel build -c opt //docker/images:control_plane_image_amd64 --config=remote
+```
+
+Use the remote build targets above from local macOS development. The push target
+is intentionally treated as a Linux CI path, because `bazel run` executes the
+generated push script on the host and the current `rules_oci` helper resolution
+is not portable for local macOS push execution.
+
+The canonical push path is the GitHub workflow on Linux:
+
+```bash
+bazel run -c opt //docker/images:push_all --config=remote
 ```
 
 On `main`, the image publish workflow also resolves the pushed GHCR digest and
