@@ -352,9 +352,39 @@ if config_env() == :prod do
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
+  db_ssl_enabled = parse_bool.(System.get_env("THREADR_DB_SSL"))
+
+  db_ssl_verify =
+    case System.get_env("THREADR_DB_SSL_VERIFY") do
+      "verify_none" -> :verify_none
+      _ -> :verify_peer
+    end
+
+  db_ssl_opts =
+    case {db_ssl_enabled, System.get_env("THREADR_DB_SSL_CA_CERT_FILE")} do
+      {false, _} ->
+        []
+
+      {true, nil} when db_ssl_verify == :verify_none ->
+        [verify: :verify_none]
+
+      {true, ""} when db_ssl_verify == :verify_none ->
+        [verify: :verify_none]
+
+      {true, nil} ->
+        []
+
+      {true, ""} ->
+        []
+
+      {true, ca_cert_file} ->
+        [verify: db_ssl_verify, cacertfile: ca_cert_file]
+    end
+
   config :threadr, Threadr.Repo,
-    # ssl: true,
     url: database_url,
+    ssl: db_ssl_enabled,
+    ssl_opts: db_ssl_opts,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
