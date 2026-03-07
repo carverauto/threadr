@@ -209,6 +209,13 @@ It pins:
 - the bootstrap operator email
 - the observer-enabled control-plane config
 
+The messaging worker is deployed separately from the web control plane. Its
+base is [worker/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/worker/kustomization.yaml#L1),
+and the production overlay is
+[worker/production/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/worker/production/kustomization.yaml#L1).
+That worker runs `THREADR_MESSAGING_ENABLED=true` and `THREADR_BROADWAY_ENABLED=true`
+without the web endpoint, while the control-plane overlay keeps both disabled.
+
 The placeholder digest in
 [image-patch.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/production/image-patch.yaml#L1)
 is expected to be replaced automatically by the image publish workflow on `main`.

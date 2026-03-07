@@ -1,0 +1,9 @@
+namespace: threadr
+
+resources:
+  - ../../../worker
+  - networkpolicy.yaml
+
+patches:
+  - path: image-patch.yaml
+  - path: worker-config-patch.yaml

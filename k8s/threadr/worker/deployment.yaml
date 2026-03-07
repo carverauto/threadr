@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadr-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: threadr-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: threadr-worker
+        app.kubernetes.io/component: messaging
+    spec:
+      serviceAccountName: threadr-worker
+      containers:
+        - name: threadr-worker
+          image: threadr-control-plane:latest
+          imagePullPolicy: IfNotPresent
+          command: ["bin/threadr", "start"]
+          envFrom:
+            - configMapRef:
+                name: threadr-worker-config
+            - secretRef:
+                name: threadr-control-plane-env
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

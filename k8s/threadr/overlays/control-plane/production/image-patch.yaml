@@ -7,7 +7,7 @@ spec:
     spec:
       initContainers:
         - name: migrate
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:d7d6e7eaefd9165b4ea9d4264419c36ff97aa4f0bdccb151daa5f4413db4d7f8
+          $patch: delete
       containers:
         - name: threadr-control-plane
           image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:d7d6e7eaefd9165b4ea9d4264419c36ff97aa4f0bdccb151daa5f4413db4d7f8

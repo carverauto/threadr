@@ -4,4 +4,6 @@ metadata:
   name: threadr-control-plane-config
 data:
   PHX_HOST: threadr.example.com
+  THREADR_MESSAGING_ENABLED: "false"
+  THREADR_BROADWAY_ENABLED: "false"
   THREADR_BOT_STATUS_OBSERVER_ENABLED: "true"

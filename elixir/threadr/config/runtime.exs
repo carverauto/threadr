@@ -68,6 +68,13 @@ parse_bool = fn
   _value -> false
 end
 
+config :threadr,
+       :web_enabled,
+       case System.get_env("THREADR_WEB_ENABLED") do
+         nil -> Application.get_env(:threadr, :web_enabled, true)
+         value -> parse_bool.(value)
+       end
+
 parse_integer = fn
   nil ->
     nil
@@ -128,6 +135,14 @@ env_or_legacy = fn primary, legacy ->
 end
 
 config :threadr, Threadr.Messaging.Topology,
+  messaging_enabled:
+    case System.get_env("THREADR_MESSAGING_ENABLED") do
+      nil ->
+        Keyword.get(Application.get_env(:threadr, Threadr.Messaging.Topology, []), :messaging_enabled, true)
+
+      value ->
+        parse_bool.(value)
+    end,
   pipeline_enabled: pipeline_enabled,
   connections: [
     %{
