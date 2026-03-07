@@ -9,6 +9,11 @@ on:
       - ".bazelrc"
       - ".bazelversion"
       - "MODULE.bazel"
+      - "BUILD.bazel"
+      - "build/**"
+      - "docker/images/**"
+      - "tools/buildbuddy/**"
+      - "buildbuddy_setup_docker_auth.sh"
       - "elixir/threadr/**"
   workflow_dispatch:
 
