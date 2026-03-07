@@ -102,7 +102,7 @@ register_toolchains("//build/toolchains:rbe_cc_toolchain")
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "hexpm_elixir_runtime_linux_amd64",
-    digest = "sha256:cdacd4041282e534b4fd6d96eabc78b24cb334d80efe56936e88f0f3d6c8eb49",
+    digest = "sha256:b469ca709bfb5a3d94e6e9e4975ad37b74652894fd0cc2c8e7e5fa0390d06e03",
     image = "docker.io/hexpm/elixir",
     platforms = ["linux/amd64"],
 )
