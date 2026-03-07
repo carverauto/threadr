@@ -683,56 +683,6 @@
         ]
       }
     },
-    "@@gazelle~//internal/bzlmod:non_module_deps.bzl%non_module_deps": {
-      "general": {
-        "bzlTransitiveDigest": "idtJXxcHUd75fcvggtK/s6naCFjcaysxF0U5OKBm2LE=",
-        "usagesDigest": "MSRC6XQC2hTPso00Q6U8X4K/6hZrN5jRz5oC+ZunIss=",
-        "recordedFileInputs": {},
-        "recordedDirentsInputs": {},
-        "envVariables": {},
-        "generatedRepoSpecs": {
-          "bazel_gazelle_go_repository_cache": {
-            "bzlFile": "@@gazelle~//internal:go_repository_cache.bzl",
-            "ruleClassName": "go_repository_cache",
-            "attributes": {
-              "go_sdk_name": "@rules_go~~go_sdk~go_default_sdk",
-              "go_env": {}
-            }
-          },
-          "bazel_gazelle_go_repository_tools": {
-            "bzlFile": "@@gazelle~//internal:go_repository_tools.bzl",
-            "ruleClassName": "go_repository_tools",
-            "attributes": {
-              "go_cache": "@@gazelle~~non_module_deps~bazel_gazelle_go_repository_cache//:go.env"
-            }
-          },
-          "bazel_gazelle_is_bazel_module": {
-            "bzlFile": "@@gazelle~//internal:is_bazel_module.bzl",
-            "ruleClassName": "is_bazel_module",
-            "attributes": {
-              "is_bazel_module": true
-            }
-          }
-        },
-        "recordedRepoMappingEntries": [
-          [
-            "gazelle~",
-            "bazel_gazelle_go_repository_cache",
-            "gazelle~~non_module_deps~bazel_gazelle_go_repository_cache"
-          ],
-          [
-            "gazelle~",
-            "go_host_compatible_sdk_label",
-            "rules_go~~go_sdk~go_host_compatible_sdk_label"
-          ],
-          [
-            "rules_go~~go_sdk~go_host_compatible_sdk_label",
-            "go_default_sdk",
-            "rules_go~~go_sdk~go_default_sdk"
-          ]
-        ]
-      }
-    },
     "@@rules_elixir~//bzlmod:extensions.bzl%elixir_config": {
       "general": {
         "bzlTransitiveDigest": "TTUZulTBD4S++NWPsUfH8UW2a0GrbXDCjed/tEdVJo0=",
@@ -965,7 +915,7 @@
     "@@rules_oci~//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "nWwp7/pJdtRc99uMaz5w9DbhuLm5eix2oiWVJA6xxU0=",
-        "usagesDigest": "D/kS6xPnqHAs9g4gQlavXvn9BPR1cH/aKhFhML0Y/Ic=",
+        "usagesDigest": "cp+wmJO3TYwLEE7G41r2fi4U8gSWfxoNTMkUKDUdx/s=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -978,7 +928,7 @@
               "scheme": "https",
               "registry": "index.docker.io",
               "repository": "hexpm/elixir",
-              "identifier": "sha256:cdacd4041282e534b4fd6d96eabc78b24cb334d80efe56936e88f0f3d6c8eb49",
+              "identifier": "sha256:b469ca709bfb5a3d94e6e9e4975ad37b74652894fd0cc2c8e7e5fa0390d06e03",
               "platform": "linux/amd64",
               "target_name": "hexpm_elixir_runtime_linux_amd64_linux_amd64",
               "bazel_tags": []
@@ -993,7 +943,7 @@
               "scheme": "https",
               "registry": "index.docker.io",
               "repository": "hexpm/elixir",
-              "identifier": "sha256:cdacd4041282e534b4fd6d96eabc78b24cb334d80efe56936e88f0f3d6c8eb49",
+              "identifier": "sha256:b469ca709bfb5a3d94e6e9e4975ad37b74652894fd0cc2c8e7e5fa0390d06e03",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@hexpm_elixir_runtime_linux_amd64_linux_amd64"
               },
