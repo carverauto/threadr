@@ -134,15 +134,17 @@ env_or_legacy = fn primary, legacy ->
   System.get_env(primary) || System.get_env(legacy)
 end
 
-config :threadr, Threadr.Messaging.Topology,
-  messaging_enabled:
-    case System.get_env("THREADR_MESSAGING_ENABLED") do
-      nil ->
-        Keyword.get(Application.get_env(:threadr, Threadr.Messaging.Topology, []), :messaging_enabled, true)
+messaging_enabled =
+  case System.get_env("THREADR_MESSAGING_ENABLED") do
+    nil ->
+      Keyword.get(Application.get_env(:threadr, Threadr.Messaging.Topology, []), :messaging_enabled, true)
 
-      value ->
-        parse_bool.(value)
-    end,
+    value ->
+      parse_bool.(value)
+  end
+
+config :threadr, Threadr.Messaging.Topology,
+  messaging_enabled: messaging_enabled,
   pipeline_enabled: pipeline_enabled,
   connections: [
     %{
