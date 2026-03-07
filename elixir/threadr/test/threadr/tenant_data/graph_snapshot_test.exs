@@ -30,7 +30,7 @@ defmodule Threadr.TenantData.GraphSnapshotTest do
 
     assert snapshot.schema_version == GraphSnapshot.schema_version()
     assert snapshot.node_count == 5
-    assert snapshot.edge_count == 5
+    assert snapshot.edge_count == 6
     assert snapshot.bitmap_metadata.root_cause.count == 3
     assert snapshot.bitmap_metadata.affected.count == 1
     assert snapshot.bitmap_metadata.healthy.count == 1

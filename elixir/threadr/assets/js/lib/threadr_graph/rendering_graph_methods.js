@@ -13,11 +13,9 @@ export const threadrGraphRenderingGraphMethods = {
     if (!this.state.graph) return
     if (!this.state.deck) this.ensureDeck()
 
-    let shapedGraph = this.reshapeGraph(this.state.graph)
+    let shapedGraph = this.investigationGraph(this.state.graph)
     const visibilityMask = this.visibilityMask()
     let selectionEmphasis = this.selectionEmphasis(shapedGraph)
-    shapedGraph = this.filterGraphForFocus(shapedGraph, selectionEmphasis)
-    selectionEmphasis = this.selectionEmphasis(shapedGraph)
     shapedGraph = this.filterGraphByVisibility(shapedGraph, visibilityMask, selectionEmphasis)
     selectionEmphasis = this.selectionEmphasis(shapedGraph)
     const nodes = shapedGraph.nodes
@@ -123,6 +121,36 @@ export const threadrGraphRenderingGraphMethods = {
         }),
       ],
     })
+  },
+
+  investigationGraph(graph) {
+    const focusNode = this.activeFocusNode()
+
+    if (!focusNode) {
+      return this.subgraphByPredicate(
+        graph,
+        (node) => node.kind === "channel",
+        () => false,
+      )
+    }
+
+    if (focusNode.kind === "channel") {
+      return this.channelConversationSubgraph(graph, focusNode)
+    }
+
+    if (focusNode.kind === "conversation") {
+      return this.conversationDetailSubgraph(graph, focusNode)
+    }
+
+    if (focusNode.kind === "message") {
+      return this.messageDetailSubgraph(graph, focusNode)
+    }
+
+    if (focusNode.kind === "actor") {
+      return this.actorConversationSubgraph(graph, focusNode)
+    }
+
+    return graph
   },
 
   ensureDeck() {
@@ -282,14 +310,18 @@ export const threadrGraphRenderingGraphMethods = {
     if (!graph || !selectedNode) return null
 
     const selectedId = selectedNode.details?.id || null
+    const selectedIndex =
+      selectedId != null
+        ? graph.nodes.find((node) => String(node.details?.id || "") === String(selectedId))?.index ?? null
+        : this.state.selectedNodeIndex
     const focusIds = this.collectFocusIds(this.state.selectedNodeDetail)
-    const directNeighborIds = this.collectDirectNeighborIds(graph, this.state.selectedNodeIndex)
+    const directNeighborIds = this.collectDirectNeighborIds(graph, selectedIndex)
 
     return {
       key: `${selectedId || "cluster"}:${focusIds.size}:${directNeighborIds.size}`,
       mode: focusIds.size > 0 || directNeighborIds.size > 0 ? "dossier" : "selected",
       selectedId,
-      selectedIndex: this.state.selectedNodeIndex,
+      selectedIndex,
       focusIds,
       directNeighborIds,
     }
@@ -480,110 +512,6 @@ export const threadrGraphRenderingGraphMethods = {
     }
   },
 
-  filterGraphForFocus(graph, selectionEmphasis) {
-    if (!graph || !this.state.focusNeighborhoodOnly || !selectionEmphasis) return graph
-
-    const keepIndexes = new Set()
-    const selectedIndex = selectionEmphasis.selectedIndex
-
-    graph.nodes.forEach((node) => {
-      const nodeId = node.details?.id ? String(node.details.id) : null
-      if (node.index === selectedIndex) keepIndexes.add(node.index)
-      if (nodeId && selectionEmphasis.focusIds.has(nodeId)) keepIndexes.add(node.index)
-    })
-
-    if (selectedIndex != null) {
-      if (this.state.messageFocusOnly) {
-        this.expandMessageFocusNeighborhood(graph, keepIndexes, selectedIndex)
-      } else {
-        this.expandRelationshipFocusNeighborhood(graph, keepIndexes, selectedIndex)
-      }
-    }
-
-    if (keepIndexes.size === 0 || keepIndexes.size === graph.nodes.length) return graph
-
-    const indexMap = new Map()
-    const nodes = graph.nodes
-      .filter((node) => keepIndexes.has(node.index))
-      .map((node, newIndex) => {
-        indexMap.set(node.index, newIndex)
-        return {...node, index: newIndex, originalIndex: this.maskIndex(node)}
-      })
-
-    const edges = graph.edges
-      .filter((edge) => keepIndexes.has(edge.source) && keepIndexes.has(edge.target))
-      .map((edge) => ({
-        ...edge,
-        source: indexMap.get(edge.source),
-        target: indexMap.get(edge.target),
-      }))
-
-    return {
-      ...graph,
-      nodes,
-      edges,
-    }
-  },
-
-  expandMessageFocusNeighborhood(graph, keepIndexes, selectedIndex) {
-    const adjacency = new Map()
-
-    graph.edges.forEach((edge) => {
-      const source = edge.source
-      const target = edge.target
-      if (!adjacency.has(source)) adjacency.set(source, [])
-      if (!adjacency.has(target)) adjacency.set(target, [])
-      adjacency.get(source).push(edge)
-      adjacency.get(target).push(edge)
-    })
-
-    const queue = [{index: selectedIndex, depth: 0}]
-    const visited = new Set([selectedIndex])
-
-    while (queue.length > 0) {
-      const {index, depth} = queue.shift()
-      keepIndexes.add(index)
-      if (depth >= 2) continue
-
-      const edges = adjacency.get(index) || []
-      edges.forEach((edge) => {
-        if (edge.kind === "relationship") return
-        const nextIndex = edge.source === index ? edge.target : edge.source
-        if (visited.has(nextIndex)) return
-        visited.add(nextIndex)
-        queue.push({index: nextIndex, depth: depth + 1})
-      })
-    }
-  },
-
-  expandRelationshipFocusNeighborhood(graph, keepIndexes, selectedIndex) {
-    const selectedNode = graph.nodes[selectedIndex]
-    if (!selectedNode) return
-
-    if (selectedNode.kind === "channel" || selectedNode.kind === "conversation") {
-      graph.edges.forEach((edge) => {
-        const touchesSelected = edge.source === selectedIndex || edge.target === selectedIndex
-        if (!touchesSelected) return
-        if (edge.kind !== "conversation") return
-
-        keepIndexes.add(edge.source)
-        keepIndexes.add(edge.target)
-      })
-
-      return
-    }
-
-    graph.edges.forEach((edge) => {
-      const touchesSelected = edge.source === selectedIndex || edge.target === selectedIndex
-      if (!touchesSelected) return
-
-      if (edge.kind === "authored" || edge.kind === "in_channel") return
-
-      keepIndexes.add(edge.source)
-      keepIndexes.add(edge.target)
-    })
-  },
-
   tooltipText(object) {
     if (!object) return "node"
 
@@ -646,12 +574,24 @@ export const threadrGraphRenderingGraphMethods = {
   },
 
   shouldShowNodeLabel(node, selectionEmphasis) {
-    if (this.state.labelMode === "all") {
-      return this.shouldShowExpandedLabel(node, selectionEmphasis)
+    const focusNode = this.activeFocusNode()
+
+    if (this.state.labelMode !== "on") return false
+
+    if (!focusNode) {
+      return node.kind === "channel" && node.details?.type !== "cluster"
     }
 
-    if (!this.state.focusNeighborhoodOnly) {
-      return node.kind === "channel" && node.details?.type !== "cluster"
+    if (focusNode.kind === "channel") {
+      return node.kind === "channel" || node.kind === "conversation"
+    }
+
+    if (focusNode.kind === "conversation") {
+      return node.kind === "channel" || node.kind === "conversation" || node.kind === "actor"
+    }
+
+    if (focusNode.kind === "message") {
+      return node.kind !== "message"
     }
 
     const emphasis = this.nodeEmphasis(node, selectionEmphasis)
@@ -660,15 +600,6 @@ export const threadrGraphRenderingGraphMethods = {
     if (emphasis === "dossier") return true
     if (this.shouldShowNeighborhoodLabel(node, emphasis)) return true
     return false
-  },
-
-  shouldShowExpandedLabel(node, selectionEmphasis) {
-    if (!node || node.details?.type === "cluster") return false
-    if (node.kind === "message") return this.isSelectedNode(node)
-    if (node.kind === "actor" || node.kind === "channel") return true
-
-    const emphasis = this.nodeEmphasis(node, selectionEmphasis)
-    return emphasis !== "dim"
   },
 
   shouldShowNeighborhoodLabel(node, emphasis) {
@@ -761,5 +692,191 @@ export const threadrGraphRenderingGraphMethods = {
     if (edge.label === "CO_MENTIONED") return "co_mentioned"
     if (edge.label === "ACTIVE_IN") return "active_in"
     return "other"
+  },
+
+  subgraphByPredicate(graph, nodePredicate, edgePredicate) {
+    if (!graph) return graph
+
+    const keepIndexes = new Set(graph.nodes.filter(nodePredicate).map((node) => node.index))
+    return this.subgraphFromIndexes(graph, keepIndexes, edgePredicate)
+  },
+
+  subgraphFromIndexes(graph, keepIndexes, edgePredicate = null) {
+    if (!graph || keepIndexes.size === 0) {
+      return {
+        ...graph,
+        nodes: [],
+        edges: [],
+      }
+    }
+
+    const indexMap = new Map()
+    const nodes = graph.nodes
+      .filter((node) => keepIndexes.has(node.index))
+      .map((node, newIndex) => {
+        indexMap.set(node.index, newIndex)
+        return {...node, index: newIndex, originalIndex: this.maskIndex(node)}
+      })
+
+    const edges = graph.edges
+      .filter((edge) => keepIndexes.has(edge.source) && keepIndexes.has(edge.target))
+      .filter((edge) => (typeof edgePredicate === "function" ? edgePredicate(edge, graph.nodes) : true))
+      .map((edge) => ({
+        ...edge,
+        source: indexMap.get(edge.source),
+        target: indexMap.get(edge.target),
+      }))
+
+    return {
+      ...graph,
+      nodes,
+      edges,
+    }
+  },
+
+  channelConversationSubgraph(graph, focusNode) {
+    const focusId = String(focusNode.details?.id || "")
+    const keepIndexes = new Set()
+
+    graph.nodes.forEach((node) => {
+      if (String(node.details?.id || "") === focusId) {
+        keepIndexes.add(node.index)
+      }
+    })
+
+    graph.edges.forEach((edge) => {
+      if (edge.kind !== "conversation") return
+
+      const source = graph.nodes[edge.source]
+      const target = graph.nodes[edge.target]
+      const sourceId = String(source?.details?.id || "")
+      const targetId = String(target?.details?.id || "")
+
+      if (sourceId !== focusId && targetId !== focusId) return
+      if (source?.kind !== "conversation" && target?.kind !== "conversation") return
+
+      keepIndexes.add(edge.source)
+      keepIndexes.add(edge.target)
+    })
+
+    return this.subgraphFromIndexes(
+      graph,
+      keepIndexes,
+      (edge) => edge.kind === "conversation",
+    )
+  },
+
+  conversationDetailSubgraph(graph, focusNode) {
+    const focusId = String(focusNode.details?.id || "")
+    const keepIndexes = new Set()
+
+    graph.nodes.forEach((node) => {
+      if (String(node.details?.id || "") === focusId) {
+        keepIndexes.add(node.index)
+      }
+    })
+
+    graph.edges.forEach((edge) => {
+      if (edge.kind !== "conversation") return
+
+      const source = graph.nodes[edge.source]
+      const target = graph.nodes[edge.target]
+      const sourceId = String(source?.details?.id || "")
+      const targetId = String(target?.details?.id || "")
+
+      if (sourceId !== focusId && targetId !== focusId) return
+
+      keepIndexes.add(edge.source)
+      keepIndexes.add(edge.target)
+    })
+
+    return this.subgraphFromIndexes(
+      graph,
+      keepIndexes,
+      (edge) => edge.kind === "conversation",
+    )
+  },
+
+  messageDetailSubgraph(graph, focusNode) {
+    const focusId = String(focusNode.details?.id || "")
+    const keepIndexes = new Set()
+
+    graph.nodes.forEach((node) => {
+      if (String(node.details?.id || "") === focusId) {
+        keepIndexes.add(node.index)
+      }
+    })
+
+    const conversationIndexes = new Set()
+
+    graph.edges.forEach((edge) => {
+      if (edge.kind !== "conversation") return
+
+      const source = graph.nodes[edge.source]
+      const target = graph.nodes[edge.target]
+      const sourceId = String(source?.details?.id || "")
+      const targetId = String(target?.details?.id || "")
+
+      if (sourceId === focusId || targetId === focusId) {
+        keepIndexes.add(edge.source)
+        keepIndexes.add(edge.target)
+        if (source?.kind === "conversation") conversationIndexes.add(edge.source)
+        if (target?.kind === "conversation") conversationIndexes.add(edge.target)
+      }
+    })
+
+    graph.edges.forEach((edge) => {
+      if (edge.kind !== "conversation") return
+      if (!conversationIndexes.has(edge.source) && !conversationIndexes.has(edge.target)) return
+      keepIndexes.add(edge.source)
+      keepIndexes.add(edge.target)
+    })
+
+    return this.subgraphFromIndexes(
+      graph,
+      keepIndexes,
+      (edge) => edge.kind === "conversation",
+    )
+  },
+
+  actorConversationSubgraph(graph, focusNode) {
+    const focusId = String(focusNode.details?.id || "")
+    const keepIndexes = new Set()
+    const conversationIndexes = new Set()
+
+    graph.nodes.forEach((node) => {
+      if (String(node.details?.id || "") === focusId) {
+        keepIndexes.add(node.index)
+      }
+    })
+
+    graph.edges.forEach((edge) => {
+      if (edge.kind !== "conversation") return
+
+      const source = graph.nodes[edge.source]
+      const target = graph.nodes[edge.target]
+      const sourceId = String(source?.details?.id || "")
+      const targetId = String(target?.details?.id || "")
+
+      if (sourceId === focusId || targetId === focusId) {
+        keepIndexes.add(edge.source)
+        keepIndexes.add(edge.target)
+        if (source?.kind === "conversation") conversationIndexes.add(edge.source)
+        if (target?.kind === "conversation") conversationIndexes.add(edge.target)
+      }
+    })
+
+    graph.edges.forEach((edge) => {
+      if (edge.kind !== "conversation") return
+      if (!conversationIndexes.has(edge.source) && !conversationIndexes.has(edge.target)) return
+      keepIndexes.add(edge.source)
+      keepIndexes.add(edge.target)
+    })
+
+    return this.subgraphFromIndexes(
+      graph,
+      keepIndexes,
+      (edge) => edge.kind === "conversation",
+    )
   },
 }

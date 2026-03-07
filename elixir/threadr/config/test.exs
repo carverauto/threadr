@@ -1,5 +1,7 @@
 import Config
 
+integration_enabled = System.get_env("THREADR_RUN_INTEGRATION") in ~w(true 1 TRUE)
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
@@ -9,7 +11,7 @@ config :threadr, Threadr.Repo,
   username: System.get_env("THREADR_DB_USER") || "postgres",
   password: System.get_env("THREADR_DB_PASSWORD") || "postgres",
   hostname: System.get_env("THREADR_DB_HOST") || "localhost",
-  port: String.to_integer(System.get_env("THREADR_DB_PORT") || "5432"),
+  port: String.to_integer(System.get_env("THREADR_DB_PORT") || "55432"),
   database:
     System.get_env("THREADR_TEST_DB_NAME") ||
       "threadr_test#{System.get_env("MIX_TEST_PARTITION")}",
@@ -49,6 +51,8 @@ config :threadr, Threadr.ML,
     max_tokens: 600,
     timeout: 30_000
   ]
+
+config :threadr, Threadr.Messaging.Topology, messaging_enabled: integration_enabled
 
 config :threadr, Threadr.ControlPlane.BotOperationDispatcher, enabled: false
 config :threadr, Threadr.ControlPlane.BotStatusObserver, enabled: false

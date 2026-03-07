@@ -25,6 +25,7 @@
 - [x] 4.1 Build Phoenix LiveView interfaces for chat history, dossiers, and graph exploration, using the binary Arrow plus roaring bitmap plus `deck.gl` plus Wasm pipeline for graph exploration.
 - [x] 4.1.a Build authenticated tenant QA and graph exploration LiveViews, including the binary Arrow plus roaring bitmap plus `deck.gl` plus Wasm graph pipeline.
 - [x] 4.1.b Build analyst-facing chat history and dossier LiveViews that expose temporal conversation context outside the current QA and graph exploration surfaces.
+- [x] 4.1.c Finish the graph investigation workflow polish so the graph starts from channel overviews, drills into conversation and message neighborhoods, and keeps selection details in the dedicated side panel.
 - [x] 4.2 Implement authenticated web sign-in and tenant-scoped session handling for the Threadr UI.
 - [x] 4.3 Implement self-service API key creation, listing, and revocation for authenticated users.
 - [x] 4.4 Define the first public API surface for tenant-facing automation and control-plane access.
@@ -34,4 +35,5 @@
 - [x] 4.8 Verify end-to-end ingestion through JetStream, Broadway consumers, PostgreSQL persistence, and LiveView updates.
 - [x] 4.8.a Verify end-to-end ingestion through JetStream, Broadway consumers, and PostgreSQL persistence, including IRC, Discord, duplicate-delivery, and operator-contract smoke coverage.
 - [x] 4.8.b Add explicit automated verification that LiveView surfaces update from ingestion-driven state changes rather than only reading persisted state after the fact.
+- [x] 4.8.c Re-run graph snapshot and tenant graph LiveView verification for the investigation workflow against a PostgreSQL-backed test environment and extend coverage for any uncovered regressions.
 - [x] 4.9 Implement first-install operator-admin bootstrap, persisted operator-admin authorization, and forced password rotation for bootstrap credentials.

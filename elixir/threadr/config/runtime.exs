@@ -21,7 +21,14 @@ if System.get_env("PHX_SERVER") do
 end
 
 nats_host = System.get_env("THREADR_NATS_HOST") || "localhost"
-nats_port = String.to_integer(System.get_env("THREADR_NATS_PORT") || "4222")
+
+default_nats_port =
+  case config_env() do
+    env when env in [:dev, :test] -> "54222"
+    _ -> "4222"
+  end
+
+nats_port = String.to_integer(System.get_env("THREADR_NATS_PORT") || default_nats_port)
 truthy_env? = fn value -> value in ~w(true 1 TRUE) end
 pipeline_enabled = truthy_env?.(System.get_env("THREADR_BROADWAY_ENABLED"))
 nats_tls_enabled = truthy_env?.(System.get_env("THREADR_NATS_TLS"))

@@ -108,8 +108,10 @@ defmodule Threadr.TenantData.GraphSnapshot do
         }
       end)
 
+    real_conversations = Enum.filter(conversations, &real_conversation?/1)
+
     conversation_nodes =
-      conversations
+      real_conversations
       |> Enum.sort_by(&{&1.channel_name || "", sortable_observed_at(%{observed_at: &1.started_at})})
       |> Enum.with_index(length(actor_nodes) + length(channel_nodes))
       |> Enum.map(fn {conversation, index} ->
@@ -169,9 +171,9 @@ defmodule Threadr.TenantData.GraphSnapshot do
 
     relationship_edges = relationship_edges(prefix, node_index, window)
     actor_channel_edges = actor_channel_edges(prefix, node_index, window)
-    conversation_channel_edges = conversation_channel_edges(conversations, node_index)
-    actor_conversation_edges = actor_conversation_edges(conversations, node_index)
-    conversation_message_edges = conversation_message_edges(conversations, node_index)
+    conversation_channel_edges = conversation_channel_edges(real_conversations, node_index)
+    actor_conversation_edges = actor_conversation_edges(real_conversations, node_index)
+    conversation_message_edges = conversation_message_edges(real_conversations, node_index)
     authored_edges = authored_edges(messages, node_index)
     in_channel_edges = in_channel_edges(messages, node_index)
     edges =
@@ -323,11 +325,16 @@ defmodule Threadr.TenantData.GraphSnapshot do
       channel_id: channel_id,
       channel_name: conversation.channel_name,
       actor_ids: actor_ids,
+      actor_count: length(actor_ids),
       message_ids: message_ids,
       message_count: conversation.message_count,
       started_at: conversation.started_at,
       ended_at: conversation.ended_at
     }
+  end
+
+  defp real_conversation?(conversation) do
+    (conversation.actor_count || length(conversation.actor_ids || [])) >= 2
   end
 
   defp same_conversation?(conversation, message) do

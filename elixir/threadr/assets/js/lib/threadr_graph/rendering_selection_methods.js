@@ -15,10 +15,6 @@ export const threadrGraphRenderingSelectionMethods = {
     this.renderGraph()
   },
 
-  updateSummary(text) {
-    return
-  },
-
   updateSelectionDetails(node = null) {
     if (!this.state.detailsEl) return
 
@@ -93,9 +89,9 @@ export const threadrGraphRenderingSelectionMethods = {
       this.state.pinnedNodeKind = node.kind
       this.state.pinnedNodeLabel = node.label || node.details?.id || null
       this.state.pinnedNodeDetail = this.cachedDetailFor(node)
-      this.centerOnFocusContext()
     }
 
+    this.centerOnInvestigationGraph()
     this.updateSelectionDetails(node)
     this.requestNodeDetail(node)
     this.renderGraph()
@@ -119,12 +115,13 @@ export const threadrGraphRenderingSelectionMethods = {
     this.state.pinnedNodeDetail = this.cachedDetailFor(node) || this.state.selectedNodeDetail || null
     this.ensureNodeFocusMode(node)
     this.updateSelectionDetails(this.state.selectedNode || node)
-    this.centerOnFocusContext()
+    this.centerOnInvestigationGraph()
     this.renderGraph()
   },
 
   toggleFocusNeighborhood() {
-    if (!this.activeFocusNode()) return
+    const focusNode = this.activeFocusNode()
+    if (!focusNode) return
 
     if (this.state.messageFocusOnly) {
       this.state.messageFocusOnly = false
@@ -142,18 +139,13 @@ export const threadrGraphRenderingSelectionMethods = {
         authored: false,
         in_channel: false,
       }
+      this.centerOnInvestigationGraph()
       this.updateSelectionDetails(this.state.selectedNode)
       this.renderGraph()
       return
     }
 
-    this.state.focusNeighborhoodOnly = !this.state.focusNeighborhoodOnly
-    if (!this.state.focusNeighborhoodOnly) {
-      this.state.conversationFocusOnly = false
-      this.state.messageFocusOnly = false
-    }
-    this.updateSelectionDetails(this.state.selectedNode)
-    this.renderGraph()
+    this.showChannelOverview()
   },
 
   clearPinnedFocus() {
@@ -182,8 +174,26 @@ export const threadrGraphRenderingSelectionMethods = {
       this.state.pinnedNodeDetail = this.cachedDetailFor(node) || this.state.selectedNodeDetail || null
     }
 
-    this.centerOnFocusContext()
+    this.centerOnInvestigationGraph()
     this.updateSelectionDetails(this.state.selectedNode || node)
+    this.renderGraph()
+  },
+
+  showChannelOverview() {
+    this.state.selectedNodeIndex = null
+    this.state.selectedNode = null
+    this.state.selectedNodeDetail = null
+    this.state.pinnedNodeId = null
+    this.state.pinnedNodeKind = null
+    this.state.pinnedNodeLabel = null
+    this.state.pinnedNodeDetail = null
+    this.state.focusNeighborhoodOnly = false
+    this.state.conversationFocusOnly = false
+    this.state.messageFocusOnly = false
+    this.state.nodeKinds = {...this.state.defaultNodeKinds}
+    this.state.edgeLayers = {...this.state.defaultEdgeLayers}
+    this.state.viewState = this.initialViewState()
+    this.updateSelectionDetails(null)
     this.renderGraph()
   },
 
@@ -249,24 +259,12 @@ export const threadrGraphRenderingSelectionMethods = {
     this.state.messageFocusOnly = false
   },
 
-  updateFocusControls() {
-    return
-  },
-
   activeFocusNode() {
     if (this.state.pinnedNodeId) {
       return this.nodeById(this.state.pinnedNodeId) || this.state.selectedNode
     }
 
     return this.state.selectedNode
-  },
-
-  activeFocusDetail() {
-    if (this.state.pinnedNodeId) {
-      return this.state.pinnedNodeDetail || this.state.detailCache[this.state.pinnedNodeId] || null
-    }
-
-    return this.state.selectedNodeDetail
   },
 
   nodeById(nodeId) {
@@ -290,6 +288,7 @@ export const threadrGraphRenderingSelectionMethods = {
 
     this.state.selectedNode = nextSelectedNode
     this.state.selectedNodeIndex = nextSelectedNode ? nextSelectedNode.index : null
+    if (!nextSelectedNode) this.state.selectedNodeDetail = null
 
     if (this.state.pinnedNodeId && !refreshNode(this.state.pinnedNodeId)) {
       this.state.pinnedNodeId = null
@@ -299,37 +298,25 @@ export const threadrGraphRenderingSelectionMethods = {
     }
   },
 
-  centerOnFocusContext() {
+  centerOnInvestigationGraph() {
     const graph = this.state.graph
     if (!graph) return
 
-    const focusNode = this.activeFocusNode()
-    if (!focusNode) return
+    const focusGraph = this.investigationGraph(graph)
+    const nodes = focusGraph?.nodes || []
+    if (nodes.length === 0) return
 
-    const detail = this.activeFocusDetail()
-    const focusIds = this.collectFocusIds(detail)
-
-    const focusNodes = graph.nodes.filter((node) => {
-      const nodeId = node.details?.id || null
-
-      if (node.index === focusNode.index) return true
-      if (nodeId && focusIds.has(String(nodeId))) return true
-      return false
-    })
-
-    if (focusNodes.length === 0) return
-
-    const xs = focusNodes.map((node) => node.x)
-    const ys = focusNodes.map((node) => node.y)
+    const xs = nodes.map((node) => Number(node.x || 0))
+    const ys = nodes.map((node) => Number(node.y || 0))
     const minX = Math.min(...xs)
     const maxX = Math.max(...xs)
     const minY = Math.min(...ys)
     const maxY = Math.max(...ys)
     const width = this.rootEl.clientWidth || 1200
     const height = this.rootEl.clientHeight || 700
-    const spanX = Math.max(120, maxX - minX)
-    const spanY = Math.max(120, maxY - minY)
-    const scale = Math.min(width / spanX, height / spanY) * 0.42
+    const spanX = Math.max(180, maxX - minX)
+    const spanY = Math.max(180, maxY - minY)
+    const scale = Math.min(width / spanX, height / spanY) * 0.5
 
     this.state.viewState = {
       target: [(minX + maxX) / 2, (minY + maxY) / 2, 0],
@@ -363,12 +350,12 @@ export const threadrGraphRenderingSelectionMethods = {
       : ""
 
     return `
-      <div class="mt-2 border-t border-base-300/50 pt-2">
+      <div class="mt-2 min-w-0 overflow-hidden border-t border-base-300/50 pt-2">
         <div class="font-semibold mb-1">Local context</div>
         <div>Direct links: ${this.escapeHtml(String(profile.adjacent_count || 0))}</div>
         <div>Main relationship: ${this.escapeHtml(profile.dominant_relationship || "unknown")}</div>
-        <div>Relationship mix: ${relationshipSummary || "none"}</div>
-        <div>Connected to: ${adjacent || "none"}</div>
+        <div class="break-words">Relationship mix: ${relationshipSummary || "none"}</div>
+        <div class="break-words">Connected to: ${adjacent || "none"}</div>
       </div>
     `
   },
@@ -425,7 +412,7 @@ export const threadrGraphRenderingSelectionMethods = {
   renderNodeDossier(node, detail, isLoading) {
     if (isLoading) {
       return `
-        <div class="mt-2 border-t border-base-300/50 pt-2">
+        <div class="mt-2 min-w-0 overflow-hidden border-t border-base-300/50 pt-2">
           <div class="font-semibold mb-1">Dossier</div>
           <div>Loading server-backed neighborhood…</div>
         </div>
@@ -436,7 +423,7 @@ export const threadrGraphRenderingSelectionMethods = {
 
     if (detail.error) {
       return `
-        <div class="mt-2 border-t border-base-300/50 pt-2">
+        <div class="mt-2 min-w-0 overflow-hidden border-t border-base-300/50 pt-2">
           <div class="font-semibold mb-1">Dossier</div>
           <div>Server-backed detail unavailable.</div>
         </div>
@@ -451,7 +438,7 @@ export const threadrGraphRenderingSelectionMethods = {
     const neighborhood = detail.neighborhood || {}
 
     return `
-      <div class="mt-2 border-t border-base-300/50 pt-2">
+      <div class="mt-2 min-w-0 overflow-hidden border-t border-base-300/50 pt-2">
         <div class="font-semibold mb-1">Dossier</div>
         <div>Recent messages: ${this.escapeHtml(String(summary.message_count || recentMessages.length || 0))}</div>
         <div>Neighborhood actors: ${this.escapeHtml(String(summary.related_actor_count || neighborhood.actors?.length || 0))}</div>
@@ -499,7 +486,7 @@ export const threadrGraphRenderingSelectionMethods = {
     actions.push(this.renderActionLink(qaHref, "Ask in QA"))
 
     return `
-      <div class="mt-2 flex flex-wrap gap-2 border-t border-base-300/50 pt-2">
+      <div class="mt-2 flex min-w-0 flex-wrap gap-2 overflow-hidden border-t border-base-300/50 pt-2">
         ${actions.join("")}
       </div>
     `
@@ -510,19 +497,13 @@ export const threadrGraphRenderingSelectionMethods = {
 
     const pinned = this.state.pinnedNodeId && String(this.state.pinnedNodeId) === String(node.details.id)
     const pinLabel = pinned ? "Release focus" : "Pin focus"
-    const neighborhoodLabel = this.state.focusNeighborhoodOnly
-      ? this.state.messageFocusOnly
-        ? "Show conversations"
-        : this.state.conversationFocusOnly
-          ? "Show full graph"
-          : "Show full graph"
-      : "Focus neighborhood"
+    const neighborhoodLabel = this.state.messageFocusOnly ? "Hide messages" : "Back to channels"
     const focusStatus = pinned
       ? `Focus pinned to ${this.escapeHtml(this.state.pinnedNodeLabel || node.label || "node")}`
       : "Focus follows selection"
 
     return `
-      <div class="mt-2 border-t border-base-300/50 pt-2">
+      <div class="mt-2 min-w-0 overflow-hidden border-t border-base-300/50 pt-2">
         <div class="font-semibold mb-1">Focus</div>
         <div class="mb-2 text-base-content/70">${focusStatus}</div>
         <div class="flex flex-wrap gap-2">

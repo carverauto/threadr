@@ -1,281 +1,214 @@
 defmodule Threadr.TenantData.GraphLayout do
   @moduledoc """
-  Deterministic backend-owned graph layout for tenant exploration snapshots.
+  Deterministic backend-owned layout for the investigation graph.
 
-  Layout is component-aware and degree-aware:
-  - connected components are positioned on a stable global grid
-  - high-degree nodes anchor near the component center
-  - traversal depth determines shell distance from the anchor
-  - sibling nodes remain close to their parent branch for readable neighborhoods
+  This layout is hierarchy-first:
+  - channels are the top-level anchors
+  - conversations sit under a channel
+  - actors and messages fan out around a conversation
+
+  The goal is readability for investigation drill-in, not a generic force graph.
   """
 
-  @component_spacing 560.0
-  @shell_spacing 120.0
+  @channel_spacing_x 560.0
+  @channel_spacing_y 340.0
+  @conversation_spacing_y 170.0
+  @actor_offset_x -210.0
+  @message_offset_x 210.0
+  @participant_spacing_y 72.0
+  @message_spacing_y 58.0
 
   def layout(nodes, _edges) when nodes == [], do: []
 
   def layout(nodes, edges) do
-    adjacency = adjacency(edges, length(nodes))
+    nodes_by_index = Map.new(nodes, &{&1.index, &1})
 
-    components =
+    if Enum.any?(nodes, &(&1.kind == "conversation")) do
+      layout_hierarchy(nodes, edges, nodes_by_index)
+    else
+      layout_component_grid(nodes)
+    end
+  end
+
+  defp layout_hierarchy(nodes, edges, nodes_by_index) do
+    channel_nodes =
       nodes
-      |> Enum.group_by(&component_id/1)
-      |> Enum.sort_by(fn {component_id, component_nodes} ->
-        {-length(component_nodes), component_id,
-         Enum.min_by(component_nodes, &sort_label/1).label}
+      |> Enum.filter(&(&1.kind == "channel"))
+      |> Enum.sort_by(&sort_label/1)
+
+    conversation_indexes_by_channel = conversation_indexes_by_channel(edges, nodes_by_index)
+    actor_indexes_by_conversation = actor_indexes_by_conversation(edges, nodes_by_index)
+    message_indexes_by_conversation = message_indexes_by_conversation(edges, nodes_by_index)
+
+    channel_positions =
+      channel_nodes
+      |> Enum.with_index()
+      |> Map.new(fn {channel, idx} ->
+        col = rem(idx, max(1, ceil(:math.sqrt(length(channel_nodes)))))
+        row = div(idx, max(1, ceil(:math.sqrt(length(channel_nodes)))))
+
+        {channel.index, {col * @channel_spacing_x, row * @channel_spacing_y}}
       end)
 
-    columns =
-      components
-      |> length()
-      |> :math.sqrt()
-      |> ceil()
-      |> max(1)
+    positions =
+      Enum.reduce(channel_nodes, %{}, fn channel, acc ->
+        {channel_x, channel_y} = Map.fetch!(channel_positions, channel.index)
+        acc = Map.put(acc, channel.index, {channel_x, channel_y})
 
-    components
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {{_component_id, component_nodes}, component_index} ->
-      center = component_center(component_index, columns)
-      layout_component(component_nodes, center, adjacency)
+        conversation_indexes =
+          conversation_indexes_by_channel
+          |> Map.get(channel.index, [])
+          |> Enum.sort_by(&(nodes_by_index |> Map.fetch!(&1) |> conversation_sort_key()))
+
+        conversation_start_y =
+          channel_y - ((max(length(conversation_indexes), 1) - 1) * @conversation_spacing_y) / 2.0
+
+        Enum.with_index(conversation_indexes)
+        |> Enum.reduce(acc, fn {conversation_index, conversation_idx}, nested_acc ->
+          conversation_x = channel_x
+          conversation_y = conversation_start_y + conversation_idx * @conversation_spacing_y
+          nested_acc = Map.put(nested_acc, conversation_index, {conversation_x, conversation_y})
+
+          actor_indexes =
+            actor_indexes_by_conversation
+            |> Map.get(conversation_index, [])
+            |> Enum.sort_by(&(nodes_by_index |> Map.fetch!(&1) |> sort_label()))
+
+          message_indexes =
+            message_indexes_by_conversation
+            |> Map.get(conversation_index, [])
+            |> Enum.sort_by(&(nodes_by_index |> Map.fetch!(&1) |> message_sort_key()))
+
+          nested_acc
+          |> place_vertical_list(actor_indexes, conversation_x + @actor_offset_x, conversation_y, @participant_spacing_y)
+          |> place_vertical_list(message_indexes, conversation_x + @message_offset_x, conversation_y, @message_spacing_y)
+        end)
+      end)
+
+    nodes
+    |> Enum.map(fn node ->
+      {x, y} = Map.get(positions, node.index, fallback_position(node))
+      %{node | x: x, y: y}
     end)
     |> Enum.sort_by(& &1.index)
   end
 
-  defp layout_component(nodes, {center_x, center_y}, adjacency) do
-    nodes_by_index = Map.new(nodes, &{&1.index, &1})
-    anchor = anchor_node(nodes)
-    traversal = traversal_profile(anchor.index, nodes_by_index, adjacency)
+  defp place_vertical_list(acc, [], _x, _center_y, _spacing), do: acc
 
-    Enum.map(nodes, fn node ->
-      profile = Map.fetch!(traversal, node.index)
-      radius = profile.depth * @shell_spacing
-      angle = angle_for_node(node, profile, center_x, center_y)
+  defp place_vertical_list(acc, indexes, x, center_y, spacing) do
+    start_y = center_y - ((length(indexes) - 1) * spacing) / 2.0
 
-      {x, y} =
-        if profile.depth == 0 do
-          {center_x, center_y}
-        else
-          {
-            center_x + radius * :math.cos(angle),
-            center_y + radius * :math.sin(angle)
-          }
-        end
-
-      Map.merge(node, %{x: x, y: y})
+    Enum.with_index(indexes)
+    |> Enum.reduce(acc, fn {index, idx}, nested_acc ->
+      Map.put(nested_acc, index, {x, start_y + idx * spacing})
     end)
   end
 
-  defp anchor_node(nodes) do
-    Enum.max_by(nodes, fn node ->
-      {degree(node), -kind_priority(node), invert_label(sort_label(node))}
-    end)
-  end
+  defp conversation_indexes_by_channel(edges, nodes_by_index) do
+    Enum.reduce(edges, %{}, fn edge, acc ->
+      if edge.kind != "conversation" do
+        acc
+      else
+        source = Map.fetch!(nodes_by_index, edge.source)
+        target = Map.fetch!(nodes_by_index, edge.target)
 
-  defp traversal_profile(anchor_index, nodes_by_index, adjacency) do
-    queue = :queue.from_list([{anchor_index, nil, 0, 0.0}])
-    visited = MapSet.new()
-    levels = %{}
+        cond do
+          source.kind == "channel" and target.kind == "conversation" ->
+            Map.update(acc, source.index, [target.index], &[target.index | &1])
 
-    {levels, _visited} =
-      walk_layers(queue, visited, levels, nodes_by_index, adjacency)
+          target.kind == "channel" and source.kind == "conversation" ->
+            Map.update(acc, target.index, [source.index], &[source.index | &1])
 
-    fill_unreached_nodes(levels, nodes_by_index)
-  end
-
-  defp walk_layers(queue, visited, levels, nodes_by_index, adjacency) do
-    case :queue.out(queue) do
-      {:empty, _queue} ->
-        {levels, visited}
-
-      {{:value, {index, parent_index, depth, angle}}, queue} ->
-        if MapSet.member?(visited, index) do
-          walk_layers(queue, visited, levels, nodes_by_index, adjacency)
-        else
-          visited = MapSet.put(visited, index)
-          neighbors = ordered_neighbors(index, parent_index, nodes_by_index, adjacency)
-
-          levels =
-            Map.put(levels, index, %{
-              parent_index: parent_index,
-              depth: depth,
-              angle: angle,
-              sibling_index: 0,
-              sibling_count: 1
-            })
-
-          {queue, levels} =
-            enqueue_neighbors(queue, levels, index, depth, angle, neighbors)
-
-          walk_layers(queue, visited, levels, nodes_by_index, adjacency)
+          true ->
+            acc
         end
+      end
+    end)
+    |> Enum.into(%{}, fn {key, values} -> {key, Enum.uniq(values)} end)
+  end
+
+  defp actor_indexes_by_conversation(edges, nodes_by_index) do
+    Enum.reduce(edges, %{}, fn edge, acc ->
+      if edge.kind != "conversation" do
+        acc
+      else
+        source = Map.fetch!(nodes_by_index, edge.source)
+        target = Map.fetch!(nodes_by_index, edge.target)
+
+        cond do
+          source.kind == "actor" and target.kind == "conversation" ->
+            Map.update(acc, target.index, [source.index], &[source.index | &1])
+
+          target.kind == "actor" and source.kind == "conversation" ->
+            Map.update(acc, source.index, [target.index], &[target.index | &1])
+
+          true ->
+            acc
+        end
+      end
+    end)
+    |> Enum.into(%{}, fn {key, values} -> {key, Enum.uniq(values)} end)
+  end
+
+  defp message_indexes_by_conversation(edges, nodes_by_index) do
+    Enum.reduce(edges, %{}, fn edge, acc ->
+      if edge.kind != "conversation" do
+        acc
+      else
+        source = Map.fetch!(nodes_by_index, edge.source)
+        target = Map.fetch!(nodes_by_index, edge.target)
+
+        cond do
+          source.kind == "conversation" and target.kind == "message" ->
+            Map.update(acc, source.index, [target.index], &[target.index | &1])
+
+          target.kind == "conversation" and source.kind == "message" ->
+            Map.update(acc, target.index, [source.index], &[source.index | &1])
+
+          true ->
+            acc
+        end
+      end
+    end)
+    |> Enum.into(%{}, fn {key, values} -> {key, Enum.uniq(values)} end)
+  end
+
+  defp conversation_sort_key(node) do
+    details = node.details || %{}
+    started_at = Map.get(details, :started_at) || Map.get(details, "started_at")
+    {sortable_time(started_at), sort_label(node)}
+  end
+
+  defp message_sort_key(node) do
+    details = node.details || %{}
+    observed_at = Map.get(details, :observed_at) || Map.get(details, "observed_at")
+    {sortable_time(observed_at), sort_label(node)}
+  end
+
+  defp sortable_time(%DateTime{} = value), do: DateTime.to_unix(value, :microsecond)
+  defp sortable_time(%NaiveDateTime{} = value), do: NaiveDateTime.diff(value, ~N[1970-01-01 00:00:00], :microsecond)
+  defp sortable_time(_), do: 0
+
+  defp fallback_position(node) do
+    case node.kind do
+      "channel" -> {0.0, 0.0}
+      "conversation" -> {0.0, 170.0}
+      "actor" -> {@actor_offset_x, 170.0}
+      "message" -> {@message_offset_x, 170.0}
+      _ -> {0.0, 0.0}
     end
   end
 
-  defp enqueue_neighbors(queue, levels, _index, _depth, _angle, []), do: {queue, levels}
-
-  defp enqueue_neighbors(queue, levels, index, depth, angle, neighbors) do
-    count = length(neighbors)
-
-    Enum.with_index(neighbors)
-    |> Enum.reduce({queue, levels}, fn {{neighbor_index, _neighbor}, sibling_index},
-                                       {queue, levels} ->
-      if Map.has_key?(levels, neighbor_index) do
-        {queue, levels}
-      else
-        neighbor_angle = child_angle(angle, sibling_index, count)
-
-        levels =
-          Map.put(levels, neighbor_index, %{
-            parent_index: index,
-            depth: depth + 1,
-            angle: neighbor_angle,
-            sibling_index: sibling_index,
-            sibling_count: count
-          })
-
-        {:queue.in({neighbor_index, index, depth + 1, neighbor_angle}, queue), levels}
-      end
+  defp layout_component_grid(nodes) do
+    nodes
+    |> Enum.with_index()
+    |> Enum.map(fn {node, idx} ->
+      col = rem(idx, 4)
+      row = div(idx, 4)
+      %{node | x: col * 220.0, y: row * 180.0}
     end)
+    |> Enum.sort_by(& &1.index)
   end
-
-  defp fill_unreached_nodes(levels, nodes_by_index) do
-    missing =
-      nodes_by_index
-      |> Map.keys()
-      |> Enum.reject(&Map.has_key?(levels, &1))
-      |> Enum.map(fn index -> {index, Map.fetch!(nodes_by_index, index)} end)
-      |> Enum.sort_by(fn {_index, node} ->
-        {-degree(node), kind_priority(node), sort_label(node)}
-      end)
-
-    count = length(missing)
-
-    Enum.with_index(missing)
-    |> Enum.reduce(levels, fn {{index, _node}, missing_index}, acc ->
-      angle =
-        if count <= 1 do
-          0.0
-        else
-          2.0 * :math.pi() * missing_index / count
-        end
-
-      Map.put(acc, index, %{
-        parent_index: nil,
-        depth: 1,
-        angle: angle,
-        sibling_index: missing_index,
-        sibling_count: count
-      })
-    end)
-  end
-
-  defp ordered_neighbors(index, parent_index, nodes_by_index, adjacency) do
-    adjacency
-    |> Map.get(index, [])
-    |> Enum.reject(&(&1 == parent_index))
-    |> Enum.uniq()
-    |> Enum.map(fn neighbor_index ->
-      {neighbor_index, Map.fetch!(nodes_by_index, neighbor_index)}
-    end)
-    |> Enum.sort_by(fn {_neighbor_index, node} ->
-      {-degree(node), kind_priority(node), sort_label(node)}
-    end)
-  end
-
-  defp angle_for_node(_node, %{angle: angle, depth: 0}, _center_x, _center_y), do: angle
-
-  defp angle_for_node(node, profile, _center_x, _center_y) do
-    angle =
-      profile.angle +
-        layer_bias(profile.depth) +
-        kind_angle_bias(node.kind) +
-        sibling_bias(profile.sibling_index, profile.sibling_count)
-
-    normalize_angle(angle)
-  end
-
-  defp child_angle(parent_angle, sibling_index, sibling_count) do
-    span = child_span(sibling_count)
-    start = parent_angle - span / 2.0
-    start + (sibling_index + 0.5) / sibling_count * span
-  end
-
-  defp child_span(sibling_count) when sibling_count <= 1, do: :math.pi() / 2.8
-  defp child_span(sibling_count) when sibling_count <= 3, do: :math.pi() * 0.95
-  defp child_span(_sibling_count), do: :math.pi() * 1.35
-
-  defp sibling_bias(_sibling_index, sibling_count) when sibling_count <= 1, do: 0.0
-
-  defp sibling_bias(sibling_index, sibling_count) do
-    midpoint = (sibling_count - 1) / 2.0
-    (sibling_index - midpoint) * 0.06
-  end
-
-  defp layer_bias(depth), do: depth * 0.08
-
-  defp kind_angle_bias("actor"), do: -0.08
-  defp kind_angle_bias("channel"), do: 0.0
-  defp kind_angle_bias("conversation"), do: 0.04
-  defp kind_angle_bias("message"), do: 0.08
-  defp kind_angle_bias(_kind), do: 0.0
-
-  defp normalize_angle(angle) do
-    two_pi = 2.0 * :math.pi()
-    wrapped = :math.fmod(angle, two_pi)
-    if wrapped < 0.0, do: wrapped + two_pi, else: wrapped
-  end
-
-  defp component_center(component_index, columns) do
-    row = div(component_index, columns)
-    col = rem(component_index, columns)
-
-    {
-      col * @component_spacing,
-      row * @component_spacing
-    }
-  end
-
-  defp adjacency(edges, node_count) do
-    base =
-      if node_count == 0 do
-        %{}
-      else
-        Map.new(0..(node_count - 1), fn index -> {index, []} end)
-      end
-
-    Enum.reduce(edges, base, fn edge, acc ->
-      acc
-      |> Map.update!(edge.source, &[edge.target | &1])
-      |> Map.update!(edge.target, &[edge.source | &1])
-    end)
-  end
-
-  defp component_id(node) do
-    node
-    |> graph_profile()
-    |> Map.get(:component_id, 0)
-  end
-
-  defp degree(node) do
-    node
-    |> graph_profile()
-    |> Map.get(:degree, 0)
-  end
-
-  defp graph_profile(node) do
-    Map.get(node.details || %{}, :graph_profile, %{})
-  end
-
-  defp kind_priority(%{kind: "actor"}), do: 0
-  defp kind_priority(%{kind: "channel"}), do: 1
-  defp kind_priority(%{kind: "message"}), do: 2
-  defp kind_priority(_node), do: 3
 
   defp sort_label(node), do: String.downcase(to_string(node.label || node.id || "node"))
-
-  defp invert_label(label) do
-    label
-    |> to_charlist()
-    |> Enum.map(&(-&1))
-  end
 end

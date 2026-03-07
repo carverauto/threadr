@@ -35,8 +35,8 @@ export default class ThreadrGraphRenderer {
       defaultEdgeLayers: JSON.parse(rootEl.dataset.initialEdgeLayers || "{}"),
       defaultNodeKinds: JSON.parse(rootEl.dataset.initialNodeKinds || "{}"),
       defaultRelationshipTypes: JSON.parse(rootEl.dataset.initialRelationshipTypes || "{}"),
-      labelMode: "channels",
-      defaultLabelMode: "channels",
+      labelMode: "on",
+      defaultLabelMode: "on",
       subjectName: rootEl.dataset.subjectName || "",
       since: rootEl.dataset.since || "",
       until: rootEl.dataset.until || "",
@@ -121,10 +121,43 @@ export default class ThreadrGraphRenderer {
     this.labelToggleButtonEl.type = "button"
     this.labelToggleButtonEl.className = "btn btn-xs bg-base-100/90 shadow-sm backdrop-blur"
     this.labelToggleButtonEl.addEventListener("click", () => this.toggleLabelMode())
-    this.hudEl.replaceChildren(this.resetButtonEl, this.labelToggleButtonEl)
-    this.state.detailsEl = document.createElement("div")
-    this.state.detailsEl.className =
-      "absolute bottom-4 right-4 max-h-[70vh] w-[24rem] max-w-[calc(100%-2rem)] overflow-y-auto rounded-box bg-base-100/90 p-3 text-xs shadow-sm backdrop-blur"
+    this.legendButtonEl = document.createElement("button")
+    this.legendButtonEl.type = "button"
+    this.legendButtonEl.className = "btn btn-xs btn-outline bg-base-100/90 shadow-sm backdrop-blur"
+    this.legendButtonEl.textContent = "Legend"
+    this.legendButtonEl.addEventListener("click", () => this.toggleLegendPanel())
+    this.hudEl.replaceChildren(this.resetButtonEl, this.labelToggleButtonEl, this.legendButtonEl)
+
+    this.legendPanelEl = document.createElement("div")
+    this.legendPanelEl.className =
+      "absolute left-4 top-14 hidden w-64 rounded-box border border-base-300 bg-base-100/95 p-3 text-xs shadow-xl backdrop-blur"
+    this.legendPanelEl.innerHTML = `
+      <div class="mb-2 font-semibold text-base-content">Legend</div>
+      <div class="space-y-3 text-base-content/75">
+        <div class="space-y-1">
+          <div class="font-medium text-base-content">Nodes</div>
+          <div class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-amber-400 ring-1 ring-white/70"></span><span>Actor</span></div>
+          <div class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-sky-400 ring-1 ring-white/70"></span><span>Channel</span></div>
+          <div class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-slate-200 ring-1 ring-white/70"></span><span>Conversation</span></div>
+          <div class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-emerald-500 ring-1 ring-white/70"></span><span>Message</span></div>
+        </div>
+        <div class="space-y-1">
+          <div class="font-medium text-base-content">Edges</div>
+          <div class="flex items-center gap-2"><span class="h-0.5 w-5 rounded bg-slate-200"></span><span>Conversation link</span></div>
+          <div class="flex items-center gap-2"><span class="h-0.5 w-5 rounded bg-red-400"></span><span>MENTIONED</span></div>
+          <div class="flex items-center gap-2"><span class="h-0.5 w-5 rounded bg-amber-300"></span><span>CO_MENTIONED</span></div>
+          <div class="flex items-center gap-2"><span class="h-0.5 w-5 rounded bg-fuchsia-400"></span><span>Other relationship</span></div>
+        </div>
+      </div>
+    `
+
+    const externalDetailsEl = document.getElementById(this.rootEl.dataset.detailsPanelId || "")
+    this.state.detailsEl = externalDetailsEl || document.createElement("div")
+    if (!externalDetailsEl) {
+      this.state.detailsEl.className =
+        "absolute bottom-4 right-4 max-h-[70vh] w-[24rem] max-w-[calc(100%-2rem)] overflow-y-auto rounded-box bg-base-100/90 p-3 text-xs shadow-sm backdrop-blur"
+    }
+
     this.state.detailsEl.addEventListener("click", (event) => {
       const button = event.target.closest("[data-threadr-graph-action]")
       if (!button) return
@@ -142,7 +175,11 @@ export default class ThreadrGraphRenderer {
       }
     })
 
-    this.rootEl.replaceChildren(this.canvasEl, this.hudEl, this.state.detailsEl)
+    if (externalDetailsEl) {
+      this.rootEl.replaceChildren(this.canvasEl, this.hudEl, this.legendPanelEl)
+    } else {
+      this.rootEl.replaceChildren(this.canvasEl, this.hudEl, this.legendPanelEl, this.state.detailsEl)
+    }
     this.updateSelectionDetails(null)
     this.updateLabelToggleButton()
   }
@@ -207,7 +244,7 @@ export default class ThreadrGraphRenderer {
   }
 
   toggleLabelMode() {
-    this.state.labelMode = this.state.labelMode === "all" ? "channels" : "all"
+    this.state.labelMode = this.state.labelMode === "off" ? "on" : "off"
     this.updateLabelToggleButton()
     this.renderGraph()
   }
@@ -215,8 +252,13 @@ export default class ThreadrGraphRenderer {
   updateLabelToggleButton() {
     if (!this.labelToggleButtonEl) return
     this.labelToggleButtonEl.textContent = "Labels"
-    this.labelToggleButtonEl.classList.toggle("btn-outline", this.state.labelMode !== "all")
-    this.labelToggleButtonEl.classList.toggle("btn-primary", this.state.labelMode === "all")
+    this.labelToggleButtonEl.classList.toggle("btn-outline", this.state.labelMode !== "on")
+    this.labelToggleButtonEl.classList.toggle("btn-primary", this.state.labelMode === "on")
+  }
+
+  toggleLegendPanel() {
+    if (!this.legendPanelEl) return
+    this.legendPanelEl.classList.toggle("hidden")
   }
 }
 

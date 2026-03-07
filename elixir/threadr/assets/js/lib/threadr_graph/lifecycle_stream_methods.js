@@ -7,7 +7,7 @@ export const threadrGraphLifecycleStreamMethods = {
     this.state.graph = graph
     this.syncSelectionState(graph)
     this.applyRequestedFocus(graph)
-    this.updateSummary("")
+    this.updateSelectionDetails(this.state.selectedNode)
     this.renderGraph()
   },
 

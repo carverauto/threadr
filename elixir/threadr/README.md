@@ -351,7 +351,7 @@ QA workspaces are now testable in a real browser session.
 ## Runtime Configuration
 
 - `THREADR_NATS_HOST` defaults to `localhost`
-- `THREADR_NATS_PORT` defaults to `4222`
+- `THREADR_NATS_PORT` defaults to `54222` for local dev and test, and `4222` otherwise
 - `THREADR_BROADWAY_ENABLED=true` starts the Broadway JetStream consumer
 - `THREADR_INGEST_ENABLED=true` starts a single-platform bot ingest runtime inside the pod
 - `THREADR_PLATFORM` supports `irc` and `discord`
