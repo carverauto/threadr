@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threadr-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: threadr-worker
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:d7d6e7eaefd9165b4ea9d4264419c36ff97aa4f0bdccb151daa5f4413db4d7f8

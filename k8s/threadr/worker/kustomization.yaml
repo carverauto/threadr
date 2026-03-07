@@ -1,0 +1,6 @@
+namespace: threadr
+
+resources:
+  - worker-config.yaml
+  - serviceaccount.yaml
+  - deployment.yaml

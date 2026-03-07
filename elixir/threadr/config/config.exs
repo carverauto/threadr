@@ -10,7 +10,8 @@ import Config
 config :threadr,
   ecto_repos: [Threadr.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
-  ash_domains: [Threadr.ControlPlane, Threadr.TenantData]
+  ash_domains: [Threadr.ControlPlane, Threadr.TenantData],
+  web_enabled: true
 
 config :threadr, :bot_reconciler, Threadr.ControlPlane.KubernetesBotReconciler
 config :threadr, :kubernetes_client, Threadr.ControlPlane.KubernetesReqClient

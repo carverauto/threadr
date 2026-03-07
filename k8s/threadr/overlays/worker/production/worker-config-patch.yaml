@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: threadr-worker-config
+data:
+  THREADR_WEB_ENABLED: "false"
+  THREADR_MESSAGING_ENABLED: "true"
+  THREADR_BROADWAY_ENABLED: "true"
+  THREADR_BOT_OPERATION_DISPATCHER_ENABLED: "false"
+  THREADR_BOT_STATUS_OBSERVER_ENABLED: "false"

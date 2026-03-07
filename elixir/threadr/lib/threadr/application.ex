@@ -7,26 +7,33 @@ defmodule Threadr.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      ThreadrWeb.Telemetry,
-      Threadr.Repo,
-      {AshAuthentication.Supervisor, otp_app: :threadr},
-      Threadr.ControlPlane.BotOperationDispatcher,
-      Threadr.ControlPlane.BotStatusObserver,
-      Threadr.Messaging.Supervisor,
-      Threadr.Ingest.Supervisor,
-      {DNSCluster, query: Application.get_env(:threadr, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Threadr.PubSub},
-      # Start a worker by calling: Threadr.Worker.start_link(arg)
-      # {Threadr.Worker, arg},
-      # Start to serve requests, typically the last entry
-      ThreadrWeb.Endpoint
-    ]
+    children =
+      [
+        Threadr.Repo,
+        Threadr.ControlPlane.BotOperationDispatcher,
+        Threadr.ControlPlane.BotStatusObserver,
+        Threadr.Messaging.Supervisor,
+        Threadr.Ingest.Supervisor,
+        {DNSCluster, query: Application.get_env(:threadr, :dns_cluster_query) || :ignore}
+      ] ++ web_children()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Threadr.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp web_children do
+    if Application.get_env(:threadr, :web_enabled, true) do
+      [
+        ThreadrWeb.Telemetry,
+        {AshAuthentication.Supervisor, otp_app: :threadr},
+        {Phoenix.PubSub, name: Threadr.PubSub},
+        ThreadrWeb.Endpoint
+      ]
+    else
+      []
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration
