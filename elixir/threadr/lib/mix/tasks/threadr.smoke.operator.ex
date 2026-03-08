@@ -14,6 +14,7 @@ defmodule Mix.Tasks.Threadr.Smoke.Operator do
   use Mix.Task
 
   alias Threadr.ControlPlane.Smoke
+  alias Threadr.ControlPlane.SmokeServer
 
   @switches [
     tenant_name: :string,
@@ -45,10 +46,11 @@ defmodule Mix.Tasks.Threadr.Smoke.Operator do
     %{tenant: tenant, bot: bot, contract: contract} =
       Smoke.provision_bot_contract!(Keyword.put(opts, :timeout_ms, timeout_ms))
 
+    Application.put_env(:threadr, :control_plane_token, token)
     server_pid = start_server!(port, token)
 
     try do
-      wait_for_http!("127.0.0.1", port, timeout_ms)
+      wait_for_contract_api!("http://127.0.0.1:#{port}", token, timeout_ms)
 
       operator_output =
         run_operator_smoke!(
@@ -127,49 +129,61 @@ defmodule Mix.Tasks.Threadr.Smoke.Operator do
     end
   end
 
-  defp start_server!(port, token) do
-    server_log = Path.join(System.tmp_dir!(), "threadr-operator-smoke-server-#{port}.log")
+  defp start_server!(port, _token) do
+    case Supervisor.start_child(
+           Threadr.Supervisor,
+           {SmokeServer, port: port}
+         ) do
+      {:ok, pid} ->
+        pid
 
-    {pid, 0} =
-      System.cmd(
-        "sh",
-        ["-lc", "mix phx.server > #{server_log} 2>&1 & echo $!"],
-        cd: File.cwd!(),
-        env: [
-          {"PHX_SERVER", "true"},
-          {"PORT", Integer.to_string(port)},
-          {"THREADR_CONTROL_PLANE_TOKEN", token},
-          {"MIX_ENV", Atom.to_string(Mix.env())}
-        ]
-      )
+      {:error, {:already_started, pid}} ->
+        pid
 
-    {String.trim(pid), server_log}
+      {:error, reason} ->
+        Mix.raise("failed to start smoke control-plane server: #{inspect(reason)}")
+    end
   end
 
-  defp stop_server({pid, _server_log}) do
-    _ = System.cmd("kill", ["-TERM", pid])
+  defp stop_server(pid) do
+    _ = GenServer.stop(pid, :normal, 5_000)
     :ok
   end
 
-  defp wait_for_http!(host, port, timeout_ms) do
+  defp wait_for_contract_api!(base_url, token, timeout_ms) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
-    do_wait_for_http(host, port, deadline)
+    do_wait_for_contract_api(base_url, token, deadline)
   end
 
-  defp do_wait_for_http(host, port, deadline) do
-    case :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: false], 500) do
-      {:ok, socket} ->
-        :gen_tcp.close(socket)
+  defp do_wait_for_contract_api(base_url, token, deadline) do
+    case Req.get(
+           "#{base_url}/api/control-plane/bot-contracts",
+           headers: [{"authorization", "Bearer #{token}"}],
+           receive_timeout: 500
+         ) do
+      {:ok, %{status: 200}} ->
         :ok
 
-      {:error, _reason} ->
-        if System.monotonic_time(:millisecond) >= deadline do
-          Mix.raise("timed out waiting for Phoenix server on #{host}:#{port}")
-        end
+      {:ok, response} ->
+        maybe_wait_for_contract_api(
+          deadline,
+          "unexpected status #{response.status}",
+          base_url,
+          token
+        )
 
-        Process.sleep(100)
-        do_wait_for_http(host, port, deadline)
+      {:error, reason} ->
+        maybe_wait_for_contract_api(deadline, inspect(reason), base_url, token)
     end
+  end
+
+  defp maybe_wait_for_contract_api(deadline, reason, base_url, token) do
+    if System.monotonic_time(:millisecond) >= deadline do
+      Mix.raise("timed out waiting for control-plane API readiness: #{reason}")
+    end
+
+    Process.sleep(100)
+    do_wait_for_contract_api(base_url, token, deadline)
   end
 
   defp find_available_port! do
