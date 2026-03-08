@@ -351,6 +351,22 @@ observer_config =
         Keyword.get(observer_defaults, :batch_size)
   )
 
+image_drift_syncer_defaults =
+  Application.get_env(:threadr, Threadr.ControlPlane.BotImageDriftSyncer, [])
+
+image_drift_syncer_config =
+  image_drift_syncer_defaults
+  |> Keyword.merge(
+    enabled:
+      case System.get_env("THREADR_BOT_IMAGE_DRIFT_SYNCER_ENABLED") do
+        nil -> Keyword.get(image_drift_syncer_defaults, :enabled)
+        value -> parse_bool.(value)
+      end,
+    poll_interval_ms:
+      parse_integer.(System.get_env("THREADR_BOT_IMAGE_DRIFT_SYNCER_POLL_INTERVAL_MS")) ||
+        Keyword.get(image_drift_syncer_defaults, :poll_interval_ms)
+  )
+
 reconciler_defaults =
   Application.get_env(:threadr, Threadr.ControlPlane.KubernetesBotReconciler, [])
 
@@ -383,6 +399,7 @@ reconciler_config =
 
 config :threadr, Threadr.ControlPlane.BotOperationDispatcher, dispatcher_config
 config :threadr, Threadr.ControlPlane.BotStatusObserver, observer_config
+config :threadr, Threadr.ControlPlane.BotImageDriftSyncer, image_drift_syncer_config
 config :threadr, Threadr.ControlPlane.KubernetesBotReconciler, reconciler_config
 
 ml_embeddings_config =

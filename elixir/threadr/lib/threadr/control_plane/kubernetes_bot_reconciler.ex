@@ -39,6 +39,11 @@ defmodule Threadr.ControlPlane.KubernetesBotReconciler do
     end
   end
 
+  def desired_image(bot) do
+    config = Application.get_env(:threadr, __MODULE__, [])
+    container_image(bot, config)
+  end
+
   defp controller_contract(bot, tenant, deployment_name, namespace, generation) do
     config = Application.get_env(:threadr, __MODULE__, [])
 

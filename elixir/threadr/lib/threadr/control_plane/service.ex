@@ -766,6 +766,63 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
+  def reconcile_bots_with_image_drift(opts \\ []) do
+    reconciler = Application.fetch_env!(:threadr, :bot_reconciler)
+
+    if function_exported?(reconciler, :desired_image, 1) do
+      system_opts = system_ash_opts(opts)
+
+      with {:ok, bots} <-
+             Threadr.ControlPlane.list_bots(
+               Keyword.merge(system_opts, query: [sort: [updated_at: :asc]])
+             ),
+           {:ok, contracts} <- list_bot_controller_contracts(opts),
+           {:ok, operations} <-
+             Threadr.ControlPlane.list_bot_reconcile_operations(
+               Keyword.merge(system_opts, query: [sort: [inserted_at: :desc]])
+             ) do
+        contract_by_bot_id = Map.new(contracts, &{&1.bot_id, &1})
+
+        pending_bot_ids =
+          operations
+          |> Enum.filter(&(&1.status in ["pending", "processing"] and is_binary(&1.bot_id)))
+          |> Enum.map(& &1.bot_id)
+          |> MapSet.new()
+
+        bots
+        |> Enum.reject(&(&1.desired_state == "deleted"))
+        |> Enum.reject(&MapSet.member?(pending_bot_ids, &1.id))
+        |> Enum.each(fn bot ->
+          desired_image = reconciler.desired_image(bot)
+
+          current_image =
+            get_in(contract_by_bot_id[bot.id], [:contract, "spec", "workload", "image"])
+
+          if is_binary(desired_image) and desired_image != "" and desired_image != current_image do
+            :ok = reconcile_bot_system(bot, opts)
+          end
+        end)
+
+        :ok
+      end
+    else
+      :ok
+    end
+  end
+
+  def reconcile_bot_system(bot, opts \\ [])
+
+  def reconcile_bot_system(%{id: _id} = bot, opts) do
+    ash_opts = system_ash_opts(opts)
+
+    with {:ok, updated_bot} <- request_bot_reconcile(bot, %{}, ash_opts),
+         {:ok, _operation} <- enqueue_bot_operation(updated_bot, "apply", ash_opts) do
+      :ok
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def mark_tenant_migration_running(tenant, opts \\ []) do
     Threadr.ControlPlane.update_tenant(
       tenant,
