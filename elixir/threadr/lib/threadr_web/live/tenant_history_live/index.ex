@@ -154,7 +154,9 @@ defmodule ThreadrWeb.TenantHistoryLive.Index do
               >
                 Compare in QA
               </.button>
-              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_params(nil, nil, @filters)}"}>
+              <.button navigate={
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_params(nil, nil, @filters)}"
+              }>
                 Graph
               </.button>
             </div>

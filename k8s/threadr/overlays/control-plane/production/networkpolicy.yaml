@@ -14,6 +14,9 @@ spec:
         - podSelector: {}
         - namespaceSelector:
             matchLabels:
+              kubernetes.io/metadata.name: ircbot-operator-system
+        - namespaceSelector:
+            matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
           podSelector:
             matchLabels:

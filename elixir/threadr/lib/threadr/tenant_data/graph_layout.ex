@@ -61,7 +61,7 @@ defmodule Threadr.TenantData.GraphLayout do
           |> Enum.sort_by(&(nodes_by_index |> Map.fetch!(&1) |> conversation_sort_key()))
 
         conversation_start_y =
-          channel_y - ((max(length(conversation_indexes), 1) - 1) * @conversation_spacing_y) / 2.0
+          channel_y - (max(length(conversation_indexes), 1) - 1) * @conversation_spacing_y / 2.0
 
         Enum.with_index(conversation_indexes)
         |> Enum.reduce(acc, fn {conversation_index, conversation_idx}, nested_acc ->
@@ -80,8 +80,18 @@ defmodule Threadr.TenantData.GraphLayout do
             |> Enum.sort_by(&(nodes_by_index |> Map.fetch!(&1) |> message_sort_key()))
 
           nested_acc
-          |> place_vertical_list(actor_indexes, conversation_x + @actor_offset_x, conversation_y, @participant_spacing_y)
-          |> place_vertical_list(message_indexes, conversation_x + @message_offset_x, conversation_y, @message_spacing_y)
+          |> place_vertical_list(
+            actor_indexes,
+            conversation_x + @actor_offset_x,
+            conversation_y,
+            @participant_spacing_y
+          )
+          |> place_vertical_list(
+            message_indexes,
+            conversation_x + @message_offset_x,
+            conversation_y,
+            @message_spacing_y
+          )
         end)
       end)
 
@@ -96,7 +106,7 @@ defmodule Threadr.TenantData.GraphLayout do
   defp place_vertical_list(acc, [], _x, _center_y, _spacing), do: acc
 
   defp place_vertical_list(acc, indexes, x, center_y, spacing) do
-    start_y = center_y - ((length(indexes) - 1) * spacing) / 2.0
+    start_y = center_y - (length(indexes) - 1) * spacing / 2.0
 
     Enum.with_index(indexes)
     |> Enum.reduce(acc, fn {index, idx}, nested_acc ->
@@ -186,7 +196,10 @@ defmodule Threadr.TenantData.GraphLayout do
   end
 
   defp sortable_time(%DateTime{} = value), do: DateTime.to_unix(value, :microsecond)
-  defp sortable_time(%NaiveDateTime{} = value), do: NaiveDateTime.diff(value, ~N[1970-01-01 00:00:00], :microsecond)
+
+  defp sortable_time(%NaiveDateTime{} = value),
+    do: NaiveDateTime.diff(value, ~N[1970-01-01 00:00:00], :microsecond)
+
   defp sortable_time(_), do: 0
 
   defp fallback_position(node) do

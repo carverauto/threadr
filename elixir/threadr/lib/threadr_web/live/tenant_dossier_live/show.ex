@@ -141,11 +141,9 @@ defmodule ThreadrWeb.TenantDossierLive.Show do
               >
                 Compare in QA
               </.button>
-              <.button
-                navigate={
-                  ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_params(@dossier, @since, @until, @compare_since, @compare_until)}"
-                }
-              >
+              <.button navigate={
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_params(@dossier, @since, @until, @compare_since, @compare_until)}"
+              }>
                 Graph
               </.button>
             </div>

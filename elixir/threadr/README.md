@@ -37,48 +37,56 @@ These roll up under the `THREADR_EVENTS` stream by default via `threadr.tenants.
 
 ## Local Development
 
-Start the local infrastructure stack:
+Run Phoenix locally against the Kubernetes-hosted Threadr dependencies:
 
 ```bash
 cd elixir/threadr
-docker compose up -d
+./tools/dev_server.sh
 ```
 
-The local Compose stack uses the same ServiceRadar CNPG 18 image as the Threadr
+By default, the script:
+- reads Postgres credentials from the `threadr/cnpg-app` Secret
+- starts `kubectl port-forward` sessions to `svc/cnpg-rw` and `svc/nats`
+- enables SSL for the forwarded CNPG connection
+- runs migrations and JetStream setup before starting `mix phx.server`
+
+If the default local ports are busy, it automatically picks the next free ports
+instead of failing. Override the cluster resources if needed:
+
+```bash
+cd elixir/threadr
+./tools/dev_server.sh \
+  --namespace threadr \
+  --db-service cnpg-rw \
+  --db-secret cnpg-app \
+  --nats-service nats
+```
+
+The script prefers shell env or `.env.local` overrides when you need to point at
+different credentials or databases.
+
+Use Docker Compose only when you explicitly want the older local-only stack:
+
+```bash
+cd elixir/threadr
+./tools/dev_server.sh --use-compose
+```
+
+The Compose stack still uses the same ServiceRadar CNPG 18 image as the Threadr
 cluster manifests: `ghcr.io/carverauto/serviceradar-cnpg:18.3.0-sr2`.
 
-Then export the local env values or load them from `.env.local.example`:
+If you are managing setup manually, the app still expects:
 
 ```bash
 cd elixir/threadr
-export THREADR_DB_HOST=localhost
-export THREADR_DB_PORT=55432
-export THREADR_DB_USER=postgres
-export THREADR_DB_PASSWORD=postgres
-export THREADR_DB_NAME=threadr_dev
-export THREADR_TEST_DB_NAME=threadr_test
-export THREADR_NATS_HOST=localhost
-export THREADR_NATS_PORT=54222
-```
-
-Then initialize the app databases:
-
-```bash
-cd elixir/threadr
-mix ecto.create
 mix ecto.migrate
+mix threadr.tenants.migrate --all
+THREADR_MESSAGING_ENABLED=true THREADR_BROADWAY_ENABLED=false mix threadr.nats.setup
 ```
 
 The public migrations enable `age`, `vector`, `timescaledb`, and opportunistically enable `pg_search` when the image provides it, so the database must be backed by the CNPG image or another Postgres build that includes those extensions.
 
 Tenant-owned tables live in `priv/repo/tenant_migrations`, which AshPostgres uses when provisioning or migrating tenant schemas.
-
-Start or point at a NATS server with JetStream enabled, then provision the topology:
-
-```bash
-cd elixir/threadr
-mix threadr.nats.setup
-```
 
 Run the end-to-end local smoke check:
 
@@ -142,9 +150,23 @@ kubectl apply -k k8s/threadr/control-plane
 
 The rendered Service is named `threadr-control-plane`, and the base defaults
 `PHX_HOST` to `threadr-control-plane.threadr.svc.cluster.local`.
-The default ingress host is `threadr.local`; patch
-[ingress.yaml](/Users/mfreeman/src/threadr/k8s/threadr/control-plane/ingress.yaml#L1)
-or override it in your environment-specific Kustomize layer.
+The base ingress host is `threadr.local`; production wiring lives in
+[k8s/threadr/overlays/control-plane/production/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/overlays/control-plane/production/kustomization.yaml#L1),
+which sets:
+- `PHX_HOST=threadr.carverauto.dev`
+- `Ingress` host `threadr.carverauto.dev`
+- `cert-manager.io/cluster-issuer: carverauto-issuer`
+- `external-dns.alpha.kubernetes.io/hostname: threadr.carverauto.dev`
+- MetalLB annotations for the shared ingress IP contract
+
+Apply the production overlay with:
+
+```bash
+kubectl apply -k k8s/threadr/overlays/control-plane/production
+```
+
+The expected TLS Secret is `threadr-control-plane-tls`, managed by cert-manager
+from the ingress annotations.
 
 The service is annotated for scrape-by-annotation Prometheus setups, and the
 application exports metrics at `GET /metrics`. Health probes use:
@@ -165,6 +187,34 @@ Example:
 kubectl apply -k k8s/threadr/overlays/control-plane/nginx-tls
 kubectl apply -k k8s/threadr/overlays/control-plane/prometheus-servicemonitor
 kubectl apply -k k8s/threadr/overlays/control-plane/restricted-network
+```
+
+Threadr also owns the operator apply path under
+[k8s/threadr/bot-operator/kustomization.yaml](/Users/mfreeman/src/threadr/k8s/threadr/bot-operator/kustomization.yaml#L1).
+That overlay installs the `ThreadrBot` CRD, deploys the operator, and patches it
+to sync against the in-cluster control plane. It expects:
+- a Secret named `threadr-control-plane-access` in `ircbot-operator-system`
+  containing `THREADR_CONTROL_PLANE_TOKEN`
+- a `ghcr-io-cred` image pull Secret in both `threadr` and `ircbot-operator-system`
+
+Apply it with:
+
+```bash
+kubectl apply -k k8s/threadr/bot-operator
+```
+
+The operator sync loop uses:
+- `THREADR_CONTROL_PLANE_BASE_URL=http://threadr-control-plane.threadr.svc.cluster.local`
+- `THREADR_CONTROL_PLANE_TOKEN` from `threadr-control-plane-access`
+- `THREADR_CONTROL_PLANE_SYNC_INTERVAL=15s`
+
+Useful verification commands:
+
+```bash
+kubectl get ingress,certificate -n threadr
+kubectl get threadrbots.cache.threadr.ai -n threadr
+kubectl get deploy,pods -n threadr
+curl -Ik --resolve threadr.carverauto.dev:443:<lb-ip> https://threadr.carverauto.dev
 ```
 
 The control-plane image is published to
@@ -470,7 +520,7 @@ Tenant subject scoping uses the tenant `subject_name`, not the tenant UUID. The 
 
 The intended deployment model is many Threadr tenants sharing one CNPG cluster and one Kubernetes namespace, with tenant-created bot definitions reconciled by the control plane.
 
-Bot lifecycle operations now emit durable `bot_reconcile_operations` rows, and the supervised `Threadr.ControlPlane.BotOperationDispatcher` drains them asynchronously with scheduled retries. That gives the future Kubernetes controller a stable handoff record for `apply` and `delete` intents instead of relying on in-memory side effects.
+Bot lifecycle operations now emit durable `bot_reconcile_operations` rows, and the supervised `Threadr.ControlPlane.BotOperationDispatcher` drains them asynchronously with scheduled retries. That gives the Kubernetes controller a stable handoff record for `apply` and `delete` intents instead of relying on in-memory side effects.
 
 The current reconciler persists a concrete `ThreadrBot` custom resource document in the control plane. That document is available through the machine-authenticated `/api/control-plane/bot-contracts` endpoints and is shaped to match the Kubebuilder CRD under [cache.threadr.ai_threadrbots.yaml](/Users/mfreeman/src/threadr/k8s/operators/ircbot-operator/config/crd/bases/cache.threadr.ai_threadrbots.yaml). By default it uses the placeholder image `threadr-bot:latest`; production deployments should override that with `bot.settings["image"]` or a reconciler config override.
 

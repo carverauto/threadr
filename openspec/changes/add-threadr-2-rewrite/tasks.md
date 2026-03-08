@@ -30,7 +30,10 @@
 - [x] 4.3 Implement self-service API key creation, listing, and revocation for authenticated users.
 - [x] 4.4 Define the first public API surface for tenant-facing automation and control-plane access.
 - [x] 4.5 Define deployment, observability, Bazel-driven image delivery, and operational guidance for the rewrite components.
-- [x] 4.6 Implement or scaffold the Kubernetes control-plane boundary that reconciles tenant bot definitions into bot workloads in the shared namespace.
+- [x] 4.6 Implement the Kubernetes control-plane boundary that reconciles tenant bot definitions into bot workloads in the shared namespace.
+- [x] 4.6.a Scaffold the control-plane side of bot reconciliation by creating tenant bot APIs, reconcile operations, and durable controller-contract emission.
+- [x] 4.6.c Build an authenticated tenant-facing control-plane UI for creating, updating, and deleting IRC and Discord bots from the web application.
+- [x] 4.6.b Implement the cluster-side sync or controller path that consumes emitted `ThreadrBot` contracts and applies or upserts the corresponding Kubernetes resources in the shared namespace.
 - [x] 4.7 Define and persist a controller-owned `ThreadrBot` custom resource contract for bot workloads, with generation-aware status callbacks.
 - [x] 4.8 Verify end-to-end ingestion through JetStream, Broadway consumers, PostgreSQL persistence, and LiveView updates.
 - [x] 4.8.a Verify end-to-end ingestion through JetStream, Broadway consumers, and PostgreSQL persistence, including IRC, Discord, duplicate-delivery, and operator-contract smoke coverage.

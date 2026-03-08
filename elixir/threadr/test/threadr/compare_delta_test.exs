@@ -23,6 +23,7 @@ defmodule Threadr.CompareDeltaTest do
       )
 
     assert result.entity_delta.unchanged == 1
+
     assert Enum.any?(result.entity_delta.added, fn entry ->
              entry.label == "person: Carol" and entry.count == 1 and entry.entity_name == "Carol"
            end)
@@ -32,6 +33,7 @@ defmodule Threadr.CompareDeltaTest do
            end)
 
     assert %{type: "person", count: 1} in result.entity_delta.added_by_type
+
     assert Enum.any?(result.entity_delta.highlights.new_people, fn entry ->
              entry.label == "person: Carol" and entry.count == 1
            end)
@@ -47,6 +49,7 @@ defmodule Threadr.CompareDeltaTest do
            end)
 
     assert %{subject: "Carol", count: 1} in result.fact_delta.added_by_subject
+
     assert Enum.any?(result.fact_delta.highlights.new_claims, fn entry ->
              entry.label == "Carol reported payroll access was narrowed" and entry.count == 1
            end)

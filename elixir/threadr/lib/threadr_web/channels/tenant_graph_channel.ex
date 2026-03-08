@@ -169,10 +169,14 @@ defmodule ThreadrWeb.TenantGraphChannel do
   defp normalize_observed_at(_value), do: nil
 
   defp within_since?(_observed_at, nil), do: true
-  defp within_since?(observed_at, %NaiveDateTime{} = since), do: NaiveDateTime.compare(observed_at, since) != :lt
+
+  defp within_since?(observed_at, %NaiveDateTime{} = since),
+    do: NaiveDateTime.compare(observed_at, since) != :lt
 
   defp within_until?(_observed_at, nil), do: true
-  defp within_until?(observed_at, %NaiveDateTime{} = until), do: NaiveDateTime.compare(observed_at, until) != :gt
+
+  defp within_until?(observed_at, %NaiveDateTime{} = until),
+    do: NaiveDateTime.compare(observed_at, until) != :gt
 
   defp parse_naive_datetime(nil), do: nil
   defp parse_naive_datetime(""), do: nil

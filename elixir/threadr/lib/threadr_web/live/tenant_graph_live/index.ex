@@ -174,10 +174,14 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
           </:subtitle>
           <:actions>
             <div class="flex gap-2">
-              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/history?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"}>
+              <.button navigate={
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/history?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"
+              }>
                 History
               </.button>
-              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/qa?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"}>
+              <.button navigate={
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/qa?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"
+              }>
                 QA Workspace
               </.button>
               <.button navigate={~p"/control-plane/tenants"}>

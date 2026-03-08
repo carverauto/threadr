@@ -164,7 +164,9 @@ defmodule ThreadrWeb.TenantQaLive.Index do
               <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/history"}>
                 History
               </.button>
-              <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params(nil, nil, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"}>
+              <.button navigate={
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/graph?#{graph_focus_params(nil, nil, %{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until})}"
+              }>
                 Graph
               </.button>
               <.button

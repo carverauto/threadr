@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ghcr-io-cred
+      containers:
+        - name: manager
+          env:
+            - name: THREADR_CONTROL_PLANE_BASE_URL
+              value: http://threadr-control-plane.threadr.svc.cluster.local
+            - name: THREADR_CONTROL_PLANE_SYNC_INTERVAL
+              value: 15s
+            - name: THREADR_CONTROL_PLANE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: threadr-control-plane-access
+                  key: THREADR_CONTROL_PLANE_TOKEN

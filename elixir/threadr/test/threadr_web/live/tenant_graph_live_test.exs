@@ -49,7 +49,9 @@ defmodule ThreadrWeb.TenantGraphLiveTest do
     assert html =~ ~s(data-until="2026-03-05T12:30:00")
   end
 
-  test "hydrates graph compare context from query params without surfacing compare controls", %{conn: conn} do
+  test "hydrates graph compare context from query params without surfacing compare controls", %{
+    conn: conn
+  } do
     user = create_user!("tenant-graph-compare-window")
     tenant = create_tenant!("Graph Compare Window Tenant", user)
 

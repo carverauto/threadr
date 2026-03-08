@@ -19,7 +19,8 @@ defmodule Threadr.TenantData.GraphSnapshot do
 
   def schema_version, do: @schema_version
 
-  def latest_snapshot(%{schema_name: schema_name} = tenant, window \\ %{}) when is_binary(schema_name) do
+  def latest_snapshot(%{schema_name: schema_name} = tenant, window \\ %{})
+      when is_binary(schema_name) do
     projection = build_projection(schema_name, window)
     generated_at = DateTime.utc_now()
     revision = snapshot_revision(tenant, projection, window)
@@ -112,7 +113,9 @@ defmodule Threadr.TenantData.GraphSnapshot do
 
     conversation_nodes =
       real_conversations
-      |> Enum.sort_by(&{&1.channel_name || "", sortable_observed_at(%{observed_at: &1.started_at})})
+      |> Enum.sort_by(
+        &{&1.channel_name || "", sortable_observed_at(%{observed_at: &1.started_at})}
+      )
       |> Enum.with_index(length(actor_nodes) + length(channel_nodes))
       |> Enum.map(fn {conversation, index} ->
         %{
@@ -176,6 +179,7 @@ defmodule Threadr.TenantData.GraphSnapshot do
     conversation_message_edges = conversation_message_edges(real_conversations, node_index)
     authored_edges = authored_edges(messages, node_index)
     in_channel_edges = in_channel_edges(messages, node_index)
+
     edges =
       relationship_edges ++
         actor_channel_edges ++
@@ -183,6 +187,7 @@ defmodule Threadr.TenantData.GraphSnapshot do
         actor_conversation_edges ++
         conversation_message_edges ++
         authored_edges ++ in_channel_edges
+
     nodes = GraphSemantics.enrich_nodes(nodes, edges)
     nodes = GraphLayout.layout(nodes, edges)
 
@@ -708,20 +713,36 @@ defmodule Threadr.TenantData.GraphSnapshot do
   end
 
   defp maybe_filter_message_since(query, nil), do: query
-  defp maybe_filter_message_since(query, %NaiveDateTime{} = since), do: where(query, [m], m.observed_at >= ^since)
-  defp maybe_filter_message_since(query, %DateTime{} = since), do: where(query, [m], m.observed_at >= ^since)
+
+  defp maybe_filter_message_since(query, %NaiveDateTime{} = since),
+    do: where(query, [m], m.observed_at >= ^since)
+
+  defp maybe_filter_message_since(query, %DateTime{} = since),
+    do: where(query, [m], m.observed_at >= ^since)
 
   defp maybe_filter_message_until(query, nil), do: query
-  defp maybe_filter_message_until(query, %NaiveDateTime{} = until), do: where(query, [m], m.observed_at <= ^until)
-  defp maybe_filter_message_until(query, %DateTime{} = until), do: where(query, [m], m.observed_at <= ^until)
+
+  defp maybe_filter_message_until(query, %NaiveDateTime{} = until),
+    do: where(query, [m], m.observed_at <= ^until)
+
+  defp maybe_filter_message_until(query, %DateTime{} = until),
+    do: where(query, [m], m.observed_at <= ^until)
 
   defp maybe_filter_joined_message_since(query, nil), do: query
-  defp maybe_filter_joined_message_since(query, %NaiveDateTime{} = since), do: where(query, [_, m], m.observed_at >= ^since)
-  defp maybe_filter_joined_message_since(query, %DateTime{} = since), do: where(query, [_, m], m.observed_at >= ^since)
+
+  defp maybe_filter_joined_message_since(query, %NaiveDateTime{} = since),
+    do: where(query, [_, m], m.observed_at >= ^since)
+
+  defp maybe_filter_joined_message_since(query, %DateTime{} = since),
+    do: where(query, [_, m], m.observed_at >= ^since)
 
   defp maybe_filter_joined_message_until(query, nil), do: query
-  defp maybe_filter_joined_message_until(query, %NaiveDateTime{} = until), do: where(query, [_, m], m.observed_at <= ^until)
-  defp maybe_filter_joined_message_until(query, %DateTime{} = until), do: where(query, [_, m], m.observed_at <= ^until)
+
+  defp maybe_filter_joined_message_until(query, %NaiveDateTime{} = until),
+    do: where(query, [_, m], m.observed_at <= ^until)
+
+  defp maybe_filter_joined_message_until(query, %DateTime{} = until),
+    do: where(query, [_, m], m.observed_at <= ^until)
 
   defp window_value(window, key) when is_list(window), do: Keyword.get(window, key)
   defp window_value(window, key) when is_map(window), do: Map.get(window, key)

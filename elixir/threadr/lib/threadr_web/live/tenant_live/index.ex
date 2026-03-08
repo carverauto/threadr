@@ -202,6 +202,15 @@ defmodule ThreadrWeb.TenantLive.Index do
               <.button
                 :if={Service.manager_role?(tenant.membership_role)}
                 class="btn btn-sm"
+                navigate={~p"/control-plane/tenants/#{tenant.subject_name}/bots"}
+              >
+                Bots
+              </.button>
+            </:action>
+            <:action :let={tenant}>
+              <.button
+                :if={Service.manager_role?(tenant.membership_role)}
+                class="btn btn-sm"
                 navigate={~p"/control-plane/tenants/#{tenant.subject_name}/llm"}
               >
                 LLM
