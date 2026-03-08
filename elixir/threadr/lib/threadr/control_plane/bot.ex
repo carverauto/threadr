@@ -156,7 +156,7 @@ defmodule Threadr.ControlPlane.Bot do
 
     transitions do
       transition(:request_reconcile,
-        from: [:pending, :running, :stopped, :degraded, :error],
+        from: [:pending, :reconciling, :running, :stopped, :degraded, :error],
         to: :reconciling
       )
 

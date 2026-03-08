@@ -18,5 +18,4 @@ defmodule Mix.Tasks.Threadr.Nats.Setup do
       "JetStream ready: stream=#{Topology.stream_name()} consumer=#{Topology.consumer_name()}"
     )
   end
-
 end

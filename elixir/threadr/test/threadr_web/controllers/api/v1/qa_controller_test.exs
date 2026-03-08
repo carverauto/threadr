@@ -8,7 +8,7 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
   alias Threadr.ControlPlane.Service
   alias Threadr.Events.{ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
-  alias Threadr.TenantData.{Actor, Channel, Ingest, Message, MessageEmbedding}
+  alias Threadr.TenantData.{Actor, Channel, Extraction, Ingest, Message, MessageEmbedding}
 
   setup do
     previous_ml_config = Application.get_env(:threadr, Threadr.ML, [])
@@ -81,6 +81,78 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     assert data["answer"]["metadata"]["context"]["question"] == "Who did Alice mention?"
     assert hd(data["citations"])["label"] == "C1"
     assert data["answer"]["content"] =~ "Question:"
+  end
+
+  test "POST /api/v1/tenants/:subject_name/qa/answer returns extraction-aware citations", %{
+    conn: conn
+  } do
+    owner = create_user!("owner")
+    tenant = create_tenant!("QA Extraction", owner)
+    seed_semantic_extraction_data!(tenant)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/answer", %{
+        "question" => "What did Bob report?"
+      })
+
+    assert %{"data" => data} = json_response(conn, 200)
+    assert hd(data["citations"])["extracted_entities"] != []
+    assert hd(data["citations"])["extracted_facts"] != []
+    assert data["context"] =~ "Facts: Bob reported payroll access was limited"
+    assert data["facts_over_time"] != []
+  end
+
+  test "POST /api/v1/tenants/:subject_name/qa/search respects since/until bounds", %{conn: conn} do
+    owner = create_user!("owner")
+    tenant = create_tenant!("QA Temporal", owner)
+    seed_temporal_semantic_data!(tenant.schema_name)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/search", %{
+        "question" => "What changed?",
+        "limit" => 5,
+        "since" => "2026-03-05T12:30:00",
+        "until" => "2026-03-05T13:30:00"
+      })
+
+    assert %{"data" => data} = json_response(conn, 200)
+    assert length(data["matches"]) == 1
+    assert hd(data["matches"])["body"] == "Bob confirmed payroll access was narrowed."
+  end
+
+  test "POST /api/v1/tenants/:subject_name/qa/compare compares two windows", %{conn: conn} do
+    owner = create_user!("owner")
+    tenant = create_tenant!("QA Compare", owner)
+    seed_temporal_semantic_data!(tenant.schema_name)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/compare", %{
+        "question" => "What changed?",
+        "limit" => 5,
+        "since" => "2026-03-05T11:30:00",
+        "until" => "2026-03-05T12:30:00",
+        "compare_since" => "2026-03-05T12:30:00",
+        "compare_until" => "2026-03-05T13:30:00"
+      })
+
+    assert %{"data" => data} = json_response(conn, 200)
+
+    assert data["baseline"]["matches"] |> hd() |> Map.fetch!("body") ==
+             "Alice opened the incident timeline."
+
+    assert data["comparison"]["matches"] |> hd() |> Map.fetch!("body") ==
+             "Bob confirmed payroll access was narrowed."
+
+    assert Map.has_key?(data, "entity_delta")
+    assert Map.has_key?(data, "fact_delta")
+    assert data["answer"]["content"] =~ "Baseline Window:"
+    assert data["answer"]["content"] =~ "Comparison Window:"
   end
 
   test "POST /api/v1/tenants/:subject_name/qa/answer returns 422 when no embeddings exist", %{
@@ -201,6 +273,31 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     create_embedding!(tenant_schema, second_message.id, [0.1, 0.2, 0.3])
   end
 
+  defp seed_semantic_extraction_data!(tenant) do
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice told Bob that payroll access was limited on 2026-03-05."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6])
+
+    {:ok, _persisted} =
+      Extraction.extract_and_persist_message(
+        message,
+        tenant.subject_name,
+        tenant.schema_name,
+        provider: Threadr.TestExtractionProvider,
+        generation_provider: Threadr.TestGenerationProvider,
+        model: "test-chat"
+      )
+  end
+
   defp seed_graph_rag_data!(tenant) do
     observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -229,6 +326,32 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
   end
 
+  defp seed_temporal_semantic_data!(tenant_schema) do
+    actor = create_actor!(tenant_schema, "alice")
+    channel = create_channel!(tenant_schema, "ops")
+
+    first_message =
+      create_message!(
+        tenant_schema,
+        actor.id,
+        channel.id,
+        "Alice opened the incident timeline.",
+        ~U[2026-03-05 12:00:00Z]
+      )
+
+    second_message =
+      create_message!(
+        tenant_schema,
+        actor.id,
+        channel.id,
+        "Bob confirmed payroll access was narrowed.",
+        ~U[2026-03-05 13:00:00Z]
+      )
+
+    create_embedding!(tenant_schema, first_message.id, [0.2, 0.2, 0.2])
+    create_embedding!(tenant_schema, second_message.id, [0.4, 0.5, 0.6])
+  end
+
   defp create_actor!(tenant_schema, handle) do
     Actor
     |> Ash.Changeset.for_create(
@@ -247,14 +370,20 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     |> Ash.create!()
   end
 
-  defp create_message!(tenant_schema, actor_id, channel_id, body) do
+  defp create_message!(
+         tenant_schema,
+         actor_id,
+         channel_id,
+         body,
+         observed_at \\ DateTime.utc_now()
+       ) do
     Message
     |> Ash.Changeset.for_create(
       :create,
       %{
         external_id: Ecto.UUID.generate(),
         body: body,
-        observed_at: DateTime.utc_now(),
+        observed_at: observed_at,
         raw: %{"body" => body},
         metadata: %{},
         actor_id: actor_id,

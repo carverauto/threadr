@@ -3,7 +3,7 @@ defmodule Threadr.ML.SemanticQATest do
 
   alias Threadr.ControlPlane.Service
   alias Threadr.ML.SemanticQA
-  alias Threadr.TenantData.{Actor, Channel, Message, MessageEmbedding}
+  alias Threadr.TenantData.{Actor, Channel, Extraction, Message, MessageEmbedding}
 
   test "retrieves the closest tenant messages and answers against that context" do
     tenant = create_tenant!("Semantic QA")
@@ -62,6 +62,53 @@ defmodule Threadr.ML.SemanticQATest do
     assert result.answer.model == "test-chat"
     assert result.answer.metadata["context"]["question"] == "Who did Alice mention?"
     assert result.answer.content =~ "Question:"
+  end
+
+  test "includes extracted entities and facts in citations and QA context" do
+    tenant = create_tenant!("Semantic QA Extraction")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice told Bob that payroll access was limited on 2026-03-05."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6], "test-embedding-model", %{
+      source: "primary"
+    })
+
+    assert {:ok, _persisted} =
+             Extraction.extract_and_persist_message(
+               message,
+               tenant.subject_name,
+               tenant.schema_name,
+               provider: Threadr.TestExtractionProvider,
+               generation_provider: Threadr.TestGenerationProvider,
+               model: "test-chat"
+             )
+
+    assert {:ok, result} =
+             SemanticQA.answer_question(
+               tenant.subject_name,
+               "What did Bob report?",
+               embedding_provider: Threadr.TestEmbeddingProvider,
+               embedding_model: "test-embedding-model",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat",
+               limit: 1
+             )
+
+    assert result.context =~ "Entities: person=Alice"
+
+    assert result.context =~ "Facts: Bob reported payroll access was limited"
+    assert result.context =~ "2026-03-05T12:00:00"
+
+    assert hd(result.citations).extracted_entities != []
+    assert hd(result.citations).extracted_facts != []
   end
 
   test "returns an error when no tenant message embeddings exist" do

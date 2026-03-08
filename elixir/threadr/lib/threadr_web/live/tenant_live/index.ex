@@ -177,6 +177,14 @@ defmodule ThreadrWeb.TenantLive.Index do
             <:action :let={tenant}>
               <.button
                 class="btn btn-sm"
+                navigate={~p"/control-plane/tenants/#{tenant.subject_name}/history"}
+              >
+                History
+              </.button>
+            </:action>
+            <:action :let={tenant}>
+              <.button
+                class="btn btn-sm"
                 navigate={~p"/control-plane/tenants/#{tenant.subject_name}/graph"}
               >
                 Graph
@@ -188,6 +196,15 @@ defmodule ThreadrWeb.TenantLive.Index do
                 navigate={~p"/control-plane/tenants/#{tenant.subject_name}/qa"}
               >
                 Workspace
+              </.button>
+            </:action>
+            <:action :let={tenant}>
+              <.button
+                :if={Service.manager_role?(tenant.membership_role)}
+                class="btn btn-sm"
+                navigate={~p"/control-plane/tenants/#{tenant.subject_name}/bots"}
+              >
+                Bots
               </.button>
             </:action>
             <:action :let={tenant}>

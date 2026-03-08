@@ -16,6 +16,23 @@ export const TenantGraphExplorer = {
     this.handleEvent("tenant_graph:set_edge_layers", ({layers}) => {
       this.renderer.setEdgeLayers(layers)
     })
+
+    this.handleEvent("tenant_graph:set_node_kinds", ({node_kinds: nodeKinds}) => {
+      this.renderer.setNodeKinds(nodeKinds)
+    })
+
+    this.handleEvent("tenant_graph:set_relationship_types", ({relationship_types: relationshipTypes}) => {
+      this.renderer.setRelationshipTypes(relationshipTypes)
+    })
+  },
+
+  updated() {
+    this.renderer?.setWindow({
+      since: this.el.dataset.since || "",
+      until: this.el.dataset.until || "",
+      compareSince: this.el.dataset.compareSince || "",
+      compareUntil: this.el.dataset.compareUntil || "",
+    })
   },
 
   destroyed() {

@@ -180,19 +180,24 @@ Threadr 2.0 SHALL let authenticated users create and revoke API keys for their o
 - **THEN** the system prevents further public API use with that credential
 - **AND** the user can still view non-secret metadata about that key after revocation
 
-### Requirement: Elixir-native orchestration with evaluated local ML backends
-Threadr 2.0 SHALL keep workflow orchestration in Elixir and SHALL evaluate local ML backends based on workload fit, including Nx or Bumblebee for BEAM-native inference and candidate structured-extraction models such as GLiNER2 where they better match the rewrite's needs.
+### Requirement: Elixir-native orchestration with Elixir-owned ML backends
+Threadr 2.0 SHALL keep workflow orchestration in Elixir and SHALL evaluate ML backends based on workload fit using BEAM-native inference paths where appropriate, without reintroducing Python model services into the rewrite.
 
 #### Scenario: The system runs AI-driven processing
 - **WHEN** Threadr generates embeddings, performs graph-aware retrieval, or orchestrates autonomous processing flows
 - **THEN** those flows execute from Elixir services
-- **AND** the implementation may use Nx or Bumblebee, GLiNER2, or a deliberate hybrid split between them
+- **AND** the implementation may use Nx, Bumblebee, or another BEAM-native local inference path selected for the workload
 - **AND** any remote model providers are invoked from Elixir rather than delegated to Python workers
 
-#### Scenario: Structured extraction needs exceed the initial embedding stack
+#### Scenario: Structured extraction stays out of Python services
 - **WHEN** the team evaluates local models for entity extraction, classification, or relation-oriented extraction
-- **THEN** it may select GLiNER2 alongside or instead of the initial Nx or Bumblebee path for those workloads
-- **AND** that choice is made based on capability fit rather than an assumption that one stack must serve every ML use case
+- **THEN** it selects a BEAM-native local inference path or a remote provider invoked from Elixir
+- **AND** it does not add Python worker services back into the rewrite to satisfy structured extraction
+
+#### Scenario: Structured extraction persists tenant-scoped entities and facts
+- **WHEN** Threadr extracts entities or temporal facts from a chat message
+- **THEN** the extraction runs through an Elixir-owned provider boundary
+- **AND** the resulting entities and facts are persisted in the tenant schema with message linkage and temporal metadata
 
 ### Requirement: Real-time analyst interfaces use Phoenix LiveView
 Threadr 2.0 SHALL provide analyst-facing chat monitoring, dossier, and graph exploration interfaces through Phoenix LiveView.

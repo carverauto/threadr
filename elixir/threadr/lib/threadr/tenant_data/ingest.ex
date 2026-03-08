@@ -12,7 +12,9 @@ defmodule Threadr.TenantData.Ingest do
   alias Threadr.TenantData.{
     Actor,
     Channel,
+    Extraction,
     Graph,
+    LiveUpdates,
     Message,
     MessageMention,
     Relationship,
@@ -32,7 +34,7 @@ defmodule Threadr.TenantData.Ingest do
              context: %{system: true}
            ),
          {:ok, persisted_message} <-
-           persist_chat_message(chat_message, envelope, tenant.schema_name) do
+           persist_chat_message(chat_message, envelope, tenant_subject_name, tenant.schema_name) do
       {:ok, persisted_message}
     end
   end
@@ -41,7 +43,12 @@ defmodule Threadr.TenantData.Ingest do
     {:error, {:unsupported_envelope_type, type}}
   end
 
-  def persist_chat_message(%ChatMessage{} = chat_message, %Envelope{} = envelope, tenant_schema) do
+  def persist_chat_message(
+        %ChatMessage{} = chat_message,
+        %Envelope{} = envelope,
+        tenant_subject_name,
+        tenant_schema
+      ) do
     with {:ok, actor} <- upsert_actor(chat_message.platform, chat_message.actor, tenant_schema),
          {:ok, channel} <-
            upsert_channel(chat_message.platform, chat_message.channel, tenant_schema),
@@ -62,7 +69,22 @@ defmodule Threadr.TenantData.Ingest do
            Graph.sync_relationships(
              mention_result.relationships ++ inferred_relationships,
              tenant_schema
+           ),
+         :ok <-
+           maybe_extract_message(
+             message,
+             tenant_subject_name,
+             tenant_schema
            ) do
+      :ok =
+        LiveUpdates.broadcast_message_persisted(tenant_subject_name, %{
+          message_id: message.id,
+          actor_id: actor.id,
+          channel_id: channel.id,
+          observed_at: chat_message.observed_at,
+          actor_ids: [actor.id | Enum.map(mention_result.mentioned_actors, & &1.id)]
+        })
+
       {:ok, message}
     end
   end
@@ -385,4 +407,30 @@ defmodule Threadr.TenantData.Ingest do
 
   defp maybe_prepend_relationship(relationships, nil), do: relationships
   defp maybe_prepend_relationship(relationships, relationship), do: [relationship | relationships]
+
+  defp maybe_extract_message(message, tenant_subject_name, tenant_schema) do
+    if Extraction.enabled?() do
+      case Extraction.extract_and_persist_message(message, tenant_subject_name, tenant_schema) do
+        {:ok, _result} ->
+          :ok
+
+        {:error, :generation_provider_not_configured} ->
+          :ok
+
+        {:error, :extraction_provider_not_configured} ->
+          :ok
+
+        {:error, reason} ->
+          require Logger
+
+          Logger.warning(
+            "message extraction failed for #{tenant_subject_name}: #{inspect(reason)}"
+          )
+
+          :ok
+      end
+    else
+      :ok
+    end
+  end
 end

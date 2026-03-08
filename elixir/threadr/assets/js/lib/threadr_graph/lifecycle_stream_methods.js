@@ -6,10 +6,8 @@ export const threadrGraphLifecycleStreamMethods = {
     const graph = this.decodeArrowGraph(snapshot.payload)
     this.state.graph = graph
     this.syncSelectionState(graph)
-    if (this.state.pinnedNodeId) this.centerOnFocusContext()
-    this.updateSummary(
-      `revision=${snapshot.revision} nodes=${graph.nodes.length} edges=${graph.edges.length} renderer=${this.rendererMode()}`,
-    )
+    this.applyRequestedFocus(graph)
+    this.updateSelectionDetails(this.state.selectedNode)
     this.renderGraph()
   },
 
@@ -106,5 +104,32 @@ export const threadrGraphLifecycleStreamMethods = {
       edgeSourceIndex: Uint32Array.from(edgeSourceIndex),
       edgeTargetIndex: Uint32Array.from(edgeTargetIndex),
     }
+  },
+
+  applyRequestedFocus(graph) {
+    if (this.state.requestedFocusApplied) return
+
+    const focusId = this.state.requestedFocusNodeId
+    const focusKind = this.state.requestedFocusNodeKind
+    if (!focusId || !focusKind) return
+
+    const node =
+      (graph.nodes || []).find(
+        (candidate) =>
+          candidate.kind === focusKind &&
+          candidate.details?.id &&
+          String(candidate.details.id) === String(focusId),
+      ) || null
+
+    if (!node) return
+
+    this.state.requestedFocusApplied = true
+    this.setZoomMode("local")
+    this.state.selectedNodeIndex = node.index
+    this.state.selectedNode = node
+    this.state.selectedNodeDetail = this.cachedDetailFor(node)
+    this.updateSelectionDetails(node)
+    this.requestNodeDetail(node)
+    this.togglePinFocus()
   },
 }

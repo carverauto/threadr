@@ -1,6 +1,6 @@
 services:
   cnpg:
-    image: ghcr.io/carverauto/serviceradar-cnpg:16.6.0-sr5
+    image: ghcr.io/carverauto/serviceradar-cnpg:18.3.0-sr2
     container_name: threadr-cnpg
     platform: linux/amd64
     command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]

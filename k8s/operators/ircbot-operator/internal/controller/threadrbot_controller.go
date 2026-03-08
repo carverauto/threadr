@@ -141,6 +141,9 @@ func desiredDeployment(threadrBot *cachev1alpha1.ThreadrBot) *appsv1.Deployment 
 							Env:   env,
 						},
 					},
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "ghcr-io-cred"},
+					},
 				},
 			},
 		},
@@ -168,9 +171,54 @@ func mergeStringMaps(maps ...map[string]string) map[string]string {
 }
 
 func deploymentNeedsUpdate(current *appsv1.Deployment, desired *appsv1.Deployment) bool {
-	return !reflect.DeepEqual(current.Spec, desired.Spec) ||
-		!reflect.DeepEqual(current.Labels, desired.Labels) ||
-		!reflect.DeepEqual(current.Annotations, desired.Annotations)
+	return !reflect.DeepEqual(current.Spec.Replicas, desired.Spec.Replicas) ||
+		!reflect.DeepEqual(current.Spec.Selector, desired.Spec.Selector) ||
+		!reflect.DeepEqual(current.Spec.Template.Labels, desired.Spec.Template.Labels) ||
+		!reflect.DeepEqual(current.Spec.Template.Annotations, desired.Spec.Template.Annotations) ||
+		!managedContainersMatch(current.Spec.Template.Spec.Containers, desired.Spec.Template.Spec.Containers) ||
+		!managedImagePullSecretsMatch(current.Spec.Template.Spec.ImagePullSecrets, desired.Spec.Template.Spec.ImagePullSecrets) ||
+		!managedFieldsMatch(current.Labels, desired.Labels) ||
+		!managedFieldsMatch(current.Annotations, desired.Annotations)
+}
+
+func managedFieldsMatch(current map[string]string, desired map[string]string) bool {
+	for key, value := range desired {
+		if current[key] != value {
+			return false
+		}
+	}
+
+	return true
+}
+
+func managedContainersMatch(current []corev1.Container, desired []corev1.Container) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+
+	for index := range desired {
+		if current[index].Name != desired[index].Name ||
+			current[index].Image != desired[index].Image ||
+			!reflect.DeepEqual(current[index].Env, desired[index].Env) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func managedImagePullSecretsMatch(current []corev1.LocalObjectReference, desired []corev1.LocalObjectReference) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+
+	for index := range desired {
+		if current[index].Name != desired[index].Name {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (r *ThreadrBotReconciler) deleteDeploymentIfPresent(ctx context.Context, namespace string, name string) error {

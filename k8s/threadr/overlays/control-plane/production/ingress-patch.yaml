@@ -2,13 +2,18 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: threadr-control-plane
+  annotations:
+    cert-manager.io/cluster-issuer: carverauto-issuer
+    external-dns.alpha.kubernetes.io/hostname: threadr.carverauto.dev
+    metallb.universe.tf/allow-shared-ip: "true"
+    metallb.universe.tf/address-pool: k3s-lan-pool
 spec:
   tls:
     - hosts:
-        - threadr.example.com
+        - threadr.carverauto.dev
       secretName: threadr-control-plane-tls
   rules:
-    - host: threadr.example.com
+    - host: threadr.carverauto.dev
       http:
         paths:
           - path: /

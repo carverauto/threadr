@@ -8,5 +8,15 @@ defmodule Threadr.TenantData.GraphSnapshot.Native do
   def encode_snapshot(_schema_version, _revision, _nodes, _edges, _bitmap_sizes),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def encode_patch(
+        _schema_version,
+        _revision,
+        _node_upserts,
+        _node_removals,
+        _edge_upserts,
+        _edge_removals
+      ),
+      do: :erlang.nif_error(:nif_not_loaded)
+
   def build_roaring_bitmaps(_states), do: :erlang.nif_error(:nif_not_loaded)
 end

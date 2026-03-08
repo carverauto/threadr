@@ -195,8 +195,8 @@ defmodule ThreadrWeb.TenantLlmSettingsLive.Index do
                     placeholder={@provider_meta.endpoint}
                   />
                   <p class="text-sm text-base-content/70">
-                    Leave blank to use the default <code>{@provider_meta.provider}</code> endpoint:
-                    <code>{@provider_meta.endpoint}</code>
+                    Leave blank to use the default <code>{@provider_meta.provider}</code>
+                    endpoint: <code>{@provider_meta.endpoint}</code>
                   </p>
 
                   <.input
@@ -322,7 +322,8 @@ defmodule ThreadrWeb.TenantLlmSettingsLive.Index do
     provider = merged["provider_name"] || "openai"
 
     endpoint =
-      case {Map.get(params, "endpoint"), Map.get(existing, "endpoint"), previous_provider != provider} do
+      case {Map.get(params, "endpoint"), Map.get(existing, "endpoint"),
+            previous_provider != provider} do
         {"", _existing_endpoint, true} ->
           provider_meta(provider).endpoint
 

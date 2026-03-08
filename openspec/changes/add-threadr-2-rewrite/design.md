@@ -126,14 +126,14 @@ The secret material itself is not committed in Git as plaintext:
 This keeps the deployment contract concrete without committing plaintext credentials, and it matches the current cluster capability rather than deferring the secret-manager decision indefinitely.
 
 ### Runtime Consolidation
-Elixir services handle ingestion, workflow orchestration, graph inference, user-facing APIs, and control-plane orchestration. Jido remains a candidate for agent-oriented orchestration, while local ML execution should remain flexible enough to compare Nx or Bumblebee with focused extraction models such as GLiNER2.
+Elixir services handle ingestion, workflow orchestration, graph inference, user-facing APIs, and control-plane orchestration. Jido remains a candidate for agent-oriented orchestration, while local ML execution should remain inside BEAM-native runtimes instead of reintroducing Python-backed model services.
 
 The current assumption should be:
 - Nx or Bumblebee remain the leading candidates for fully Elixir-native embeddings and other BEAM-hosted inference
-- GLiNER2 is an explicit candidate for schema-based information extraction, classification, and relation-oriented extraction if it proves more capable than a pure Nx or Bumblebee path for those workloads
-- the rewrite may use one stack or a hybrid split, as long as Python is not reintroduced into the critical path without an explicit architectural decision
+- schema-based extraction must also stay on a BEAM-native path or move behind a remote provider invoked from Elixir, rather than introducing Python workers into the rewrite
+- the rewrite may use more than one Elixir-side model path if needed, as long as Python is not reintroduced into the critical path without an explicit architectural decision
 
-This keeps the architecture honest about an unresolved capability question: the team has not yet proven that a single local model stack is the best fit for both embeddings and structured extraction.
+The current implementation follows that split explicitly: embeddings are BEAM-hosted, while structured extraction is provider-neutral and orchestrated from Elixir with tenant-scoped persistence. That keeps the architecture honest without forcing one local model stack to satisfy both workloads.
 
 ### Graph Exploration Rendering Pipeline
 Threadr graph exploration should not introduce a second frontend graph stack. The rewrite should reuse the proven ServiceRadar God-View architecture where it fits the product:
@@ -175,5 +175,5 @@ The initial graph exploration contract should therefore assume:
   Mitigation: version the desired-state contract with generations and reject stale controller reports that do not match the current desired generation.
 - Running local ML workloads on the BEAM can create resource pressure.
   Mitigation: use Nx.Serving, batching, and dedicated worker configuration for embedding and LLM-serving paths.
-- Locking local ML too early could force the wrong model stack onto both embeddings and extraction workloads.
-  Mitigation: explicitly evaluate Nx/Bumblebee and GLiNER2 against the rewrite's embedding, entity extraction, and relation extraction needs before finalizing the serving model.
+- Locking local ML too early could force the wrong BEAM-native model stack onto both embeddings and extraction workloads.
+  Mitigation: explicitly evaluate the available Elixir-side local model options for embedding, entity extraction, and relation extraction needs before finalizing the serving model.

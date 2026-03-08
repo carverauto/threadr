@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -112,6 +113,9 @@ var _ = Describe("ThreadrBot Controller", func() {
 				To(Succeed())
 			Expect(*deployment.Spec.Replicas).To(Equal(int32(1)))
 			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal("threadr-bot:latest"))
+			Expect(deployment.Spec.Template.Spec.ImagePullSecrets).To(ContainElement(
+				Equal(corev1.LocalObjectReference{Name: "ghcr-io-cred"}),
+			))
 
 			threadrBot := &cachev1alpha1.ThreadrBot{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, threadrBot)).To(Succeed())

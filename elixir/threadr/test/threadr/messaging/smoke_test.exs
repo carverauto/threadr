@@ -16,9 +16,13 @@ defmodule Threadr.Messaging.SmokeTest do
   @integration_env "THREADR_RUN_INTEGRATION"
   @integration_enabled System.get_env(@integration_env) in ~w(true 1 TRUE)
 
+  if not @integration_enabled do
+    @moduletag skip: "set #{@integration_env}=true to run local CNPG/NATS integration tests"
+  end
+
   setup_all do
     unless @integration_enabled do
-      {:skip, "set #{@integration_env}=true to run local CNPG/NATS integration tests"}
+      :ok
     else
       owner = Sandbox.start_owner!(Threadr.Repo, shared: true)
       on_exit(fn -> Sandbox.stop_owner(owner) end)

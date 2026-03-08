@@ -9,6 +9,8 @@ defmodule Threadr.TenantData do
     resource Threadr.TenantData.Actor
     resource Threadr.TenantData.Channel
     resource Threadr.TenantData.CommandExecution
+    resource Threadr.TenantData.ExtractedEntity
+    resource Threadr.TenantData.ExtractedFact
     resource Threadr.TenantData.Message
     resource Threadr.TenantData.MessageEmbedding
     resource Threadr.TenantData.MessageMention

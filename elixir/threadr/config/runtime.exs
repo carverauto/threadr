@@ -21,7 +21,14 @@ if System.get_env("PHX_SERVER") do
 end
 
 nats_host = System.get_env("THREADR_NATS_HOST") || "localhost"
-nats_port = String.to_integer(System.get_env("THREADR_NATS_PORT") || "4222")
+
+default_nats_port =
+  case config_env() do
+    env when env in [:dev, :test] -> "54222"
+    _ -> "4222"
+  end
+
+nats_port = String.to_integer(System.get_env("THREADR_NATS_PORT") || default_nats_port)
 truthy_env? = fn value -> value in ~w(true 1 TRUE) end
 pipeline_enabled = truthy_env?.(System.get_env("THREADR_BROADWAY_ENABLED"))
 nats_tls_enabled = truthy_env?.(System.get_env("THREADR_NATS_TLS"))
@@ -65,7 +72,7 @@ nats_ssl_opts =
           |> Keyword.put(:server_name_indication, String.to_charlist(hostname))
           |> Keyword.put(
             :customize_hostname_check,
-            [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)]
+            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
           )
       end
     end)
@@ -245,7 +252,11 @@ end
 messaging_enabled =
   case System.get_env("THREADR_MESSAGING_ENABLED") do
     nil ->
-      Keyword.get(Application.get_env(:threadr, Threadr.Messaging.Topology, []), :messaging_enabled, true)
+      Keyword.get(
+        Application.get_env(:threadr, Threadr.Messaging.Topology, []),
+        :messaging_enabled,
+        true
+      )
 
     value ->
       parse_bool.(value)
@@ -405,7 +416,9 @@ ml_generation_config =
           :endpoint
         ),
     provider:
-      normalize_module.(env_or_legacy.("THREADR_SYSTEM_LLM_ADAPTER", "THREADR_GENERATION_PROVIDER")) ||
+      normalize_module.(
+        env_or_legacy.("THREADR_SYSTEM_LLM_ADAPTER", "THREADR_GENERATION_PROVIDER")
+      ) ||
         case Threadr.ML.Generation.ProviderResolver.resolve(
                env_or_legacy.("THREADR_SYSTEM_LLM_PROVIDER", "THREADR_GENERATION_PROVIDER_NAME") ||
                  Keyword.get(
@@ -439,28 +452,89 @@ ml_generation_config =
           :system_prompt
         ),
     temperature:
-      parse_float.(env_or_legacy.("THREADR_SYSTEM_LLM_TEMPERATURE", "THREADR_GENERATION_TEMPERATURE")) ||
+      parse_float.(
+        env_or_legacy.("THREADR_SYSTEM_LLM_TEMPERATURE", "THREADR_GENERATION_TEMPERATURE")
+      ) ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :temperature
         ),
     max_tokens:
-      parse_integer.(env_or_legacy.("THREADR_SYSTEM_LLM_MAX_TOKENS", "THREADR_GENERATION_MAX_TOKENS")) ||
+      parse_integer.(
+        env_or_legacy.("THREADR_SYSTEM_LLM_MAX_TOKENS", "THREADR_GENERATION_MAX_TOKENS")
+      ) ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :max_tokens
         ),
     timeout:
-      parse_integer.(env_or_legacy.("THREADR_SYSTEM_LLM_TIMEOUT_MS", "THREADR_GENERATION_TIMEOUT_MS")) ||
+      parse_integer.(
+        env_or_legacy.("THREADR_SYSTEM_LLM_TIMEOUT_MS", "THREADR_GENERATION_TIMEOUT_MS")
+      ) ||
         Keyword.get(
           Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:generation, []),
           :timeout
         )
   )
 
+ml_extraction_config =
+  Application.get_env(:threadr, Threadr.ML, [])
+  |> Keyword.get(:extraction, [])
+  |> Keyword.merge(
+    enabled:
+      case System.get_env("THREADR_EXTRACTION_ENABLED") do
+        nil ->
+          Keyword.get(
+            Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+            :enabled,
+            true
+          )
+
+        value ->
+          parse_bool.(value)
+      end,
+    provider:
+      normalize_module.(System.get_env("THREADR_EXTRACTION_PROVIDER")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+          :provider
+        ),
+    provider_name:
+      System.get_env("THREADR_EXTRACTION_PROVIDER_NAME") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+          :provider_name
+        ),
+    system_prompt:
+      System.get_env("THREADR_EXTRACTION_SYSTEM_PROMPT") ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+          :system_prompt
+        ),
+    temperature:
+      parse_float.(System.get_env("THREADR_EXTRACTION_TEMPERATURE")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+          :temperature
+        ),
+    max_tokens:
+      parse_integer.(System.get_env("THREADR_EXTRACTION_MAX_TOKENS")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+          :max_tokens
+        ),
+    timeout:
+      parse_integer.(System.get_env("THREADR_EXTRACTION_TIMEOUT_MS")) ||
+        Keyword.get(
+          Application.get_env(:threadr, Threadr.ML, []) |> Keyword.get(:extraction, []),
+          :timeout
+        )
+  )
+
 config :threadr, Threadr.ML,
   embeddings: ml_embeddings_config,
-  generation: ml_generation_config
+  generation: ml_generation_config,
+  extraction: ml_extraction_config
 
 if config_env() == :prod do
   database_url =

@@ -1,12 +1,47 @@
 import Config
 
+parse_bool = fn
+  value when value in [true, "true", "TRUE", "1"] -> true
+  _value -> false
+end
+
+db_ssl_enabled = parse_bool.(System.get_env("THREADR_DB_SSL"))
+
+db_ssl_verify =
+  case System.get_env("THREADR_DB_SSL_VERIFY") do
+    "verify_none" -> :verify_none
+    _ -> :verify_peer
+  end
+
+db_ssl_opts =
+  case {db_ssl_enabled, System.get_env("THREADR_DB_SSL_CA_CERT_FILE")} do
+    {false, _} ->
+      false
+
+    {true, nil} when db_ssl_verify == :verify_none ->
+      [verify: :verify_none]
+
+    {true, ""} when db_ssl_verify == :verify_none ->
+      [verify: :verify_none]
+
+    {true, nil} ->
+      true
+
+    {true, ""} ->
+      true
+
+    {true, ca_cert_file} ->
+      [verify: db_ssl_verify, cacertfile: ca_cert_file]
+  end
+
 # Configure your database
 config :threadr, Threadr.Repo,
   username: System.get_env("THREADR_DB_USER") || "postgres",
   password: System.get_env("THREADR_DB_PASSWORD") || "postgres",
   hostname: System.get_env("THREADR_DB_HOST") || "localhost",
-  port: String.to_integer(System.get_env("THREADR_DB_PORT") || "5432"),
+  port: String.to_integer(System.get_env("THREADR_DB_PORT") || "55432"),
   database: System.get_env("THREADR_DB_NAME") || "threadr_dev",
+  ssl: db_ssl_opts,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
