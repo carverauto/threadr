@@ -793,14 +793,12 @@ defmodule Threadr.ControlPlane.Service do
         |> Enum.reject(&(&1.desired_state == "deleted"))
         |> Enum.reject(&MapSet.member?(pending_bot_ids, &1.id))
         |> Enum.each(fn bot ->
-          desired_image = reconciler.desired_image(bot)
-
-          current_image =
-            get_in(contract_by_bot_id[bot.id], [:contract, "spec", "workload", "image"])
-
-          if is_binary(desired_image) and desired_image != "" and desired_image != current_image do
-            :ok = reconcile_bot_system(bot, opts)
-          end
+          maybe_reconcile_bot_image_drift(
+            bot,
+            Map.get(contract_by_bot_id, bot.id),
+            reconciler,
+            opts
+          )
         end)
 
         :ok
@@ -822,6 +820,29 @@ defmodule Threadr.ControlPlane.Service do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  defp maybe_reconcile_bot_image_drift(bot, contract, reconciler, opts) do
+    desired_image = reconciler.desired_image(bot)
+    current_image = contract_workload_image(contract)
+
+    if is_binary(desired_image) and desired_image != "" and desired_image != current_image do
+      _ = reconcile_bot_system(bot, opts)
+    end
+  rescue
+    _error ->
+      :ok
+  end
+
+  defp contract_workload_image(nil), do: nil
+
+  defp contract_workload_image(%{contract: contract}) when is_map(contract) do
+    contract
+    |> Map.get("spec", %{})
+    |> Map.get("workload", %{})
+    |> Map.get("image")
+  end
+
+  defp contract_workload_image(_contract), do: nil
 
   def mark_tenant_migration_running(tenant, opts \\ []) do
     Threadr.ControlPlane.update_tenant(
