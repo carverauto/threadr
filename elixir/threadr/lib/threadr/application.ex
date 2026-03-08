@@ -12,6 +12,7 @@ defmodule Threadr.Application do
         Threadr.Repo,
         Threadr.ControlPlane.BotOperationDispatcher,
         Threadr.ControlPlane.BotStatusObserver,
+        Threadr.ControlPlane.BotImageDriftSyncer,
         Threadr.Messaging.Supervisor,
         Threadr.Ingest.Supervisor,
         {DNSCluster, query: Application.get_env(:threadr, :dns_cluster_query) || :ignore}

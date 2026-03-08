@@ -31,6 +31,10 @@ config :threadr, Threadr.ControlPlane.BotStatusObserver,
   poll_interval_ms: 15_000,
   batch_size: 50
 
+config :threadr, Threadr.ControlPlane.BotImageDriftSyncer,
+  enabled: false,
+  poll_interval_ms: 60_000
+
 config :threadr, Threadr.ControlPlane.KubernetesBotReconciler,
   default_image: "ghcr.io/carverauto/threadr-irc:v0.0.28",
   default_images: %{
