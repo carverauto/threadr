@@ -3,6 +3,12 @@ defmodule Threadr.ControlPlane.Service do
   Operational service layer for tenant provisioning and bot reconciliation.
   """
 
+  import Ecto.Query
+
+  alias Threadr.ML.ActorQA
+  alias Threadr.Repo
+  alias Threadr.TenantData.MessageEmbedding
+
   @manager_roles ~w(owner admin)
   @membership_roles ~w(owner admin member)
   @bot_statuses [
@@ -17,6 +23,7 @@ defmodule Threadr.ControlPlane.Service do
   ]
   @tenant_schema_prefix "tenant_"
   @bootstrap_password_length 24
+  @embedding_catch_up_limit 25
 
   def create_tenant(attrs, opts \\ []) do
     ash_opts = ash_opts(opts)
@@ -278,6 +285,7 @@ defmodule Threadr.ControlPlane.Service do
       when is_binary(subject_name) and is_binary(question) do
     with {:ok, tenant, _membership} <-
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+         :ok <- ensure_recent_message_embeddings(tenant, semantic_runtime_opts(opts)),
          {:ok, result} <-
            Threadr.ML.SemanticQA.search_messages(
              tenant.subject_name,
@@ -296,12 +304,7 @@ defmodule Threadr.ControlPlane.Service do
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
          {:ok, runtime_opts} <-
            tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <-
-           Threadr.ML.SemanticQA.answer_question(
-             tenant.subject_name,
-             question,
-             runtime_opts
-           ) do
+         {:ok, result} <- answer_tenant_question_for_user_runtime(tenant, question, runtime_opts) do
       {:ok, result}
     else
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
@@ -1519,17 +1522,44 @@ defmodule Threadr.ControlPlane.Service do
   end
 
   defp answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts) do
-    case Threadr.ML.GraphRAG.answer_question(tenant.subject_name, question, runtime_opts) do
+    case ActorQA.answer_question(tenant.subject_name, question, runtime_opts) do
       {:ok, result} ->
-        {:ok, Map.put(result, :mode, :graph_rag)}
+        {:ok, Map.put(result, :mode, :actor_qa)}
 
-      {:error, :no_message_embeddings} = error ->
-        error
+      {:error, :not_actor_question} ->
+        :ok = ensure_recent_message_embeddings(tenant, runtime_opts)
 
-      {:error, :generation_provider_not_configured} = error ->
-        error
+        case Threadr.ML.GraphRAG.answer_question(tenant.subject_name, question, runtime_opts) do
+          {:ok, result} ->
+            {:ok, Map.put(result, :mode, :graph_rag)}
 
-      {:error, _graph_reason} ->
+          {:error, :generation_provider_not_configured} = error ->
+            error
+
+          {:error, _graph_reason} ->
+            case Threadr.ML.SemanticQA.answer_question(
+                   tenant.subject_name,
+                   question,
+                   runtime_opts
+                 ) do
+              {:ok, result} ->
+                {:ok, Map.put(result, :mode, :semantic_qa)}
+
+              {:error, reason} ->
+                {:error, reason}
+            end
+        end
+    end
+  end
+
+  defp answer_tenant_question_for_user_runtime(tenant, question, runtime_opts) do
+    case ActorQA.answer_question(tenant.subject_name, question, runtime_opts) do
+      {:ok, result} ->
+        {:ok, Map.put(result, :mode, :actor_qa)}
+
+      {:error, :not_actor_question} ->
+        :ok = ensure_recent_message_embeddings(tenant, runtime_opts)
+
         case Threadr.ML.SemanticQA.answer_question(tenant.subject_name, question, runtime_opts) do
           {:ok, result} ->
             {:ok, Map.put(result, :mode, :semantic_qa)}
@@ -1539,6 +1569,80 @@ defmodule Threadr.ControlPlane.Service do
         end
     end
   end
+
+  defp ensure_recent_message_embeddings(tenant, runtime_opts) do
+    model =
+      Keyword.get(
+        runtime_opts,
+        :embedding_model,
+        Application.get_env(:threadr, Threadr.ML, [])
+        |> Keyword.fetch!(:embeddings)
+        |> Keyword.fetch!(:model)
+      )
+
+    provider =
+      Keyword.get(
+        runtime_opts,
+        :embedding_provider,
+        Application.get_env(:threadr, Threadr.ML, [])
+        |> Keyword.fetch!(:embeddings)
+        |> Keyword.fetch!(:provider)
+      )
+
+    missing_messages =
+      from(m in "messages",
+        left_join: me in "message_embeddings",
+        on: me.message_id == m.id and me.model == ^model,
+        where: is_nil(me.id),
+        order_by: [desc: m.observed_at],
+        limit: ^@embedding_catch_up_limit,
+        select: %{id: m.id, body: m.body}
+      )
+      |> Repo.all(prefix: tenant.schema_name)
+
+    Enum.each(missing_messages, fn message ->
+      if is_binary(message.body) and String.trim(message.body) != "" do
+        case provider.embed_document(message.body, embedding_provider_opts(runtime_opts, model)) do
+          {:ok, embedding_result} ->
+            persist_message_embedding(tenant.schema_name, message.id, model, embedding_result)
+
+          {:error, _reason} ->
+            :ok
+        end
+      end
+    end)
+
+    :ok
+  end
+
+  defp persist_message_embedding(tenant_schema, message_id, model, embedding_result) do
+    MessageEmbedding
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        message_id: message_id,
+        model: model,
+        dimensions: length(embedding_result.embedding),
+        embedding: embedding_result.embedding,
+        metadata: Map.get(embedding_result, :metadata, %{})
+      },
+      tenant: tenant_schema
+    )
+    |> Ash.create()
+    |> case do
+      {:ok, _embedding} -> :ok
+      {:error, _reason} -> :ok
+    end
+  end
+
+  defp embedding_provider_opts(runtime_opts, model) do
+    [model: model]
+    |> maybe_put_embedding_opt(:document_prefix, Keyword.get(runtime_opts, :document_prefix))
+    |> maybe_put_embedding_opt(:query_prefix, Keyword.get(runtime_opts, :query_prefix))
+  end
+
+  defp maybe_put_embedding_opt(opts, _key, nil), do: opts
+  defp maybe_put_embedding_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp build_system_generation_runtime_opts(nil), do: []
 

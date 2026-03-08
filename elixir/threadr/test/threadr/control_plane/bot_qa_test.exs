@@ -34,6 +34,73 @@ defmodule Threadr.ControlPlane.BotQATest do
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
   end
 
+  test "answers actor-centric questions for bot runtimes without generic fallback" do
+    tenant = create_tenant!("Bot QA Actor")
+    actor = create_actor!(tenant.schema_name, "twatbot")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "twatbot keeps talking about deploys, restart loops, and operator state."
+    )
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "twatbot also talks about bots, rollouts, and crash recovery."
+    )
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "twatbot asked whether the new bot image was live."
+    )
+
+    assert {:ok, result} =
+             Service.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               "what does twatbot talk about?",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat",
+               limit: 3
+             )
+
+    assert result.mode == :actor_qa
+    assert result.query.actor_handle == "twatbot"
+    assert result.answer.content =~ "what does twatbot talk about?"
+  end
+
+  test "catches up missing embeddings before generic bot QA" do
+    tenant = create_tenant!("Bot QA Catchup")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "Alice and Bob discussed endpoint isolation last week."
+    )
+
+    assert {:ok, result} =
+             Service.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               "What did Alice and Bob talk about last week?",
+               embedding_provider: Threadr.TestEmbeddingProvider,
+               embedding_model: "test-embedding-model",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat",
+               limit: 1
+             )
+
+    assert result.mode in [:graph_rag, :semantic_qa]
+    assert result.answer.content =~ "What did Alice and Bob talk about last week?"
+  end
+
   test "returns insufficient context when no embeddings exist" do
     tenant = create_tenant!("Bot QA Empty")
 
