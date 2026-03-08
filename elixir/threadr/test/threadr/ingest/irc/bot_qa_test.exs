@@ -158,6 +158,76 @@ defmodule Threadr.Ingest.IRC.BotQATest do
     assert raw_cmd =~ "PRIVMSG #intel :alice:"
   end
 
+  test "resolves self references for addressed IRC questions" do
+    tenant = create_tenant!("IRC Bot QA Self Reference")
+    actor = create_actor!(tenant.schema_name, "leku")
+    other_actor = create_actor!(tenant.schema_name, "sig")
+    channel = create_channel!(tenant.schema_name, "intel")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "leku keeps talking about IRC bots and deploy drift."
+    )
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "leku asked whether the rollout recovered."
+    )
+
+    mention_message =
+      create_message!(
+        tenant.schema_name,
+        other_actor.id,
+        channel.id,
+        "sig said leku keeps talking about bot deploys and rollout status."
+      )
+
+    create_message_mention!(tenant.schema_name, mention_message.id, actor.id)
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      generation_provider: Threadr.TestGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "leku",
+        user: "leku",
+        host: "workstation.example.org",
+        args: ["#intel", "threadr: what do you know about me?"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    assert raw_cmd =~ "PRIVMSG #intel :leku:"
+    refute raw_cmd =~ "can't find actor \"me\""
+    assert raw_cmd =~ "what do you know about me?"
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 
@@ -219,6 +289,16 @@ defmodule Threadr.Ingest.IRC.BotQATest do
         metadata: %{},
         message_id: message_id
       },
+      tenant: tenant_schema
+    )
+    |> Ash.create!()
+  end
+
+  defp create_message_mention!(tenant_schema, message_id, actor_id) do
+    Threadr.TenantData.MessageMention
+    |> Ash.Changeset.for_create(
+      :create,
+      %{message_id: message_id, actor_id: actor_id},
       tenant: tenant_schema
     )
     |> Ash.create!()

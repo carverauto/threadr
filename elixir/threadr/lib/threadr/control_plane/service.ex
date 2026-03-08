@@ -27,6 +27,7 @@ defmodule Threadr.ControlPlane.Service do
 
   def create_tenant(attrs, opts \\ []) do
     ash_opts = ash_opts(opts)
+    system_opts = system_ash_opts(opts)
 
     with {:ok, tenant} <-
            attrs
@@ -34,7 +35,11 @@ defmodule Threadr.ControlPlane.Service do
            |> Threadr.ControlPlane.create_tenant(ash_opts),
          {:ok, _membership} <- maybe_create_owner_membership(tenant, opts),
          {:ok, tenant} <-
-           mark_tenant_migration_succeeded(tenant, latest_tenant_migration_version(), ash_opts) do
+           mark_tenant_migration_succeeded(
+             tenant,
+             latest_tenant_migration_version(),
+             system_opts
+           ) do
       {:ok, tenant}
     end
   end
@@ -688,9 +693,9 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  def list_user_api_keys(%{id: user_id}, opts \\ []) when is_binary(user_id) do
+  def list_user_api_keys(%{id: user_id} = user, opts \\ []) when is_binary(user_id) do
     Threadr.ControlPlane.list_api_keys(
-      Keyword.merge(actor_ash_opts(%{id: user_id}, opts),
+      Keyword.merge(actor_ash_opts(user, opts),
         query: [filter: [user_id: user_id], sort: [inserted_at: :desc]]
       )
     )
@@ -1790,7 +1795,10 @@ defmodule Threadr.ControlPlane.Service do
         :generation_provider_name,
         :generation_temperature,
         :generation_max_tokens,
-        :generation_timeout
+        :generation_timeout,
+        :requester_actor_handle,
+        :requester_actor_display_name,
+        :requester_external_id
       ]
     )
   end
@@ -1815,7 +1823,10 @@ defmodule Threadr.ControlPlane.Service do
         :generation_provider_name,
         :generation_temperature,
         :generation_max_tokens,
-        :generation_timeout
+        :generation_timeout,
+        :requester_actor_handle,
+        :requester_actor_display_name,
+        :requester_external_id
       ]
     )
   end

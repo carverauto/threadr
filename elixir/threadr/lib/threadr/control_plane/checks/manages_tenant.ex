@@ -4,10 +4,9 @@ defmodule Threadr.ControlPlane.Checks.ManagesTenant do
   """
 
   use Ash.Policy.SimpleCheck
+  import Ecto.Query
 
   alias Threadr.Repo
-
-  @manager_roles ~w(owner admin)
 
   @impl true
   def describe(opts) do
@@ -85,42 +84,33 @@ defmodule Threadr.ControlPlane.Checks.ManagesTenant do
   defp present(value), do: {:ok, value}
 
   defp membership_exists?(tenant_id, user_id, manager?) do
-    tenant_id = dump_uuid!(tenant_id)
-    user_id = dump_uuid!(user_id)
+    tenant_id = normalize_uuid!(tenant_id)
+    user_id = normalize_uuid!(user_id)
 
-    role_sql =
+    query =
+      from(tm in "tenant_memberships",
+        where: field(tm, :tenant_id) == type(^tenant_id, Ecto.UUID),
+        where: field(tm, :user_id) == type(^user_id, Ecto.UUID),
+        select: 1,
+        limit: 1
+      )
+
+    query =
       if manager? do
-        "AND role = ANY($3)"
+        where(query, [tm], field(tm, :role) in ["owner", "admin"])
       else
-        ""
+        query
       end
 
-    params =
-      if manager? do
-        [tenant_id, user_id, @manager_roles]
-      else
-        [tenant_id, user_id]
-      end
-
-    query = """
-    SELECT 1
-    FROM public.tenant_memberships
-    WHERE tenant_id = $1
-      AND user_id = $2
-      #{role_sql}
-    LIMIT 1
-    """
-
-    case Ecto.Adapters.SQL.query(Repo, query, params) do
-      {:ok, %{num_rows: num_rows}} when num_rows > 0 -> true
-      _ -> false
-    end
+    Repo.exists?(query)
   end
 
-  defp dump_uuid!(value) when is_binary(value) do
-    case Ecto.UUID.dump(value) do
-      {:ok, dumped} -> dumped
+  defp normalize_uuid!(value) when is_binary(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, uuid} -> uuid
       :error -> raise ArgumentError, "invalid UUID: #{inspect(value)}"
     end
   end
+
+  defp normalize_uuid!(value), do: value
 end

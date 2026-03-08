@@ -69,7 +69,7 @@ defmodule Threadr.ControlPlane.PolicyTest do
              )
   end
 
-  test "direct tenant membership reads are allowed for tenant managers" do
+  test "service tenant membership reads are allowed for tenant managers" do
     owner = create_user!("owner")
     member = create_user!("member")
     tenant = create_tenant!("Managed", owner)
@@ -81,10 +81,7 @@ defmodule Threadr.ControlPlane.PolicyTest do
       )
 
     assert {:ok, memberships} =
-             ControlPlane.list_tenant_memberships(
-               actor: owner,
-               query: [filter: [tenant_id: tenant.id]]
-             )
+             Service.list_tenant_memberships_for_user(owner, tenant.subject_name)
 
     assert Enum.count(memberships) == 2
   end

@@ -185,7 +185,8 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
       conn
       |> api_key_conn(owner)
       |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/graph-answer", %{
-        "question" => "Who is collaborating with Alice?"
+        "question" => "Who is collaborating with Alice?",
+        "limit" => "1"
       })
 
     assert %{"data" => data} = json_response(conn, 200)
@@ -313,7 +314,7 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
         observed_at
       )
 
-    _follow_up_message =
+    follow_up_message =
       persist_message!(
         tenant.subject_name,
         tenant.schema_name,
@@ -323,6 +324,9 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
         ["carol"],
         DateTime.add(observed_at, 60, :second)
       )
+
+    create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
+    create_embedding!(tenant.schema_name, follow_up_message.id, [0.39, 0.49, 0.59])
   end
 
   defp seed_temporal_semantic_data!(tenant_schema) do
@@ -394,19 +398,33 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
   end
 
   defp create_embedding!(tenant_schema, message_id, embedding) do
-    MessageEmbedding
-    |> Ash.Changeset.for_create(
-      :create,
-      %{
-        model: "test-embedding-model",
-        dimensions: length(embedding),
-        embedding: embedding,
-        metadata: %{},
-        message_id: message_id
-      },
-      tenant: tenant_schema
-    )
-    |> Ash.create!()
+    attrs = %{
+      model: "test-embedding-model",
+      dimensions: length(embedding),
+      embedding: embedding,
+      metadata: %{},
+      message_id: message_id
+    }
+
+    query =
+      MessageEmbedding
+      |> Ash.Query.filter(expr(message_id == ^message_id and model == "test-embedding-model"))
+
+    case Ash.read_one(query, tenant: tenant_schema) do
+      {:ok, nil} ->
+        MessageEmbedding
+        |> Ash.Changeset.for_create(:create, attrs, tenant: tenant_schema)
+        |> Ash.create!()
+
+      {:ok, existing} ->
+        existing
+        |> Ash.Changeset.for_update(
+          :update,
+          Map.take(attrs, [:dimensions, :embedding, :metadata]),
+          tenant: tenant_schema
+        )
+        |> Ash.update!()
+    end
   end
 
   defp persist_message!(

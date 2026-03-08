@@ -155,11 +155,12 @@ defmodule Threadr.Ingest.BotQA do
 
   defp answer_request(config, request) do
     subject_name = Keyword.fetch!(config, :tenant_subject_name)
+    runtime_opts = Keyword.merge(qa_runtime_opts(config), requester_runtime_opts(request))
 
     case Service.answer_tenant_question_for_bot(
            subject_name,
            request.question,
-           qa_runtime_opts(config)
+           runtime_opts
          ) do
       {:ok, result} ->
         %{
@@ -291,6 +292,12 @@ defmodule Threadr.Ingest.BotQA do
     Keyword.take(config, @qa_option_keys)
   end
 
+  defp requester_runtime_opts(request) do
+    []
+    |> put_request_opt(:requester_actor_handle, Map.get(request, :actor))
+    |> put_request_opt(:requester_external_id, stringify(Map.get(request, :actor_id)))
+  end
+
   defp discord_api(config) do
     Keyword.get(config, :discord_api, Nostrum.Api)
   end
@@ -349,6 +356,10 @@ defmodule Threadr.Ingest.BotQA do
 
   defp blank_to_default("", default), do: default
   defp blank_to_default(content, _default), do: content
+
+  defp put_request_opt(opts, _key, nil), do: opts
+  defp put_request_opt(opts, _key, ""), do: opts
+  defp put_request_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp stringify(nil), do: nil
   defp stringify(value), do: to_string(value)

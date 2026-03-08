@@ -82,7 +82,7 @@ defmodule Threadr.ControlPlane.ApiKey do
     end
 
     policy action(:read) do
-      authorize_if relates_to_actor_via(:user)
+      authorize_if expr(user_id == ^actor(:id))
     end
 
     policy action(:create) do
