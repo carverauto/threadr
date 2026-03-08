@@ -1,0 +1,226 @@
+defmodule Threadr.Ingest.IRC.BotQATest do
+  use Threadr.DataCase, async: false
+
+  alias ExIRC.Message, as: IRCMessage
+  alias Threadr.ControlPlane.Service
+  alias Threadr.Ingest.IRC.Agent
+  alias Threadr.TenantData.{Actor, Channel, MessageEmbedding}
+  alias Threadr.TenantData.Message, as: TenantMessage
+
+  setup do
+    if pid = Process.whereis(Agent) do
+      GenServer.stop(pid)
+    end
+
+    :ok
+  end
+
+  test "replies when an IRC message is addressed to the bot" do
+    tenant = create_tenant!("IRC Bot QA")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "intel")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice and Bob discussed endpoint isolation last week."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6])
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      embedding_provider: Threadr.TestEmbeddingProvider,
+      embedding_model: "test-embedding-model",
+      generation_provider: Threadr.TestGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+    assert_receive {:irc_client_join, "#intel", ""}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "alice",
+        user: "alice",
+        host: "workstation.example.org",
+        args: ["#intel", "threadr: what did Alice and Bob talk about last week?"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    assert raw_cmd =~ "PRIVMSG #intel :alice:"
+    assert raw_cmd =~ "what did Alice and Bob talk about last week?"
+  end
+
+  test "does not reply to IRC messages that are not addressed to the bot" do
+    tenant = create_tenant!("IRC Bot QA Idle")
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "alice",
+        user: "alice",
+        host: "workstation.example.org",
+        args: ["#intel", "what did Alice and Bob talk about last week?"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    refute_receive {:irc_client_cmd, _raw_cmd}, 200
+  end
+
+  test "replies when an ExIRC received event is addressed to the bot" do
+    tenant = create_tenant!("IRC Bot QA Received")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "intel")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice and Bob discussed endpoint isolation last week."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6])
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      embedding_provider: Threadr.TestEmbeddingProvider,
+      embedding_model: "test-embedding-model",
+      generation_provider: Threadr.TestGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      {:received, "threadr: what did Alice and Bob talk about last week?",
+       %{nick: "alice", user: "alice", host: "workstation.example.org"}, "#intel"}
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    assert raw_cmd =~ "PRIVMSG #intel :alice:"
+  end
+
+  defp create_tenant!(prefix) do
+    suffix = System.unique_integer([:positive])
+
+    {:ok, tenant} =
+      Service.create_tenant(%{
+        name: "#{prefix} #{suffix}",
+        subject_name: "irc-bot-qa-#{suffix}"
+      })
+
+    tenant
+  end
+
+  defp create_actor!(tenant_schema, handle) do
+    Actor
+    |> Ash.Changeset.for_create(
+      :create,
+      %{platform: "irc", handle: handle, display_name: String.capitalize(handle)},
+      tenant: tenant_schema
+    )
+    |> Ash.create!()
+  end
+
+  defp create_channel!(tenant_schema, name) do
+    Channel
+    |> Ash.Changeset.for_create(
+      :create,
+      %{platform: "irc", name: name},
+      tenant: tenant_schema
+    )
+    |> Ash.create!()
+  end
+
+  defp create_message!(tenant_schema, actor_id, channel_id, body) do
+    TenantMessage
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        external_id: Ecto.UUID.generate(),
+        body: body,
+        observed_at: DateTime.utc_now(),
+        raw: %{"body" => body},
+        metadata: %{},
+        actor_id: actor_id,
+        channel_id: channel_id
+      },
+      tenant: tenant_schema
+    )
+    |> Ash.create!()
+  end
+
+  defp create_embedding!(tenant_schema, message_id, embedding) do
+    MessageEmbedding
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        model: "test-embedding-model",
+        dimensions: length(embedding),
+        embedding: embedding,
+        metadata: %{},
+        message_id: message_id
+      },
+      tenant: tenant_schema
+    )
+    |> Ash.create!()
+  end
+end

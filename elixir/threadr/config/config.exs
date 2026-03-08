@@ -32,7 +32,11 @@ config :threadr, Threadr.ControlPlane.BotStatusObserver,
   batch_size: 50
 
 config :threadr, Threadr.ControlPlane.KubernetesBotReconciler,
-  default_image: "threadr-bot:latest",
+  default_image: "ghcr.io/carverauto/threadr-irc:v0.0.28",
+  default_images: %{
+    "irc" => "ghcr.io/carverauto/threadr-irc:v0.0.28",
+    "discord" => "ghcr.io/carverauto/threadr-discord:v0.0.3"
+  },
   container_name: "threadr-bot"
 
 config :threadr, Threadr.Ingest,

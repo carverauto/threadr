@@ -6,6 +6,7 @@ defmodule Threadr.Ingest.Discord.Consumer do
   use Nostrum.Consumer
 
   alias Nostrum.Struct.Message
+  alias Threadr.Ingest.BotQA
   alias Threadr.Ingest
 
   @config_key {__MODULE__, :config}
@@ -16,7 +17,12 @@ defmodule Threadr.Ingest.Discord.Consumer do
 
   @impl true
   def handle_event({:READY, ready, _ws_state}) do
-    config = :persistent_term.get(@config_key, [])
+    config =
+      @config_key
+      |> :persistent_term.get([])
+      |> BotQA.with_discord_identity(ready.user)
+
+    put_config(config)
 
     Threadr.Ingest.emit_runtime_event(config, :ready, %{
       platform: "discord",
@@ -82,6 +88,15 @@ defmodule Threadr.Ingest.Discord.Consumer do
           })
 
         Ingest.emit_runtime_event(config, :message_published, metadata)
+
+        :ok =
+          BotQA.maybe_answer_discord(config, %{
+            actor: actor_handle(message),
+            actor_id: message.author.id,
+            body: message.content,
+            channel_id: Integer.to_string(message.channel_id),
+            platform_message_id: to_string(message.id)
+          })
     end
   end
 
@@ -104,7 +119,7 @@ defmodule Threadr.Ingest.Discord.Consumer do
     discord_config = Keyword.get(config, :discord, %{})
     allow_bot_messages = Map.get(discord_config, :allow_bot_messages, false)
 
-    Map.get(message.author, :bot, false) and not allow_bot_messages
+    author_bot?(message) and not allow_bot_messages
   end
 
   defp message_metadata(message) do
@@ -112,9 +127,13 @@ defmodule Threadr.Ingest.Discord.Consumer do
       platform: "discord",
       channel_id: Integer.to_string(message.channel_id),
       guild_id: stringify(message.guild_id),
-      author_bot: Map.get(message.author, :bot, false),
+      author_bot: author_bot?(message),
       content_present: not blank?(message.content)
     }
+  end
+
+  defp author_bot?(message) do
+    Map.get(message.author || %{}, :bot) == true
   end
 
   defp blank?(value) when is_binary(value), do: String.trim(value) == ""

@@ -111,7 +111,7 @@ defmodule ThreadrWeb.Api.V1.BotControllerTest do
     assert contract.contract["metadata"]["namespace"] == "threadr"
     assert contract.contract["spec"]["controlPlane"]["generation"] == 1
     assert workload["replicas"] == 1
-    assert workload["image"] == "threadr-bot:latest"
+    assert workload["image"] == "ghcr.io/carverauto/threadr-irc:v0.0.28"
     assert bot["settings"]["env"]["THREADR_IRC_HOST"] == "irc.example.com"
     assert bot["settings"]["env"]["THREADR_IRC_NICK"] == "threadr-bot"
     assert bot["settings"]["env"]["THREADR_IRC_PASSWORD"] == "[REDACTED]"
@@ -236,6 +236,7 @@ defmodule ThreadrWeb.Api.V1.BotControllerTest do
     workload = contract.contract["spec"]["workload"]
 
     assert contract.contract["spec"]["platform"] == "discord"
+    assert workload["image"] == "ghcr.io/carverauto/threadr-discord:v0.0.3"
 
     assert workload["env"] == [
              %{"name" => "THREADR_INGEST_ENABLED", "value" => "true"},

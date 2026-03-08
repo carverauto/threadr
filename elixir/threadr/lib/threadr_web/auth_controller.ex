@@ -2,12 +2,14 @@ defmodule ThreadrWeb.AuthController do
   use ThreadrWeb, :controller
   use AshAuthentication.Phoenix.Controller
 
+  alias ThreadrWeb.UserRoutes
+
   def success(conn, activity, user, _token) do
     return_to =
       if user.must_rotate_password do
         ~p"/settings/password"
       else
-        get_session(conn, :return_to) || ~p"/control-plane/tenants"
+        get_session(conn, :return_to) || UserRoutes.home_path(user)
       end
 
     message =

@@ -6,6 +6,8 @@ defmodule ThreadrWeb.LiveUserAuth do
   import Phoenix.Component
   use ThreadrWeb, :verified_routes
 
+  alias ThreadrWeb.UserRoutes
+
   def on_mount(:current_user, _params, session, socket) do
     {:cont, AshAuthentication.Phoenix.LiveSession.assign_new_resources(socket, session)}
   end
@@ -36,7 +38,8 @@ defmodule ThreadrWeb.LiveUserAuth do
 
   def on_mount(:live_no_user, _params, _session, socket) do
     if socket.assigns[:current_user] do
-      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/control-plane/tenants")}
+      {:halt,
+       Phoenix.LiveView.redirect(socket, to: UserRoutes.home_path(socket.assigns.current_user))}
     else
       {:cont, assign(socket, :current_user, nil)}
     end

@@ -97,4 +97,37 @@ defmodule Threadr.Ingest.IRC.AgentTest do
 
     refute_receive {:published_envelope, _envelope}, 200
   end
+
+  test "publishes channel messages delivered via ExIRC received events" do
+    config = [
+      tenant_subject_name: "acme-threat-intel",
+      tenant_id: "tenant-123",
+      bot_id: "bot-123",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Threadr.Ingest.IRC.Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      {:received, "hello @bob", %{nick: "alice", user: "alice", host: "workstation.example.org"},
+       "#intel"}
+    )
+
+    assert_receive {:published_envelope, envelope}
+    assert envelope.data.actor == "alice"
+    assert envelope.data.channel == "#intel"
+    assert envelope.data.body == "hello @bob"
+  end
 end

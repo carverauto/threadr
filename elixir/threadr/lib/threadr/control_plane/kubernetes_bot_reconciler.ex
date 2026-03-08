@@ -72,7 +72,18 @@ defmodule Threadr.ControlPlane.KubernetesBotReconciler do
   end
 
   defp container_image(bot, config) do
-    Threadr.ControlPlane.BotConfig.image(bot.settings) || Keyword.fetch!(config, :default_image)
+    Threadr.ControlPlane.BotConfig.image(bot.settings) ||
+      default_image_for_platform(bot.platform, config)
+  end
+
+  defp default_image_for_platform(platform, config) do
+    case Keyword.get(config, :default_images, %{}) do
+      %{^platform => image} when is_binary(image) and image != "" ->
+        image
+
+      _ ->
+        Keyword.fetch!(config, :default_image)
+    end
   end
 
   defp env_vars(bot, tenant) do

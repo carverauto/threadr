@@ -1,0 +1,359 @@
+defmodule Threadr.Ingest.BotQA do
+  @moduledoc """
+  Direct-address detection plus tenant-scoped answer generation for bot runtimes.
+  """
+
+  require Logger
+
+  alias Threadr.ControlPlane.Service
+  alias ExIRC.Commands
+
+  @irc_reply_limit 350
+  @discord_reply_limit 1_800
+  @qa_option_keys [
+    :embedding_provider,
+    :embedding_model,
+    :embedding_endpoint,
+    :embedding_api_key,
+    :embedding_provider_name,
+    :generation_provider,
+    :generation_model,
+    :generation_endpoint,
+    :generation_api_key,
+    :generation_provider_name,
+    :generation_temperature,
+    :generation_max_tokens,
+    :generation_system_prompt,
+    :since,
+    :until,
+    :limit
+  ]
+
+  def maybe_answer_irc(config, client, client_module, attrs)
+      when is_list(config) and is_map(attrs) do
+    attrs
+    |> build_irc_request(config)
+    |> maybe_answer(config, fn request, content ->
+      send_irc_reply(client, client_module, request.channel, format_reply(request, content))
+    end)
+  end
+
+  def maybe_answer_discord(config, attrs) when is_list(config) and is_map(attrs) do
+    attrs
+    |> build_discord_request(config)
+    |> maybe_answer(config, fn request, content ->
+      send_discord_reply(
+        discord_api(config),
+        request.channel_id,
+        format_reply(request, content)
+      )
+    end)
+  end
+
+  def with_discord_identity(config, nil) when is_list(config), do: config
+
+  def with_discord_identity(config, user) when is_list(config) do
+    discord = Keyword.get(config, :discord, %{})
+
+    identity = %{
+      user_id: stringify(Map.get(user, :id)),
+      username: Map.get(user, :username),
+      global_name: Map.get(user, :global_name)
+    }
+
+    Keyword.put(config, :discord, Map.put(discord, :identity, identity))
+  end
+
+  defp maybe_answer(:ignore, _config, _reply_fun), do: :ok
+
+  defp maybe_answer({:ok, request}, config, reply_fun) do
+    emit_question_detected(config, request)
+    reply = answer_request(config, request)
+
+    case reply_fun.(request, reply.content) do
+      :ok ->
+        emit_reply_published(config, request, reply)
+        :ok
+
+      {:ok, _result} ->
+        emit_reply_published(config, request, reply)
+        :ok
+
+      {:error, reason} ->
+        emit_reply_failed(config, request, reply, reason)
+        :ok
+    end
+  end
+
+  defp build_irc_request(
+         %{
+           actor: actor,
+           body: body,
+           channel: channel
+         },
+         config
+       ) do
+    nick =
+      config
+      |> Keyword.get(:irc, %{})
+      |> Map.get(:nick)
+
+    case strip_prefixed_question(body, irc_bot_handles(nick)) do
+      {:ok, question, trigger} ->
+        {:ok,
+         %{
+           platform: "irc",
+           actor: actor,
+           reply_prefix: "#{actor}:",
+           question: question,
+           trigger: trigger,
+           channel: channel,
+           question_length: String.length(question)
+         }}
+
+      :ignore ->
+        :ignore
+    end
+  end
+
+  defp build_irc_request(_attrs, _config), do: :ignore
+
+  defp build_discord_request(
+         %{
+           actor: actor,
+           actor_id: actor_id,
+           body: body,
+           channel_id: channel_id
+         } = attrs,
+         config
+       ) do
+    identity =
+      config
+      |> Keyword.get(:discord, %{})
+      |> Map.get(:identity, %{})
+
+    case strip_discord_question(body, identity) do
+      {:ok, question, trigger} ->
+        {:ok,
+         %{
+           platform: "discord",
+           actor: actor,
+           reply_prefix: "<@#{actor_id}>",
+           question: question,
+           trigger: trigger,
+           channel_id: channel_id,
+           platform_message_id: Map.get(attrs, :platform_message_id),
+           question_length: String.length(question)
+         }}
+
+      :ignore ->
+        :ignore
+    end
+  end
+
+  defp build_discord_request(_attrs, _config), do: :ignore
+
+  defp answer_request(config, request) do
+    subject_name = Keyword.fetch!(config, :tenant_subject_name)
+
+    case Service.answer_tenant_question_for_bot(
+           subject_name,
+           request.question,
+           qa_runtime_opts(config)
+         ) do
+      {:ok, result} ->
+        %{
+          status: :answered,
+          content: answer_content(result),
+          mode: Map.get(result, :mode, :unknown)
+        }
+
+      {:error, :no_message_embeddings} ->
+        %{
+          status: :insufficient_context,
+          content: "I don't have enough tenant message history yet to answer that.",
+          mode: :none
+        }
+
+      {:error, :generation_provider_not_configured} ->
+        %{
+          status: :failed,
+          content: "I can't answer yet because no LLM is configured for this tenant.",
+          mode: :none
+        }
+
+      {:error, reason} ->
+        Logger.error("bot QA failed: #{inspect(reason)}")
+
+        %{
+          status: :failed,
+          content: "I couldn't answer that right now.",
+          mode: :none
+        }
+    end
+  end
+
+  defp answer_content(result) do
+    answer =
+      case Map.get(result, :answer) do
+        %{content: content} -> content
+        _ -> ""
+      end
+
+    answer
+    |> normalize_reply_content()
+    |> blank_to_default("I couldn't find a clear answer in the tenant context.")
+  end
+
+  defp send_irc_reply(client, client_module, channel, content) do
+    channel
+    |> Commands.privmsg!(content)
+    |> IO.iodata_to_binary()
+    |> then(&client_module.cmd(client, &1))
+  end
+
+  defp send_discord_reply(api, channel_id, content) do
+    call_adapter(api, :create_message, [channel_id, %{content: content}])
+  end
+
+  defp format_reply(%{platform: "irc", reply_prefix: prefix}, content) do
+    truncate("#{prefix} #{content}", @irc_reply_limit)
+  end
+
+  defp format_reply(%{platform: "discord", reply_prefix: prefix}, content) do
+    truncate("#{prefix} #{content}", @discord_reply_limit)
+  end
+
+  defp strip_discord_question(body, identity) when is_binary(body) and is_map(identity) do
+    mention_prefixes =
+      identity
+      |> Map.get(:user_id)
+      |> mention_tokens()
+
+    handle_prefixes =
+      [
+        Map.get(identity, :global_name),
+        Map.get(identity, :username)
+      ]
+      |> Enum.reject(&blank?/1)
+
+    case strip_mention_question(body, mention_prefixes) do
+      {:ok, _question, _trigger} = result ->
+        result
+
+      :ignore ->
+        strip_prefixed_question(body, handle_prefixes)
+    end
+  end
+
+  defp strip_discord_question(_body, _identity), do: :ignore
+
+  defp strip_mention_question(body, prefixes) do
+    Enum.find_value(prefixes, :ignore, fn prefix ->
+      pattern = ~r/^\s*#{Regex.escape(prefix)}\s*[:,]?\s+(.+?)\s*$/u
+
+      case Regex.run(pattern, body, capture: :all_but_first) do
+        [question] -> {:ok, String.trim(question), :mention}
+        _ -> nil
+      end
+    end)
+  end
+
+  defp strip_prefixed_question(body, handles) when is_binary(body) and is_list(handles) do
+    Enum.find_value(handles, :ignore, fn handle ->
+      pattern = ~r/^\s*#{Regex.escape(handle)}(?:\s*[:,]\s*|\s+)(.+?)\s*$/iu
+
+      case Regex.run(pattern, body, capture: :all_but_first) do
+        [question] ->
+          question = String.trim(question)
+
+          if question == "" do
+            nil
+          else
+            {:ok, question, :prefix}
+          end
+
+        _ ->
+          nil
+      end
+    end)
+  end
+
+  defp irc_bot_handles(nick) do
+    [nick]
+    |> Enum.reject(&blank?/1)
+  end
+
+  defp mention_tokens(nil), do: []
+  defp mention_tokens(user_id), do: ["<@#{user_id}>", "<@!#{user_id}>"]
+
+  defp qa_runtime_opts(config) do
+    Keyword.take(config, @qa_option_keys)
+  end
+
+  defp discord_api(config) do
+    Keyword.get(config, :discord_api, Nostrum.Api)
+  end
+
+  defp emit_question_detected(config, request) do
+    Threadr.Ingest.emit_runtime_event(config, :question_detected, %{
+      platform: request.platform,
+      actor: request.actor,
+      trigger: request.trigger,
+      question_length: request.question_length,
+      platform_message_id: Map.get(request, :platform_message_id),
+      channel: Map.get(request, :channel, Map.get(request, :channel_id))
+    })
+  end
+
+  defp emit_reply_published(config, request, reply) do
+    Threadr.Ingest.emit_runtime_event(config, :reply_published, %{
+      platform: request.platform,
+      actor: request.actor,
+      status: reply.status,
+      mode: reply.mode,
+      reply_length: String.length(reply.content),
+      platform_message_id: Map.get(request, :platform_message_id),
+      channel: Map.get(request, :channel, Map.get(request, :channel_id))
+    })
+  end
+
+  defp emit_reply_failed(config, request, reply, reason) do
+    Threadr.Ingest.emit_runtime_event(config, :reply_failed, %{
+      platform: request.platform,
+      actor: request.actor,
+      status: reply.status,
+      mode: reply.mode,
+      reason: inspect(reason),
+      platform_message_id: Map.get(request, :platform_message_id),
+      channel: Map.get(request, :channel, Map.get(request, :channel_id))
+    })
+  end
+
+  defp call_adapter({module, arg}, function, args), do: apply(module, function, args ++ [arg])
+  defp call_adapter(module, function, args), do: apply(module, function, args)
+
+  defp truncate(content, max_length) when byte_size(content) <= max_length, do: content
+
+  defp truncate(content, max_length) do
+    binary_part(content, 0, max_length - 3) <> "..."
+  end
+
+  defp normalize_reply_content(content) when is_binary(content) do
+    content
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+  end
+
+  defp normalize_reply_content(_content), do: ""
+
+  defp blank_to_default("", default), do: default
+  defp blank_to_default(content, _default), do: content
+
+  defp stringify(nil), do: nil
+  defp stringify(value), do: to_string(value)
+
+  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank?(nil), do: true
+  defp blank?(_value), do: false
+end

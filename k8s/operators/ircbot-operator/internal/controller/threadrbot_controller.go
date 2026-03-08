@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +17,17 @@ import (
 
 	cachev1alpha1 "github.com/carverauto/threadr/k8s/operator/ircbot-operator/api/v1alpha1"
 	"github.com/carverauto/threadr/k8s/operator/ircbot-operator/internal/controlplane"
+)
+
+const (
+	botWorkloadServiceAccountName   = "threadr-bot"
+	botWorkloadConfigMapName        = "threadr-worker-config"
+	botWorkloadEnvSecretName        = "threadr-control-plane-env"
+	botWorkloadNATSAuthSecretName   = "threadr-nats-auth"
+	botWorkloadNATSCAVolumeName     = "nats-ca"
+	botWorkloadNATSClientVolumeName = "nats-client"
+	botWorkloadNATSCASecretName     = "threadr-nats-ca"
+	botWorkloadNATSClientSecretName = "threadr-nats-worker-client"
 )
 
 // ThreadrBotReconciler reconciles a ThreadrBot object.
@@ -79,7 +91,17 @@ func (r *ThreadrBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	case err != nil:
 		return ctrl.Result{}, err
 	default:
-		if deploymentNeedsUpdate(current, deployment) {
+		if reasons := deploymentUpdateReasons(current, deployment); len(reasons) > 0 {
+			logger.Info(
+				"updating deployment to match desired state",
+				"name",
+				current.Name,
+				"namespace",
+				current.Namespace,
+				"reasons",
+				strings.Join(reasons, ", "),
+			)
+
 			current.Spec = deployment.Spec
 			current.Labels = deployment.Labels
 			current.Annotations = deployment.Annotations
@@ -99,6 +121,7 @@ func (r *ThreadrBotReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 func desiredDeployment(threadrBot *cachev1alpha1.ThreadrBot) *appsv1.Deployment {
 	replicas := threadrBot.Spec.Workload.Replicas
+	automountServiceAccountToken := false
 	labels := mergeStringMaps(
 		threadrBot.Labels,
 		map[string]string{
@@ -111,6 +134,8 @@ func desiredDeployment(threadrBot *cachev1alpha1.ThreadrBot) *appsv1.Deployment 
 	)
 
 	env := make([]corev1.EnvVar, 0, len(threadrBot.Spec.Workload.Env))
+	env = append(env, corev1.EnvVar{Name: "THREADR_BROADWAY_ENABLED", Value: "false"})
+
 	for _, entry := range threadrBot.Spec.Workload.Env {
 		env = append(env, corev1.EnvVar{Name: entry.Name, Value: entry.Value})
 	}
@@ -134,11 +159,60 @@ func desiredDeployment(threadrBot *cachev1alpha1.ThreadrBot) *appsv1.Deployment 
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					ServiceAccountName:           botWorkloadServiceAccountName,
+					AutomountServiceAccountToken: &automountServiceAccountToken,
+					Volumes: []corev1.Volume{
+						{
+							Name: botWorkloadNATSCAVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: botWorkloadNATSCASecretName,
+								},
+							},
+						},
+						{
+							Name: botWorkloadNATSClientVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: botWorkloadNATSClientSecretName,
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:  containerName(threadrBot),
 							Image: threadrBot.Spec.Workload.Image,
-							Env:   env,
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									ConfigMapRef: &corev1.ConfigMapEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{Name: botWorkloadConfigMapName},
+									},
+								},
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{Name: botWorkloadEnvSecretName},
+									},
+								},
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{Name: botWorkloadNATSAuthSecretName},
+									},
+								},
+							},
+							Env: env,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      botWorkloadNATSCAVolumeName,
+									MountPath: "/etc/threadr/nats/ca",
+									ReadOnly:  true,
+								},
+								{
+									Name:      botWorkloadNATSClientVolumeName,
+									MountPath: "/etc/threadr/nats/client",
+									ReadOnly:  true,
+								},
+							},
 						},
 					},
 					ImagePullSecrets: []corev1.LocalObjectReference{
@@ -171,14 +245,75 @@ func mergeStringMaps(maps ...map[string]string) map[string]string {
 }
 
 func deploymentNeedsUpdate(current *appsv1.Deployment, desired *appsv1.Deployment) bool {
-	return !reflect.DeepEqual(current.Spec.Replicas, desired.Spec.Replicas) ||
-		!reflect.DeepEqual(current.Spec.Selector, desired.Spec.Selector) ||
-		!reflect.DeepEqual(current.Spec.Template.Labels, desired.Spec.Template.Labels) ||
-		!reflect.DeepEqual(current.Spec.Template.Annotations, desired.Spec.Template.Annotations) ||
-		!managedContainersMatch(current.Spec.Template.Spec.Containers, desired.Spec.Template.Spec.Containers) ||
-		!managedImagePullSecretsMatch(current.Spec.Template.Spec.ImagePullSecrets, desired.Spec.Template.Spec.ImagePullSecrets) ||
-		!managedFieldsMatch(current.Labels, desired.Labels) ||
-		!managedFieldsMatch(current.Annotations, desired.Annotations)
+	return len(deploymentUpdateReasons(current, desired)) > 0
+}
+
+func deploymentUpdateReasons(current *appsv1.Deployment, desired *appsv1.Deployment) []string {
+	reasons := make([]string, 0, 10)
+
+	if !reflect.DeepEqual(current.Spec.Replicas, desired.Spec.Replicas) {
+		reasons = append(reasons, "spec.replicas")
+	}
+
+	if !reflect.DeepEqual(current.Spec.Selector, desired.Spec.Selector) {
+		reasons = append(reasons, "spec.selector")
+	}
+
+	if !reflect.DeepEqual(current.Spec.Template.Labels, desired.Spec.Template.Labels) {
+		reasons = append(reasons, "spec.template.metadata.labels")
+	}
+
+	if !reflect.DeepEqual(current.Spec.Template.Annotations, desired.Spec.Template.Annotations) {
+		reasons = append(reasons, "spec.template.metadata.annotations")
+	}
+
+	if !reflect.DeepEqual(
+		current.Spec.Template.Spec.ServiceAccountName,
+		desired.Spec.Template.Spec.ServiceAccountName,
+	) {
+		reasons = append(reasons, "spec.template.spec.serviceAccountName")
+	}
+
+	if !reflect.DeepEqual(
+		current.Spec.Template.Spec.AutomountServiceAccountToken,
+		desired.Spec.Template.Spec.AutomountServiceAccountToken,
+	) {
+		reasons = append(reasons, "spec.template.spec.automountServiceAccountToken")
+	}
+
+	if !managedVolumesMatch(current.Spec.Template.Spec.Volumes, desired.Spec.Template.Spec.Volumes) {
+		reasons = append(reasons, "spec.template.spec.volumes")
+	}
+
+	if !managedContainersMatch(current.Spec.Template.Spec.Containers, desired.Spec.Template.Spec.Containers) {
+		reasons = append(reasons, "spec.template.spec.containers")
+	}
+
+	if !managedImagePullSecretsMatch(
+		current.Spec.Template.Spec.ImagePullSecrets,
+		desired.Spec.Template.Spec.ImagePullSecrets,
+	) {
+		reasons = append(reasons, "spec.template.spec.imagePullSecrets")
+	}
+
+	if !managedFieldsMatch(current.Labels, desired.Labels) {
+		reasons = append(reasons, "metadata.labels")
+	}
+
+	if !managedFieldsMatch(current.Annotations, desired.Annotations) {
+		reasons = append(reasons, "metadata.annotations")
+	}
+
+	return reasons
+}
+
+func formatDeploymentUpdateReasons(current *appsv1.Deployment, desired *appsv1.Deployment) string {
+	reasons := deploymentUpdateReasons(current, desired)
+	if len(reasons) == 0 {
+		return ""
+	}
+
+	return strings.Join(reasons, ", ")
 }
 
 func managedFieldsMatch(current map[string]string, desired map[string]string) bool {
@@ -199,7 +334,35 @@ func managedContainersMatch(current []corev1.Container, desired []corev1.Contain
 	for index := range desired {
 		if current[index].Name != desired[index].Name ||
 			current[index].Image != desired[index].Image ||
-			!reflect.DeepEqual(current[index].Env, desired[index].Env) {
+			!reflect.DeepEqual(current[index].EnvFrom, desired[index].EnvFrom) ||
+			!reflect.DeepEqual(current[index].Env, desired[index].Env) ||
+			!reflect.DeepEqual(current[index].VolumeMounts, desired[index].VolumeMounts) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func managedVolumesMatch(current []corev1.Volume, desired []corev1.Volume) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+
+	for index := range desired {
+		if current[index].Name != desired[index].Name {
+			return false
+		}
+
+		currentSecret := current[index].Secret
+		desiredSecret := desired[index].Secret
+
+		switch {
+		case currentSecret == nil && desiredSecret == nil:
+			continue
+		case currentSecret == nil || desiredSecret == nil:
+			return false
+		case currentSecret.SecretName != desiredSecret.SecretName:
 			return false
 		}
 	}
@@ -245,7 +408,6 @@ func (r *ThreadrBotReconciler) updateThreadrBotStatus(
 	status.Phase = phase
 	status.ObservedGeneration = threadrBot.Spec.ControlPlane.Generation
 	status.DeploymentName = threadrBot.Spec.Workload.DeploymentName
-	status.LastObservedAt = metav1.Now()
 
 	if deployment != nil {
 		status.ReadyReplicas = deployment.Status.ReadyReplicas
@@ -257,10 +419,11 @@ func (r *ThreadrBotReconciler) updateThreadrBotStatus(
 		status.Conditions = nil
 	}
 
-	if reflect.DeepEqual(threadrBot.Status, *status) {
+	if threadrBotStatusEquivalent(threadrBot.Status, *status) {
 		return nil
 	}
 
+	status.LastObservedAt = metav1.Now()
 	threadrBot.Status = *status
 
 	if err := r.Status().Update(ctx, threadrBot); err != nil {
@@ -268,6 +431,23 @@ func (r *ThreadrBotReconciler) updateThreadrBotStatus(
 	}
 
 	return r.reportStatusToControlPlane(ctx, threadrBot)
+}
+
+func threadrBotStatusEquivalent(current cachev1alpha1.ThreadrBotStatus, next cachev1alpha1.ThreadrBotStatus) bool {
+	return current.Phase == next.Phase &&
+		current.ObservedGeneration == next.ObservedGeneration &&
+		current.DeploymentName == next.DeploymentName &&
+		current.ReadyReplicas == next.ReadyReplicas &&
+		current.AvailableReplicas == next.AvailableReplicas &&
+		conditionsEquivalent(current.Conditions, next.Conditions)
+}
+
+func conditionsEquivalent(current []metav1.Condition, next []metav1.Condition) bool {
+	if len(current) == 0 && len(next) == 0 {
+		return true
+	}
+
+	return reflect.DeepEqual(current, next)
 }
 
 func phaseFor(threadrBot *cachev1alpha1.ThreadrBot, deployment *appsv1.Deployment) string {

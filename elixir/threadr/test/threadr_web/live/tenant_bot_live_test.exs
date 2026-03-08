@@ -7,19 +7,19 @@ defmodule ThreadrWeb.TenantBotLiveTest do
   alias Threadr.ControlPlane
   alias Threadr.ControlPlane.Service
 
-  test "tenant managers can create, update, and delete bots from the web UI", %{conn: conn} do
-    owner = create_user!("tenant-bot-owner")
-    tenant = create_tenant!("Bot Tenant", owner)
+  test "regular users get a personal bot workspace and can manage bots from /bots", %{conn: conn} do
+    user = create_user!("tenant-bot-owner")
 
     conn =
       conn
       |> init_test_session(%{})
-      |> store_in_session(owner)
+      |> store_in_session(user)
 
-    {:ok, view, html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/bots")
+    {:ok, view, html} = live(conn, ~p"/bots")
 
-    assert html =~ "Tenant Bots"
-    assert html =~ tenant.subject_name
+    assert html =~ "My Bots"
+    refute html =~ "Tenant Bots"
+    refute html =~ "/control-plane/tenants"
 
     view
     |> form("#tenant-bot-form", %{
@@ -45,7 +45,10 @@ defmodule ThreadrWeb.TenantBotLiveTest do
     assert rendered =~ "irc-main"
     assert rendered =~ "#threadr, #ops"
 
-    {:ok, [bot]} = Service.list_bots_for_user(owner, tenant.subject_name)
+    [membership] = personal_memberships!(user)
+    tenant = membership.tenant
+
+    {:ok, [bot]} = Service.list_bots_for_user(user, tenant.subject_name)
     assert bot.name == "irc-main"
     assert bot.platform == "irc"
     assert bot.desired_state == "running"
@@ -82,7 +85,7 @@ defmodule ThreadrWeb.TenantBotLiveTest do
     assert rendered =~ "THREADR_IRC_HOST=irc2.example.com"
     assert rendered =~ "image=ghcr.io/example/threadr-bot:test"
 
-    {:ok, [updated_bot]} = Service.list_bots_for_user(owner, tenant.subject_name)
+    {:ok, [updated_bot]} = Service.list_bots_for_user(user, tenant.subject_name)
     assert updated_bot.id == bot.id
     assert updated_bot.desired_state == "stopped"
     assert updated_bot.channels == ["#ops"]
@@ -95,7 +98,7 @@ defmodule ThreadrWeb.TenantBotLiveTest do
     assert rendered =~ "Bot deleted"
     refute rendered =~ "irc-main"
 
-    assert {:ok, []} = Service.list_bots_for_user(owner, tenant.subject_name)
+    assert {:ok, []} = Service.list_bots_for_user(user, tenant.subject_name)
 
     view
     |> form("#tenant-bot-form", %{
@@ -130,10 +133,31 @@ defmodule ThreadrWeb.TenantBotLiveTest do
     assert rendered =~ "123456789012345678, 234567890123456789"
     assert rendered =~ "THREADR_DISCORD_TOKEN=[REDACTED]"
 
-    {:ok, [discord_bot]} = Service.list_bots_for_user(owner, tenant.subject_name)
+    {:ok, [discord_bot]} = Service.list_bots_for_user(user, tenant.subject_name)
     assert discord_bot.name == "discord-main"
     assert discord_bot.platform == "discord"
     assert discord_bot.channels == ["123456789012345678", "234567890123456789"]
+  end
+
+  test "operator admins can still open the tenant-scoped bot inventory", %{conn: conn} do
+    {operator, password} = create_operator!("tenant-bot-operator")
+    tenant = create_tenant!("Bot Tenant", operator)
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> post("/auth/user/password/sign_in", %{
+        "user" => %{
+          "email" => to_string(operator.email),
+          "password" => password
+        }
+      })
+
+    {:ok, _view, html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/bots")
+
+    assert html =~ "Tenant Bots"
+    assert html =~ tenant.subject_name
+    assert html =~ "/control-plane/tenants/#{tenant.subject_name}/history"
   end
 
   test "non-manager memberships are denied tenant bot management", %{conn: conn} do
@@ -152,7 +176,7 @@ defmodule ThreadrWeb.TenantBotLiveTest do
       |> init_test_session(%{})
       |> store_in_session(member)
 
-    assert {:error, {:live_redirect, %{to: "/control-plane/tenants"}}} =
+    assert {:error, {:live_redirect, %{to: "/bots"}}} =
              live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/bots")
   end
 
@@ -169,6 +193,25 @@ defmodule ThreadrWeb.TenantBotLiveTest do
     user
   end
 
+  defp create_operator!(prefix) do
+    suffix = System.unique_integer([:positive])
+    password = "threadr-password-#{suffix}"
+
+    {:ok, user} =
+      ControlPlane.create_bootstrap_user(
+        %{
+          email: "#{prefix}-#{suffix}@example.com",
+          name: "Tenant Bot Operator #{suffix}",
+          is_operator_admin: true,
+          must_rotate_password: false,
+          password: password
+        },
+        context: %{system: true}
+      )
+
+    {user, password}
+  end
+
   defp create_tenant!(name_prefix, owner_user) do
     suffix = System.unique_integer([:positive])
 
@@ -182,5 +225,14 @@ defmodule ThreadrWeb.TenantBotLiveTest do
       )
 
     tenant
+  end
+
+  defp personal_memberships!(user) do
+    {:ok, memberships} = Service.list_user_memberships(user)
+
+    Enum.filter(memberships, fn membership ->
+      metadata = membership.tenant.metadata || %{}
+      metadata["workspace"] == "personal" and metadata["owner_user_id"] == user.id
+    end)
   end
 end

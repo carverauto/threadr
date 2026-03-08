@@ -113,6 +113,41 @@ var _ = Describe("ThreadrBot Controller", func() {
 				To(Succeed())
 			Expect(*deployment.Spec.Replicas).To(Equal(int32(1)))
 			Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(Equal("threadr-bot:latest"))
+			Expect(deployment.Spec.Template.Spec.ServiceAccountName).To(Equal("threadr-bot"))
+			Expect(deployment.Spec.Template.Spec.AutomountServiceAccountToken).ToNot(BeNil())
+			Expect(*deployment.Spec.Template.Spec.AutomountServiceAccountToken).To(BeFalse())
+			Expect(deployment.Spec.Template.Spec.Containers[0].EnvFrom).To(ContainElements(
+				Equal(corev1.EnvFromSource{
+					ConfigMapRef: &corev1.ConfigMapEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "threadr-worker-config"},
+					},
+				}),
+				Equal(corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "threadr-control-plane-env"},
+					},
+				}),
+				Equal(corev1.EnvFromSource{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "threadr-nats-auth"},
+					},
+				}),
+			))
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
+				Equal(corev1.EnvVar{Name: "THREADR_BROADWAY_ENABLED", Value: "false"}),
+				Equal(corev1.EnvVar{Name: "THREADR_BOT_ID", Value: "bot-1"}),
+			))
+			Expect(deployment.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElements(
+				Equal(corev1.VolumeMount{Name: "nats-ca", MountPath: "/etc/threadr/nats/ca", ReadOnly: true}),
+				Equal(corev1.VolumeMount{Name: "nats-client", MountPath: "/etc/threadr/nats/client", ReadOnly: true}),
+			))
+			Expect(deployment.Spec.Template.Spec.Volumes).To(HaveLen(2))
+			Expect(deployment.Spec.Template.Spec.Volumes[0].Name).To(Equal("nats-ca"))
+			Expect(deployment.Spec.Template.Spec.Volumes[0].Secret).ToNot(BeNil())
+			Expect(deployment.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal("threadr-nats-ca"))
+			Expect(deployment.Spec.Template.Spec.Volumes[1].Name).To(Equal("nats-client"))
+			Expect(deployment.Spec.Template.Spec.Volumes[1].Secret).ToNot(BeNil())
+			Expect(deployment.Spec.Template.Spec.Volumes[1].Secret.SecretName).To(Equal("threadr-nats-worker-client"))
 			Expect(deployment.Spec.Template.Spec.ImagePullSecrets).To(ContainElement(
 				Equal(corev1.LocalObjectReference{Name: "ghcr-io-cred"}),
 			))
@@ -161,6 +196,37 @@ var _ = Describe("ThreadrBot Controller", func() {
 			Expect(reports[1].Reason).To(Equal("deployment_available"))
 			Expect(reports[1].Metadata["ready_replicas"]).To(Equal(int32(1)))
 			Expect(reports[1].Metadata["available_replicas"]).To(Equal(int32(1)))
+		})
+
+		It("does not re-report identical observed status snapshots", func() {
+			reporter := &fakeStatusReporter{}
+			reconciler := &ThreadrBotReconciler{
+				Client:         k8sClient,
+				Scheme:         k8sClient.Scheme(),
+				StatusReporter: reporter,
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			deployment := &appsv1.Deployment{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: namespace}, deployment)).
+				To(Succeed())
+			deployment.Status.ReadyReplicas = 1
+			deployment.Status.AvailableReplicas = 1
+			deployment.Status.Replicas = 1
+			Expect(k8sClient.Status().Update(ctx, deployment)).To(Succeed())
+
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			reports := reporter.Reports()
+			Expect(reports).To(HaveLen(2))
+
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(reporter.Reports()).To(HaveLen(2))
 		})
 
 		It("deletes the deployment when the desired state is deleted", func() {

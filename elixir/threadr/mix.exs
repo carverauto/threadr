@@ -21,7 +21,8 @@ defmodule Threadr.MixProject do
   def application do
     [
       mod: {Threadr.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools],
+      included_applications: [:nostrum]
     ]
   end
 
@@ -93,7 +94,7 @@ defmodule Threadr.MixProject do
       {:bandit, "~> 1.5"},
       {:bcrypt_elixir, "~> 3.3"},
       {:exirc_next, "~> 3.0"},
-      {:nostrum, "~> 0.10.4", runtime: false}
+      {:nostrum, "~> 0.10.4"}
     ]
   end
 
