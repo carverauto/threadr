@@ -2,6 +2,8 @@ defmodule Threadr.TenantData.ExtractionTest do
   use Threadr.DataCase, async: false
 
   import Ash.Expr
+  import ExUnit.CaptureLog
+  require Logger
   require Ash.Query
 
   alias Threadr.ControlPlane.Service
@@ -60,6 +62,52 @@ defmodule Threadr.TenantData.ExtractionTest do
              |> Ash.read_one(tenant: tenant.schema_name)
 
     assert fact.predicate == "reported"
+  end
+
+  test "ingest downgrades extraction timeouts to info logging" do
+    tenant = create_tenant!("Extraction Timeout Tenant")
+    ml_config = Application.get_env(:threadr, Threadr.ML, [])
+    previous_level = Logger.level()
+
+    Logger.configure(level: :info)
+
+    Application.put_env(
+      :threadr,
+      Threadr.ML,
+      Keyword.put(ml_config, :extraction,
+        enabled: true,
+        provider: Threadr.TestTimeoutExtractionProvider
+      )
+    )
+
+    on_exit(fn ->
+      Application.put_env(:threadr, Threadr.ML, ml_config)
+      Logger.configure(level: previous_level)
+    end)
+
+    envelope =
+      Envelope.new(
+        ChatMessage.from_map(%{
+          platform: "discord",
+          actor: "alice",
+          channel: "ops",
+          body: "Alice told Bob that payroll access was limited on 2026-03-05.",
+          mentions: ["bob"],
+          observed_at: ~U[2026-03-05 12:00:00Z],
+          raw: %{"body" => "Alice told Bob that payroll access was limited on 2026-03-05."}
+        }),
+        "chat.message",
+        Topology.subject_for(:chat_messages, tenant.subject_name),
+        %{source: "discord", occurred_at: ~U[2026-03-05 12:00:00Z]}
+      )
+
+    log =
+      capture_log([level: :info], fn ->
+        assert {:ok, _message} = Ingest.persist_envelope(envelope)
+      end)
+
+    assert log =~ "message extraction timed out for #{tenant.subject_name}"
+    refute log =~ "message extraction failed for #{tenant.subject_name}"
   end
 
   defp create_tenant!(name_prefix) do

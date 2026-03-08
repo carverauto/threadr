@@ -442,16 +442,36 @@ defmodule Threadr.TenantData.Ingest do
           :ok
 
         {:error, reason} ->
-          require Logger
-
-          Logger.warning(
-            "message extraction failed for #{tenant_subject_name}: #{inspect(reason)}"
-          )
-
+          log_extraction_failure(tenant_subject_name, reason)
           :ok
       end
     else
       :ok
     end
   end
+
+  defp log_extraction_failure(tenant_subject_name, reason) do
+    if extraction_timeout?(reason) do
+      Logger.info(
+        "message extraction timed out for #{tenant_subject_name}; continuing without extraction"
+      )
+    else
+      Logger.warning("message extraction failed for #{tenant_subject_name}: #{inspect(reason)}")
+    end
+  end
+
+  defp extraction_timeout?({:generation_request_failed, status, _body}) when status in [408, 504],
+    do: true
+
+  defp extraction_timeout?({:generation_failed, reason}), do: timeout_reason?(reason)
+  defp extraction_timeout?(_reason), do: false
+
+  defp timeout_reason?(reason) when is_atom(reason), do: reason == :timeout
+
+  defp timeout_reason?(reason) when is_binary(reason) do
+    String.contains?(String.downcase(reason), "timeout")
+  end
+
+  defp timeout_reason?({:timeout, _detail}), do: true
+  defp timeout_reason?(_reason), do: false
 end

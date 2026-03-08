@@ -7,71 +7,23 @@ defmodule Threadr.ML.ActorQA do
   import Ecto.Query
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{Generation, SemanticQA}
+  alias Threadr.ML.{Generation, QAIntent, SemanticQA}
   alias Threadr.ML.Generation.Result
   alias Threadr.Repo
 
   @default_limit 8
   @minimum_actor_messages 3
   @minimum_actor_profile_messages 3
-  @minimum_shared_actor_messages 4
   @minimum_targeted_messages 1
 
-  @type intent :: %{
-          kind: :talks_about | :knows_about | :says_about | :shared_topics,
-          actor_ref: String.t(),
-          target_ref: String.t() | nil
-        }
+  @type intent :: QAIntent.t()
 
   def answer_question(tenant_subject_name, question, opts \\ [])
       when is_binary(tenant_subject_name) and is_binary(question) do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
-         {:ok, intent} <- classify_question(question) do
+         {:ok, intent} <- QAIntent.classify(question) do
       build_answer(tenant, question, intent, opts)
-    end
-  end
-
-  def classify_question(question) when is_binary(question) do
-    normalized = question |> String.trim() |> String.replace(~r/\s+/u, " ")
-
-    cond do
-      captures =
-          Regex.run(
-            ~r/^\s*what(?:\s+kind\s+of(?:\s+.+?)?)?\s+do\s+(.+?)\s+and\s+(.+?)\s+(?:mostly\s+)?talk\s+about[?!.]*\s*$/iu,
-            normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref, target_ref] = captures
-        {:ok, %{kind: :shared_topics, actor_ref: actor_ref, target_ref: target_ref}}
-
-      captures =
-          Regex.run(
-            ~r/^\s*what(?:\s+kind\s+of(?:\s+.+?)?)?\s+does\s+(.+?)\s+(?:mostly\s+)?talk\s+about[?!.]*\s*$/iu,
-            normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref] = captures
-        {:ok, %{kind: :talks_about, actor_ref: actor_ref, target_ref: nil}}
-
-      captures =
-          Regex.run(~r/^\s*what\s+do\s+you\s+know\s+about\s+(.+?)[?!.]*\s*$/iu, normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref] = captures
-        {:ok, %{kind: :knows_about, actor_ref: actor_ref, target_ref: nil}}
-
-      captures =
-          Regex.run(
-            ~r/^\s*what\s+(?:does|did|has)\s+(.+?)\s+(?:say|been\s+saying)\s+about\s+(.+?)[?!.]*\s*$/iu,
-            normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref, target_ref] = captures
-        {:ok, %{kind: :says_about, actor_ref: actor_ref, target_ref: target_ref}}
-
-      true ->
-        {:error, :not_actor_question}
     end
   end
 
@@ -127,25 +79,6 @@ defmodule Threadr.ML.ActorQA do
              actor_message_count: actor_stats.message_count,
              actor_mention_count: mention_message_count(tenant.schema_name, actor, opts)
            }, actor_stats}
-
-        :shared_topics ->
-          target_stats = actor_message_stats(tenant.schema_name, target_actor)
-
-          pair_messages =
-            combine_matches(
-              fetch_actor_messages(tenant.schema_name, actor, limit, opts),
-              fetch_actor_messages(tenant.schema_name, target_actor, limit, opts),
-              limit
-            )
-            |> Enum.map(&Map.put(&1, :evidence_type, "pair_actor_message"))
-
-          {pair_messages,
-           %{
-             retrieval: "pair_actor_messages",
-             actor_message_count: actor_stats.message_count,
-             actor_mention_count: 0,
-             target_message_count: target_stats.message_count
-           }, shared_actor_stats(actor_stats, target_stats)}
 
         :says_about ->
           targeted_matches =
@@ -438,16 +371,6 @@ defmodule Threadr.ML.ActorQA do
     length(matches) >= @minimum_actor_profile_messages
   end
 
-  defp sufficient_evidence?(
-         :shared_topics,
-         %{actor_message_count: actor_message_count, target_message_count: target_message_count},
-         matches
-       ) do
-    actor_message_count >= @minimum_actor_messages and
-      target_message_count >= @minimum_actor_messages and
-      length(matches) >= @minimum_shared_actor_messages
-  end
-
   defp sufficient_evidence?(:says_about, _stats, matches) do
     length(matches) >= @minimum_targeted_messages
   end
@@ -488,9 +411,6 @@ defmodule Threadr.ML.ActorQA do
   defp insufficient_evidence_result(tenant, question, intent, actor, target_actor, stats, matches) do
     answer_text =
       case intent.kind do
-        :shared_topics ->
-          "I found actors \"#{actor.handle}\" and \"#{target_actor.handle}\", but there isn't enough grounded tenant history yet for a reliable shared-topic answer."
-
         :says_about ->
           "I found actor \"#{actor.handle}\", but I don't have enough grounded evidence yet to say what #{actor.handle} said about #{target_actor.handle}."
 
@@ -570,32 +490,11 @@ defmodule Threadr.ML.ActorQA do
   defp actor_summary_line(:knows_about, actor, _target_actor),
     do: "Actor-focused QA for what the tenant history knows about #{actor.handle}."
 
-  defp actor_summary_line(:shared_topics, actor, target_actor),
-    do: "Actor-focused QA for what #{actor.handle} and #{target_actor.handle} mostly talk about."
-
   defp actor_summary_line(:says_about, actor, target_actor),
     do: "Actor-focused QA for what #{actor.handle} said about #{target_actor.handle}."
 
-  defp actor_history_line(
-         :shared_topics,
-         actor,
-         target_actor,
-         %{actor_message_count: actor_message_count, target_message_count: target_message_count} =
-           stats
-       ) do
-    "#{actor.handle}: #{actor_message_count} messages. #{target_actor.handle}: #{target_message_count} messages#{time_range_suffix(stats)}."
-  end
-
   defp actor_history_line(_kind, _actor, _target_actor, stats) do
     "Actor history: #{stats.message_count} messages across #{stats.channel_count || 0} channels#{time_range_suffix(stats)}."
-  end
-
-  defp actor_retrieval_line(%{
-         retrieval: retrieval,
-         actor_message_count: actor_message_count,
-         target_message_count: target_message_count
-       }) do
-    "Evidence retrieval: #{retrieval}; actor_messages=#{actor_message_count}; target_messages=#{target_message_count}."
   end
 
   defp actor_retrieval_line(%{
@@ -976,36 +875,6 @@ defmodule Threadr.ML.ActorQA do
   defp format_timestamp(%DateTime{} = timestamp), do: DateTime.to_iso8601(timestamp)
   defp format_timestamp(%NaiveDateTime{} = timestamp), do: NaiveDateTime.to_iso8601(timestamp)
   defp format_timestamp(value), do: to_string(value)
-
-  defp shared_actor_stats(actor_stats, target_stats) do
-    %{
-      actor_message_count: actor_stats.message_count || 0,
-      target_message_count: target_stats.message_count || 0,
-      message_count: (actor_stats.message_count || 0) + (target_stats.message_count || 0),
-      channel_count: max(actor_stats.channel_count || 0, target_stats.channel_count || 0),
-      first_observed_at:
-        earliest_timestamp(actor_stats.first_observed_at, target_stats.first_observed_at),
-      last_observed_at:
-        latest_timestamp(actor_stats.last_observed_at, target_stats.last_observed_at)
-    }
-  end
-
-  defp earliest_timestamp(nil, other), do: other
-  defp earliest_timestamp(other, nil), do: other
-
-  defp earliest_timestamp(left, right) do
-    if DateTime.compare(to_datetime(left), to_datetime(right)) == :gt, do: right, else: left
-  end
-
-  defp latest_timestamp(nil, other), do: other
-  defp latest_timestamp(other, nil), do: other
-
-  defp latest_timestamp(left, right) do
-    if DateTime.compare(to_datetime(left), to_datetime(right)) == :lt, do: right, else: left
-  end
-
-  defp to_datetime(%DateTime{} = timestamp), do: timestamp
-  defp to_datetime(%NaiveDateTime{} = timestamp), do: DateTime.from_naive!(timestamp, "Etc/UTC")
 
   defp query_actor_message_count(%{actor_message_count: actor_message_count}),
     do: actor_message_count

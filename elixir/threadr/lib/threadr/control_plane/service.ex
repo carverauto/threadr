@@ -5,7 +5,8 @@ defmodule Threadr.ControlPlane.Service do
 
   import Ecto.Query
 
-  alias Threadr.ML.ActorQA
+  alias Threadr.{HistoryRequest, TimeWindow}
+  alias Threadr.ML.{QAOrchestrator, QARequest}
   alias Threadr.Repo
   alias Threadr.TenantData.MessageEmbedding
 
@@ -303,28 +304,62 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  def answer_tenant_question_for_user(%{id: _user_id} = user, subject_name, question, opts \\ [])
+  def answer_tenant_question_for_user(%{id: _user_id} = user, subject_name, question)
       when is_binary(subject_name) and is_binary(question) do
+    answer_tenant_question_for_user(user, subject_name, question, [])
+  end
+
+  def answer_tenant_question_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        %QARequest{} = request
+      )
+      when is_binary(subject_name) do
     with {:ok, tenant, _membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
+           get_user_tenant_by_subject_name(
+             user,
+             subject_name,
+             semantic_ash_opts(QARequest.to_runtime_opts(request))
+           ),
          {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <- answer_tenant_question_for_user_runtime(tenant, question, runtime_opts) do
+           tenant_generation_runtime_opts(tenant, QARequest.to_runtime_opts(request)),
+         request = QARequest.merge_runtime_opts(request, runtime_opts),
+         {:ok, result} <- answer_tenant_question_for_user_runtime(tenant, request) do
       {:ok, result}
     else
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
     end
   end
 
-  def answer_tenant_question_for_bot(subject_name, question, opts \\ [])
+  def answer_tenant_question_for_user(%{id: _user_id} = user, subject_name, question, opts)
+      when is_binary(subject_name) and is_binary(question) and is_list(opts) do
+    request = QARequest.new(question, :user, semantic_runtime_opts(opts))
+
+    answer_tenant_question_for_user(user, subject_name, request)
+  end
+
+  def answer_tenant_question_for_bot(subject_name, question)
       when is_binary(subject_name) and is_binary(question) do
+    answer_tenant_question_for_bot(subject_name, question, [])
+  end
+
+  def answer_tenant_question_for_bot(subject_name, %QARequest{} = request)
+      when is_binary(subject_name) do
     with {:ok, tenant} <- get_tenant_by_subject_name_system(subject_name, []),
          {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)) do
-      answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts)
+           tenant_generation_runtime_opts(tenant, QARequest.to_runtime_opts(request)),
+         request = QARequest.merge_runtime_opts(request, runtime_opts) do
+      answer_tenant_question_for_bot_runtime(tenant, request)
     else
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
     end
+  end
+
+  def answer_tenant_question_for_bot(subject_name, question, opts)
+      when is_binary(subject_name) and is_binary(question) and is_list(opts) do
+    request = QARequest.new(question, :bot, semantic_runtime_opts(opts))
+
+    answer_tenant_question_for_bot(subject_name, request)
   end
 
   def compare_tenant_question_windows_for_user(
@@ -334,6 +369,9 @@ defmodule Threadr.ControlPlane.Service do
         opts \\ []
       )
       when is_binary(subject_name) and is_binary(question) do
+    baseline_window = TimeWindow.from_opts(opts)
+    comparison_window = TimeWindow.from_opts(opts, :compare)
+
     with {:ok, tenant, _membership} <-
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
          {:ok, runtime_opts} <-
@@ -342,14 +380,8 @@ defmodule Threadr.ControlPlane.Service do
            Threadr.ML.SemanticQA.compare_windows(
              tenant.subject_name,
              question,
-             %{
-               since: Keyword.get(opts, :since),
-               until: Keyword.get(opts, :until)
-             },
-             %{
-               since: Keyword.get(opts, :compare_since),
-               until: Keyword.get(opts, :compare_until)
-             },
+             TimeWindow.to_map(baseline_window),
+             TimeWindow.to_map(comparison_window),
              runtime_opts
            ) do
       {:ok, result}
@@ -399,35 +431,71 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  def list_tenant_messages_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
+  def list_tenant_messages_for_user(%{id: _user_id} = user, subject_name)
       when is_binary(subject_name) do
-    history_opts = history_runtime_opts(opts)
-    ash_opts = history_ash_opts(opts)
+    list_tenant_messages_for_user(user, subject_name, [])
+  end
+
+  def list_tenant_messages_for_user(%{id: _user_id} = user, subject_name, opts)
+      when is_binary(subject_name) and is_list(opts) do
+    request = HistoryRequest.new(opts)
+
+    list_tenant_messages_for_user(user, subject_name, request)
+  end
+
+  def list_tenant_messages_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        %HistoryRequest{} = request
+      )
+      when is_binary(subject_name) do
+    ash_opts = request |> HistoryRequest.ash_opts() |> semantic_ash_opts()
 
     with {:ok, tenant, membership} <-
            get_user_tenant_by_subject_name(user, subject_name, ash_opts),
          {:ok, listing} <-
-           Threadr.TenantData.History.list_messages(tenant.schema_name, history_opts) do
+           Threadr.TenantData.History.list_messages(
+             tenant.schema_name,
+             HistoryRequest.to_runtime_opts(request)
+           ) do
       {:ok, Map.merge(%{tenant: tenant, membership: membership}, listing)}
     else
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
     end
   end
 
-  def compare_tenant_history_windows_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
+  def compare_tenant_history_windows_for_user(%{id: _user_id} = user, subject_name)
       when is_binary(subject_name) do
-    history_opts = history_runtime_opts(opts)
-    ash_opts = history_ash_opts(opts)
+    compare_tenant_history_windows_for_user(user, subject_name, [])
+  end
+
+  def compare_tenant_history_windows_for_user(%{id: _user_id} = user, subject_name, opts)
+      when is_binary(subject_name) and is_list(opts) do
+    request = HistoryRequest.new(opts)
+
+    compare_tenant_history_windows_for_user(user, subject_name, request)
+  end
+
+  def compare_tenant_history_windows_for_user(
+        %{id: _user_id} = user,
+        subject_name,
+        %HistoryRequest{} = request
+      )
+      when is_binary(subject_name) do
+    ash_opts = request |> HistoryRequest.ash_opts() |> semantic_ash_opts()
 
     with {:ok, tenant, membership} <-
            get_user_tenant_by_subject_name(user, subject_name, ash_opts),
          {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
+           tenant_generation_runtime_opts(
+             tenant,
+             semantic_runtime_opts(HistoryRequest.ash_opts(request))
+           ),
          {:ok, comparison} <-
            Threadr.TenantData.History.compare_windows(
              tenant.schema_name,
-             history_opts,
-             history_compare_runtime_opts(opts)
+             HistoryRequest.to_runtime_opts(request),
+             HistoryRequest.to_comparison_runtime_opts(request)
            ),
          {:ok, answer} <-
            Threadr.ML.Generation.complete(
@@ -478,6 +546,9 @@ defmodule Threadr.ControlPlane.Service do
         opts \\ []
       )
       when is_binary(subject_name) and is_binary(node_kind) and is_binary(node_id) do
+    baseline_window = TimeWindow.from_opts(opts)
+    comparison_window = TimeWindow.from_opts(opts, :compare)
+
     with {:ok, tenant, membership} <-
            get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
          {:ok, runtime_opts} <-
@@ -487,11 +558,8 @@ defmodule Threadr.ControlPlane.Service do
              node_id,
              node_kind,
              tenant.schema_name,
-             %{since: Keyword.get(opts, :since), until: Keyword.get(opts, :until)},
-             %{
-               since: Keyword.get(opts, :compare_since),
-               until: Keyword.get(opts, :compare_until)
-             }
+             TimeWindow.to_map(baseline_window),
+             TimeWindow.to_map(comparison_window)
            ),
          {:ok, answer} <-
            Threadr.ML.Generation.complete(
@@ -1526,56 +1594,27 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  defp answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts) do
-    case ActorQA.answer_question(tenant.subject_name, question, runtime_opts) do
-      {:ok, result} ->
-        {:ok, Map.put(result, :mode, :actor_qa)}
-
-      {:error, :not_actor_question} ->
-        :ok = ensure_recent_message_embeddings(tenant, runtime_opts)
-
-        case Threadr.ML.GraphRAG.answer_question(tenant.subject_name, question, runtime_opts) do
-          {:ok, result} ->
-            {:ok, Map.put(result, :mode, :graph_rag)}
-
-          {:error, :generation_provider_not_configured} = error ->
-            error
-
-          {:error, _graph_reason} ->
-            case Threadr.ML.SemanticQA.answer_question(
-                   tenant.subject_name,
-                   question,
-                   runtime_opts
-                 ) do
-              {:ok, result} ->
-                {:ok, Map.put(result, :mode, :semantic_qa)}
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-        end
-    end
+  defp answer_tenant_question_for_bot_runtime(tenant, %QARequest{} = request) do
+    QAOrchestrator.answer_question(
+      tenant,
+      request,
+      ensure_embeddings: &ensure_recent_message_embeddings/2
+    )
   end
 
-  defp answer_tenant_question_for_user_runtime(tenant, question, runtime_opts) do
-    case ActorQA.answer_question(tenant.subject_name, question, runtime_opts) do
-      {:ok, result} ->
-        {:ok, Map.put(result, :mode, :actor_qa)}
-
-      {:error, :not_actor_question} ->
-        :ok = ensure_recent_message_embeddings(tenant, runtime_opts)
-
-        case Threadr.ML.SemanticQA.answer_question(tenant.subject_name, question, runtime_opts) do
-          {:ok, result} ->
-            {:ok, Map.put(result, :mode, :semantic_qa)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-    end
+  defp answer_tenant_question_for_user_runtime(tenant, %QARequest{} = request) do
+    QAOrchestrator.answer_question(
+      tenant,
+      request,
+      ensure_embeddings: &ensure_recent_message_embeddings/2
+    )
   end
 
-  defp ensure_recent_message_embeddings(tenant, runtime_opts) do
+  defp ensure_recent_message_embeddings(tenant, %QARequest{} = request) do
+    ensure_recent_message_embeddings(tenant, QARequest.to_runtime_opts(request))
+  end
+
+  defp ensure_recent_message_embeddings(tenant, runtime_opts) when is_list(runtime_opts) do
     model =
       Keyword.get(
         runtime_opts,
@@ -1848,56 +1887,6 @@ defmodule Threadr.ControlPlane.Service do
     ])
     |> semantic_ash_opts()
   end
-
-  defp history_runtime_opts(opts) do
-    Keyword.take(
-      opts,
-      [
-        :query,
-        :actor_handle,
-        :channel_name,
-        :entity_name,
-        :entity_type,
-        :fact_type,
-        :since,
-        :until,
-        :limit
-      ]
-    )
-  end
-
-  defp history_ash_opts(opts) do
-    opts
-    |> Keyword.drop([
-      :query,
-      :actor_handle,
-      :channel_name,
-      :entity_name,
-      :entity_type,
-      :fact_type,
-      :since,
-      :until,
-      :limit
-    ])
-    |> semantic_ash_opts()
-  end
-
-  defp history_compare_runtime_opts(opts) do
-    []
-    |> put_if_present(:query, Keyword.get(opts, :query))
-    |> put_if_present(:actor_handle, Keyword.get(opts, :actor_handle))
-    |> put_if_present(:channel_name, Keyword.get(opts, :channel_name))
-    |> put_if_present(:entity_name, Keyword.get(opts, :entity_name))
-    |> put_if_present(:entity_type, Keyword.get(opts, :entity_type))
-    |> put_if_present(:fact_type, Keyword.get(opts, :fact_type))
-    |> put_if_present(:since, Keyword.get(opts, :compare_since))
-    |> put_if_present(:until, Keyword.get(opts, :compare_until))
-    |> put_if_present(:limit, Keyword.get(opts, :limit))
-  end
-
-  defp put_if_present(opts, _key, nil), do: opts
-  defp put_if_present(opts, _key, ""), do: opts
-  defp put_if_present(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp actor_ash_opts(user, opts) do
     opts

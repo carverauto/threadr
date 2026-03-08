@@ -87,3 +87,12 @@ defmodule Threadr.TestExtractionProvider do
      }}
   end
 end
+
+defmodule Threadr.TestTimeoutExtractionProvider do
+  @behaviour Threadr.ML.Extraction.Provider
+
+  @impl true
+  def extract(_request, _opts) do
+    {:error, {:generation_failed, "timeout"}}
+  end
+end

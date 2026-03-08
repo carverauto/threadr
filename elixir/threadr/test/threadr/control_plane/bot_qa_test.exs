@@ -74,6 +74,58 @@ defmodule Threadr.ControlPlane.BotQATest do
     assert result.answer.content =~ "what does twatbot talk about?"
   end
 
+  test "routes paired-actor phrasing through generic bot QA instead of actor QA" do
+    tenant = create_tenant!("Bot QA Generic Pair")
+    actor = create_actor!(tenant.schema_name, "hyralak")
+    target_actor = create_actor!(tenant.schema_name, "sig")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    first_message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "hyralak keeps talking about deploys, IRC bots, and restart loops."
+      )
+
+    second_message =
+      create_message!(
+        tenant.schema_name,
+        target_actor.id,
+        channel.id,
+        "sig mostly talks about rollout failures, bots, and deploy recovery."
+      )
+
+    create_embedding!(
+      tenant.schema_name,
+      first_message.id,
+      [0.1, 0.2, 0.3],
+      "test-embedding-model"
+    )
+
+    create_embedding!(
+      tenant.schema_name,
+      second_message.id,
+      [0.3, 0.2, 0.1],
+      "test-embedding-model"
+    )
+
+    assert {:ok, result} =
+             Service.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               "what do hyralak and sig mostly talk about?",
+               embedding_provider: Threadr.TestEmbeddingProvider,
+               embedding_model: "test-embedding-model",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat",
+               limit: 2
+             )
+
+    assert result.mode in [:graph_rag, :semantic_qa]
+    refute result.mode == :actor_qa
+    assert result.answer.content =~ "what do hyralak and sig mostly talk about?"
+  end
+
   test "catches up missing embeddings before generic bot QA" do
     tenant = create_tenant!("Bot QA Catchup")
     actor = create_actor!(tenant.schema_name, "alice")

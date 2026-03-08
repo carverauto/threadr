@@ -6,6 +6,7 @@ defmodule Threadr.Ingest.BotQA do
   require Logger
 
   alias Threadr.ControlPlane.Service
+  alias Threadr.ML.QARequest
   alias ExIRC.Commands
 
   @irc_reply_limit 350
@@ -155,12 +156,17 @@ defmodule Threadr.Ingest.BotQA do
 
   defp answer_request(config, request) do
     subject_name = Keyword.fetch!(config, :tenant_subject_name)
-    runtime_opts = Keyword.merge(qa_runtime_opts(config), requester_runtime_opts(request))
+
+    qa_request =
+      request.question
+      |> QARequest.new(
+        :bot,
+        Keyword.merge(qa_runtime_opts(config), requester_runtime_opts(request))
+      )
 
     case Service.answer_tenant_question_for_bot(
            subject_name,
-           request.question,
-           runtime_opts
+           qa_request
          ) do
       {:ok, result} ->
         %{
