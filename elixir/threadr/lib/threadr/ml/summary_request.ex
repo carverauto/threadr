@@ -1,20 +1,17 @@
-defmodule Threadr.ML.QARequest do
+defmodule Threadr.ML.SummaryRequest do
   @moduledoc """
-  Structured request parameters for tenant QA flows.
+  Structured request parameters for tenant topic summarization flows.
   """
 
   alias Threadr.ML.RequestRuntimeOpts
 
-  @runtime_option_keys RequestRuntimeOpts.qa_keys()
+  @runtime_option_keys RequestRuntimeOpts.common_keys()
 
-  @enforce_keys [:question, :strategy]
-  defstruct [:question, :strategy] ++ @runtime_option_keys
-
-  @type strategy :: :bot | :user
+  @enforce_keys [:topic]
+  defstruct [:topic] ++ @runtime_option_keys
 
   @type t :: %__MODULE__{
-          question: String.t(),
-          strategy: strategy(),
+          topic: String.t(),
           limit: integer() | nil,
           graph_message_limit: integer() | nil,
           embedding_provider: module() | nil,
@@ -34,16 +31,12 @@ defmodule Threadr.ML.QARequest do
           generation_provider_name: String.t() | nil,
           generation_temperature: number() | nil,
           generation_max_tokens: integer() | nil,
-          generation_timeout: integer() | nil,
-          requester_actor_handle: String.t() | nil,
-          requester_actor_display_name: String.t() | nil,
-          requester_external_id: String.t() | nil
+          generation_timeout: integer() | nil
         }
 
-  @spec new(String.t(), strategy(), keyword()) :: t()
-  def new(question, strategy, opts \\ [])
-      when is_binary(question) and strategy in [:bot, :user] and is_list(opts) do
-    %__MODULE__{question: question, strategy: strategy}
+  @spec new(String.t(), keyword()) :: t()
+  def new(topic, opts \\ []) when is_binary(topic) and is_list(opts) do
+    %__MODULE__{topic: topic}
     |> merge_runtime_opts(opts)
   end
 

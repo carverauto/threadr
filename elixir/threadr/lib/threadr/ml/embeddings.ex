@@ -7,6 +7,7 @@ defmodule Threadr.ML.Embeddings do
   require Ash.Query
 
   alias Threadr.Events
+  alias Threadr.ML.EmbeddingProviderOpts
   alias Threadr.TenantData.Message
 
   def embed_query(text, opts \\ []) when is_binary(text) do
@@ -73,6 +74,6 @@ defmodule Threadr.ML.Embeddings do
   end
 
   defp provider_opts(opts) do
-    Keyword.take(opts, [:model, :document_prefix, :query_prefix])
+    EmbeddingProviderOpts.from_direct(opts)
   end
 end

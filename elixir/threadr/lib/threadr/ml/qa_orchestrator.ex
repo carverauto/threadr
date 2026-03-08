@@ -23,10 +23,8 @@ defmodule Threadr.ML.QAOrchestrator do
   end
 
   defp fallback_answer(tenant, %QARequest{strategy: :bot} = request, ensure_embeddings) do
-    runtime_opts = QARequest.to_runtime_opts(request)
-
     with :ok <- ensure_embeddings.(tenant, request) do
-      case GraphRAG.answer_question(tenant.subject_name, request.question, runtime_opts) do
+      case GraphRAG.answer_question(tenant.subject_name, request) do
         {:ok, result} ->
           {:ok, Map.put(result, :mode, :graph_rag)}
 

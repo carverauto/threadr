@@ -224,7 +224,7 @@ defmodule ThreadrWeb.BotStatusControllerTest do
   end
 
   defp create_user!(prefix) do
-    suffix = System.unique_integer([:positive])
+    suffix = Ecto.UUID.generate()
 
     {:ok, user} =
       ControlPlane.register_user(%{

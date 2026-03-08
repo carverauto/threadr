@@ -1,7 +1,8 @@
 defmodule ThreadrWeb.TenantDossierLive.Show do
   use ThreadrWeb, :live_view
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.Analysis
+  alias Threadr.TimeWindow
   alias Threadr.TenantData.LiveUpdates
 
   @impl true
@@ -11,7 +12,7 @@ defmodule ThreadrWeb.TenantDossierLive.Show do
         socket
       ) do
     with {:ok, result} <-
-           Service.get_tenant_dossier_for_user(
+           Analysis.get_tenant_dossier_for_user(
              socket.assigns.current_user,
              subject_name,
              node_kind,
@@ -91,15 +92,13 @@ defmodule ThreadrWeb.TenantDossierLive.Show do
     focal = dossier.focal
 
     with {:ok, result} <-
-           Service.compare_tenant_dossier_windows_for_user(
+           Analysis.compare_tenant_dossier_windows_for_user(
              socket.assigns.current_user,
              socket.assigns.tenant.subject_name,
              dossier.type,
              focal["id"] || focal[:id],
-             since: parse_naive_datetime(socket.assigns.since),
-             until: parse_naive_datetime(socket.assigns.until),
-             compare_since: parse_naive_datetime(socket.assigns.compare_since),
-             compare_until: parse_naive_datetime(socket.assigns.compare_until)
+             baseline_window(socket),
+             comparison_window(socket)
            ) do
       {:noreply, socket |> assign(:comparison_result, result) |> clear_flash()}
     else
@@ -532,6 +531,20 @@ defmodule ThreadrWeb.TenantDossierLive.Show do
   defp compare_window_present?(compare_since, compare_until),
     do: compare_since not in [nil, ""] or compare_until not in [nil, ""]
 
+  defp baseline_window(socket) do
+    TimeWindow.new(
+      since: parse_naive_datetime(socket.assigns.since),
+      until: parse_naive_datetime(socket.assigns.until)
+    )
+  end
+
+  defp comparison_window(socket) do
+    TimeWindow.new(
+      since: parse_naive_datetime(socket.assigns.compare_since),
+      until: parse_naive_datetime(socket.assigns.compare_until)
+    )
+  end
+
   defp qa_question(%{type: "actor", focal: focal}) do
     handle = focal["handle"] || focal[:handle]
     "What does #{handle} know?"
@@ -750,7 +763,7 @@ defmodule ThreadrWeb.TenantDossierLive.Show do
     dossier = socket.assigns.dossier
     focal = dossier.focal
 
-    case Service.get_tenant_dossier_for_user(
+    case Analysis.get_tenant_dossier_for_user(
            socket.assigns.current_user,
            socket.assigns.tenant.subject_name,
            dossier.type,

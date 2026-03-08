@@ -5,7 +5,7 @@ defmodule Threadr.Ingest.BotQA do
 
   require Logger
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.Analysis
   alias Threadr.ML.QARequest
   alias ExIRC.Commands
 
@@ -164,7 +164,7 @@ defmodule Threadr.Ingest.BotQA do
         Keyword.merge(qa_runtime_opts(config), requester_runtime_opts(request))
       )
 
-    case Service.answer_tenant_question_for_bot(
+    case Analysis.answer_tenant_question_for_bot(
            subject_name,
            qa_request
          ) do

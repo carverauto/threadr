@@ -47,6 +47,27 @@ defmodule Threadr.ML.EmbeddingsTest do
     assert result.metadata["text_length"] == 18
   end
 
+  test "passes direct embedding provider config through the embeddings boundary" do
+    assert {:ok, result} =
+             Embeddings.embed_query(
+               "who mentioned bob?",
+               provider: Threadr.TestEmbeddingOptsProvider,
+               model: "test-query-model",
+               endpoint: "https://embeddings.example.test",
+               api_key: "embedding-secret",
+               provider_name: "custom-embedder",
+               document_prefix: "doc:",
+               query_prefix: "query:"
+             )
+
+    assert result.provider == "test-opts"
+    assert result.metadata["endpoint"] == "https://embeddings.example.test"
+    assert result.metadata["api_key"] == "embedding-secret"
+    assert result.metadata["provider_name"] == "custom-embedder"
+    assert result.metadata["document_prefix"] == "doc:"
+    assert result.metadata["query_prefix"] == "query:"
+  end
+
   test "returns a provider error when local embeddings are disabled" do
     message = %Message{id: Ecto.UUID.generate(), external_id: "msg-1", body: "hello"}
 

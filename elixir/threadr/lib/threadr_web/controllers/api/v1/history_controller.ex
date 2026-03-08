@@ -1,16 +1,14 @@
 defmodule ThreadrWeb.Api.V1.HistoryController do
   use ThreadrWeb, :controller
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.Analysis
+  alias Threadr.HistoryRequest
 
   def index(conn, %{"subject_name" => subject_name} = params) do
+    request = history_request(params)
+
     with {:ok, user} <- current_user(conn),
-         {:ok, result} <-
-           Service.list_tenant_messages_for_user(
-             user,
-             subject_name,
-             history_opts(params)
-           ) do
+         {:ok, result} <- Analysis.list_tenant_messages_for_user(user, subject_name, request) do
       json(conn, %{data: history_json(result)})
     else
       {:error, :unauthorized} ->
@@ -28,13 +26,11 @@ defmodule ThreadrWeb.Api.V1.HistoryController do
   end
 
   def compare(conn, %{"subject_name" => subject_name} = params) do
+    request = history_request(params)
+
     with {:ok, user} <- current_user(conn),
          {:ok, result} <-
-           Service.compare_tenant_history_windows_for_user(
-             user,
-             subject_name,
-             history_compare_opts(params)
-           ) do
+           Analysis.compare_tenant_history_windows_for_user(user, subject_name, request) do
       json(conn, %{data: compare_json(result)})
     else
       {:error, :unauthorized} ->
@@ -85,28 +81,21 @@ defmodule ThreadrWeb.Api.V1.HistoryController do
     }
   end
 
-  defp history_opts(params) do
-    []
-    |> put_opt(:query, params["query"])
-    |> put_opt(:actor_handle, params["actor_handle"])
-    |> put_opt(:channel_name, params["channel_name"])
-    |> put_opt(:entity_name, params["entity_name"])
-    |> put_opt(:entity_type, params["entity_type"])
-    |> put_opt(:fact_type, params["fact_type"])
-    |> put_opt(:since, parse_datetime(params["since"]))
-    |> put_opt(:until, parse_datetime(params["until"]))
-    |> put_opt(:limit, parse_limit(params["limit"]))
+  defp history_request(params) do
+    HistoryRequest.new(
+      query: params["query"],
+      actor_handle: params["actor_handle"],
+      channel_name: params["channel_name"],
+      entity_name: params["entity_name"],
+      entity_type: params["entity_type"],
+      fact_type: params["fact_type"],
+      since: parse_datetime(params["since"]),
+      until: parse_datetime(params["until"]),
+      compare_since: parse_datetime(params["compare_since"]),
+      compare_until: parse_datetime(params["compare_until"]),
+      limit: parse_limit(params["limit"])
+    )
   end
-
-  defp history_compare_opts(params) do
-    history_opts(params)
-    |> put_opt(:compare_since, parse_datetime(params["compare_since"]))
-    |> put_opt(:compare_until, parse_datetime(params["compare_until"]))
-  end
-
-  defp put_opt(opts, _key, nil), do: opts
-  defp put_opt(opts, _key, ""), do: opts
-  defp put_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp parse_limit(nil), do: 50
   defp parse_limit(limit) when is_integer(limit), do: limit

@@ -3,6 +3,7 @@ defmodule Threadr.ML.Extraction do
   Provider-neutral structured extraction over tenant-scoped chat messages.
   """
 
+  alias Threadr.ML.ExtractionProviderOpts
   alias Threadr.ML.Extraction.Request
   alias Threadr.TenantData.Message
 
@@ -35,19 +36,6 @@ defmodule Threadr.ML.Extraction do
   end
 
   defp provider_opts(opts) do
-    Keyword.take(
-      opts,
-      [
-        :provider_name,
-        :endpoint,
-        :model,
-        :api_key,
-        :system_prompt,
-        :temperature,
-        :max_tokens,
-        :timeout,
-        :generation_provider
-      ]
-    )
+    ExtractionProviderOpts.take_direct(opts)
   end
 end

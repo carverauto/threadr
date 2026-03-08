@@ -2,7 +2,8 @@ defmodule Threadr.ControlPlane.UserQATest do
   use Threadr.DataCase, async: false
 
   alias Threadr.ControlPlane
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.{Analysis, Service}
+  alias Threadr.ML.QARequest
   alias Threadr.TenantData.{Actor, Channel, Message, MessageEmbedding}
 
   test "answers generic tenant questions for users with semantic qa fallback" do
@@ -21,16 +22,20 @@ defmodule Threadr.ControlPlane.UserQATest do
 
     create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6], "test-embedding-model")
 
+    request =
+      QARequest.new("What did Alice and Bob talk about last week?", :user,
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 1
+      )
+
     assert {:ok, result} =
-             Service.answer_tenant_question_for_user(
+             Analysis.answer_tenant_question_for_user(
                owner,
                tenant.subject_name,
-               "What did Alice and Bob talk about last week?",
-               embedding_provider: Threadr.TestEmbeddingProvider,
-               embedding_model: "test-embedding-model",
-               generation_provider: Threadr.TestGenerationProvider,
-               generation_model: "test-chat",
-               limit: 1
+               request
              )
 
     assert result.mode == :semantic_qa

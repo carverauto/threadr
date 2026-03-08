@@ -6,7 +6,7 @@ defmodule Threadr.ML.GraphRAGTest do
 
   alias Threadr.ControlPlane.Service
   alias Threadr.Events.{ChatMessage, Envelope}
-  alias Threadr.ML.GraphRAG
+  alias Threadr.ML.{GraphRAG, QARequest, SummaryRequest}
   alias Threadr.Messaging.Topology
   alias Threadr.TenantData.{Ingest, Message, MessageEmbedding}
 
@@ -16,15 +16,19 @@ defmodule Threadr.ML.GraphRAGTest do
 
     create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
 
+    request =
+      QARequest.new("Who is collaborating with Alice?", :user,
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 1
+      )
+
     assert {:ok, result} =
              GraphRAG.answer_question(
                tenant.subject_name,
-               "Who is collaborating with Alice?",
-               embedding_provider: Threadr.TestEmbeddingProvider,
-               embedding_model: "test-embedding-model",
-               generation_provider: Threadr.TestGenerationProvider,
-               generation_model: "test-chat",
-               limit: 1
+               request
              )
 
     assert result.semantic.context =~ "[C1]"
@@ -44,15 +48,19 @@ defmodule Threadr.ML.GraphRAGTest do
 
     create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
 
+    request =
+      SummaryRequest.new("Alice, Bob, and Carol incident response activity",
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 1
+      )
+
     assert {:ok, result} =
              GraphRAG.summarize_topic(
                tenant.subject_name,
-               "Alice, Bob, and Carol incident response activity",
-               embedding_provider: Threadr.TestEmbeddingProvider,
-               embedding_model: "test-embedding-model",
-               generation_provider: Threadr.TestGenerationProvider,
-               generation_model: "test-chat",
-               limit: 1
+               request
              )
 
     assert result.summary.metadata["mode"] == :summarization

@@ -8,7 +8,7 @@ defmodule Threadr.ML.ActorQA do
 
   alias Threadr.ControlPlane
   alias Threadr.ML.{Generation, QAIntent, SemanticQA}
-  alias Threadr.ML.Generation.Result
+  alias Threadr.ML.{GenerationProviderOpts, Generation.Result}
   alias Threadr.Repo
 
   @default_limit 8
@@ -673,36 +673,7 @@ defmodule Threadr.ML.ActorQA do
   defp observed_day(_value), do: ~D[1970-01-01]
 
   defp generation_opts(opts) do
-    provider =
-      Keyword.get(
-        opts,
-        :generation_provider,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:generation)
-        |> Keyword.fetch!(:provider)
-      )
-
-    opts
-    |> Keyword.take([
-      :generation_model,
-      :generation_endpoint,
-      :generation_api_key,
-      :generation_system_prompt,
-      :generation_provider_name,
-      :generation_temperature,
-      :generation_max_tokens,
-      :generation_timeout
-    ])
-    |> Enum.reduce([provider: provider], fn
-      {:generation_model, value}, acc -> Keyword.put(acc, :model, value)
-      {:generation_endpoint, value}, acc -> Keyword.put(acc, :endpoint, value)
-      {:generation_api_key, value}, acc -> Keyword.put(acc, :api_key, value)
-      {:generation_system_prompt, value}, acc -> Keyword.put(acc, :system_prompt, value)
-      {:generation_provider_name, value}, acc -> Keyword.put(acc, :provider_name, value)
-      {:generation_temperature, value}, acc -> Keyword.put(acc, :temperature, value)
-      {:generation_max_tokens, value}, acc -> Keyword.put(acc, :max_tokens, value)
-      {:generation_timeout, value}, acc -> Keyword.put(acc, :timeout, value)
-    end)
+    GenerationProviderOpts.from_prefixed(opts)
   end
 
   defp static_answer(content) do

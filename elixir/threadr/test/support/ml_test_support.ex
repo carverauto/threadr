@@ -24,6 +24,44 @@ defmodule Threadr.TestEmbeddingProvider do
   end
 end
 
+defmodule Threadr.TestEmbeddingOptsProvider do
+  @behaviour Threadr.ML.Embeddings.Provider
+
+  @impl true
+  def embed_document(text, opts) do
+    {:ok,
+     %{
+       embedding: [0.1, 0.2, 0.3],
+       model: Keyword.get(opts, :model, "test-embedding-model"),
+       provider: "test-opts",
+       metadata: build_metadata(text, opts, "document")
+     }}
+  end
+
+  @impl true
+  def embed_query(text, opts) do
+    {:ok,
+     %{
+       embedding: [0.4, 0.5, 0.6],
+       model: Keyword.get(opts, :model, "test-embedding-model"),
+       provider: "test-opts",
+       metadata: build_metadata(text, opts, "query")
+     }}
+  end
+
+  defp build_metadata(text, opts, input_type) do
+    %{
+      "text_length" => String.length(text),
+      "input_type" => input_type,
+      "endpoint" => Keyword.get(opts, :endpoint),
+      "api_key" => Keyword.get(opts, :api_key),
+      "provider_name" => Keyword.get(opts, :provider_name),
+      "document_prefix" => Keyword.get(opts, :document_prefix),
+      "query_prefix" => Keyword.get(opts, :query_prefix)
+    }
+  end
+end
+
 defmodule Threadr.TestGenerationProvider do
   @behaviour Threadr.ML.Generation.Provider
 
@@ -84,6 +122,33 @@ defmodule Threadr.TestExtractionProvider do
        model: Keyword.get(opts, :model, "test-llm"),
        provider: "test",
        metadata: %{}
+     }}
+  end
+end
+
+defmodule Threadr.TestExtractionOptsProvider do
+  @behaviour Threadr.ML.Extraction.Provider
+
+  alias Threadr.ML.Extraction.Result
+
+  @impl true
+  def extract(_request, opts) do
+    {:ok,
+     %Result{
+       entities: [],
+       facts: [],
+       model: Keyword.get(opts, :model, "test-llm"),
+       provider: "test-opts",
+       metadata: %{
+         "provider_name" => Keyword.get(opts, :provider_name),
+         "endpoint" => Keyword.get(opts, :endpoint),
+         "api_key" => Keyword.get(opts, :api_key),
+         "system_prompt" => Keyword.get(opts, :system_prompt),
+         "temperature" => Keyword.get(opts, :temperature),
+         "max_tokens" => Keyword.get(opts, :max_tokens),
+         "timeout" => Keyword.get(opts, :timeout),
+         "generation_provider" => inspect(Keyword.get(opts, :generation_provider))
+       }
      }}
   end
 end
