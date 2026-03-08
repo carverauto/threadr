@@ -8,6 +8,7 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
   alias Threadr.ControlPlane.Service
   alias Threadr.Events.{ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
+
   alias Threadr.TenantData.{Actor, Channel, Extraction, Ingest, Message, MessageEmbedding}
 
   setup do
@@ -322,8 +323,6 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
         ["carol"],
         DateTime.add(observed_at, 60, :second)
       )
-
-    create_embedding!(tenant.schema_name, incident_message.id, [0.4, 0.5, 0.6])
   end
 
   defp seed_temporal_semantic_data!(tenant_schema) do
