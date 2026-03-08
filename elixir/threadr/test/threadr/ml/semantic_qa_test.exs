@@ -123,6 +123,43 @@ defmodule Threadr.ML.SemanticQATest do
              )
   end
 
+  test "passes embedding endpoint and provider config through query embedding calls" do
+    tenant = create_tenant!("Semantic QA Embedding Opts")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice mentioned Bob in incident response planning."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6], "test-embedding-model")
+
+    assert {:ok, result} =
+             SemanticQA.search_messages(
+               tenant.subject_name,
+               "Who did Alice mention?",
+               embedding_provider: Threadr.TestEmbeddingOptsProvider,
+               embedding_model: "test-embedding-model",
+               embedding_endpoint: "https://embeddings.example.test",
+               embedding_api_key: "embedding-secret",
+               embedding_provider_name: "custom-embedder",
+               document_prefix: "doc:",
+               query_prefix: "query:"
+             )
+
+    assert result.query.provider == "test-opts"
+    assert result.query.metadata["input_type"] == "query"
+    assert result.query.metadata["endpoint"] == "https://embeddings.example.test"
+    assert result.query.metadata["api_key"] == "embedding-secret"
+    assert result.query.metadata["provider_name"] == "custom-embedder"
+    assert result.query.metadata["document_prefix"] == "doc:"
+    assert result.query.metadata["query_prefix"] == "query:"
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 

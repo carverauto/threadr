@@ -1,7 +1,8 @@
 defmodule ThreadrWeb.Api.V1.DossierController do
   use ThreadrWeb, :controller
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.Analysis
+  alias Threadr.TimeWindow
 
   def show(conn, %{
         "subject_name" => subject_name,
@@ -10,7 +11,7 @@ defmodule ThreadrWeb.Api.V1.DossierController do
       }) do
     with {:ok, user} <- current_user(conn),
          {:ok, result} <-
-           Service.get_tenant_dossier_for_user(user, subject_name, node_kind, node_id) do
+           Analysis.get_tenant_dossier_for_user(user, subject_name, node_kind, node_id) do
       json(conn, %{data: dossier_response_json(result)})
     else
       {:error, :unauthorized} ->
@@ -38,17 +39,18 @@ defmodule ThreadrWeb.Api.V1.DossierController do
           "node_id" => node_id
         } = params
       ) do
+    baseline_window = time_window(params["since"], params["until"])
+    comparison_window = time_window(params["compare_since"], params["compare_until"])
+
     with {:ok, user} <- current_user(conn),
          {:ok, result} <-
-           Service.compare_tenant_dossier_windows_for_user(
+           Analysis.compare_tenant_dossier_windows_for_user(
              user,
              subject_name,
              node_kind,
              node_id,
-             since: parse_datetime(params["since"]),
-             until: parse_datetime(params["until"]),
-             compare_since: parse_datetime(params["compare_since"]),
-             compare_until: parse_datetime(params["compare_until"])
+             baseline_window,
+             comparison_window
            ) do
       json(conn, %{data: dossier_compare_json(result)})
     else
@@ -104,6 +106,10 @@ defmodule ThreadrWeb.Api.V1.DossierController do
 
   defp current_user(%{assigns: %{current_user: %{id: _} = user}}), do: {:ok, user}
   defp current_user(_conn), do: {:error, :unauthorized}
+
+  defp time_window(since, until) do
+    TimeWindow.new(since: parse_datetime(since), until: parse_datetime(until))
+  end
 
   defp parse_datetime(nil), do: nil
   defp parse_datetime(""), do: nil

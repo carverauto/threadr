@@ -1,7 +1,9 @@
 defmodule ThreadrWeb.TenantQaLive.Index do
   use ThreadrWeb, :live_view
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.{Analysis, Service}
+  alias Threadr.ML.{QARequest, SummaryRequest}
+  alias Threadr.TimeWindow
 
   @default_limit 5
 
@@ -578,13 +580,10 @@ defmodule ThreadrWeb.TenantQaLive.Index do
     if question == "" do
       {:error, "Question is required"}
     else
-      Service.semantic_search_for_user(
+      Analysis.semantic_search_for_user(
         socket.assigns.current_user,
         socket.assigns.tenant.subject_name,
-        question,
-        limit: socket.assigns.limit,
-        since: parse_naive_datetime(socket.assigns.since),
-        until: parse_naive_datetime(socket.assigns.until)
+        qa_request(socket, question)
       )
       |> normalize_result_error()
     end
@@ -596,13 +595,10 @@ defmodule ThreadrWeb.TenantQaLive.Index do
     if question == "" do
       {:error, "Question is required"}
     else
-      Service.answer_tenant_question_for_user(
+      Analysis.answer_tenant_question_for_user(
         socket.assigns.current_user,
         socket.assigns.tenant.subject_name,
-        question,
-        limit: socket.assigns.limit,
-        since: parse_naive_datetime(socket.assigns.since),
-        until: parse_naive_datetime(socket.assigns.until)
+        qa_request(socket, question)
       )
       |> normalize_result_error()
     end
@@ -620,15 +616,14 @@ defmodule ThreadrWeb.TenantQaLive.Index do
         {:error, "Comparison window is required"}
 
       true ->
-        Service.compare_tenant_question_windows_for_user(
+        request = qa_request(socket, question)
+        comparison_window = compare_window(socket)
+
+        Analysis.compare_tenant_question_windows_for_user(
           socket.assigns.current_user,
           socket.assigns.tenant.subject_name,
-          question,
-          limit: socket.assigns.limit,
-          since: parse_naive_datetime(socket.assigns.since),
-          until: parse_naive_datetime(socket.assigns.until),
-          compare_since: parse_naive_datetime(socket.assigns.compare_since),
-          compare_until: parse_naive_datetime(socket.assigns.compare_until)
+          request,
+          comparison_window
         )
         |> normalize_result_error()
     end
@@ -640,11 +635,10 @@ defmodule ThreadrWeb.TenantQaLive.Index do
     if question == "" do
       {:error, "Question is required"}
     else
-      Service.answer_tenant_graph_question_for_user(
+      Analysis.answer_tenant_graph_question_for_user(
         socket.assigns.current_user,
         socket.assigns.tenant.subject_name,
-        question,
-        limit: socket.assigns.limit
+        qa_request(socket, question)
       )
       |> normalize_result_error()
     end
@@ -656,11 +650,10 @@ defmodule ThreadrWeb.TenantQaLive.Index do
     if topic == "" do
       {:error, "Question is required"}
     else
-      Service.summarize_tenant_topic_for_user(
+      Analysis.summarize_tenant_topic_for_user(
         socket.assigns.current_user,
         socket.assigns.tenant.subject_name,
-        topic,
-        limit: socket.assigns.limit
+        summary_request(socket, topic)
       )
       |> normalize_result_error()
     end
@@ -681,6 +674,29 @@ defmodule ThreadrWeb.TenantQaLive.Index do
 
   defp normalize_result_error({:error, reason}),
     do: {:error, "Semantic QA failed: #{inspect(reason)}"}
+
+  defp qa_request(socket, question) do
+    QARequest.new(question, :user,
+      limit: socket.assigns.limit,
+      since: parse_naive_datetime(socket.assigns.since),
+      until: parse_naive_datetime(socket.assigns.until)
+    )
+  end
+
+  defp compare_window(socket) do
+    TimeWindow.new(
+      since: parse_naive_datetime(socket.assigns.compare_since),
+      until: parse_naive_datetime(socket.assigns.compare_until)
+    )
+  end
+
+  defp summary_request(socket, topic) do
+    SummaryRequest.new(topic,
+      limit: socket.assigns.limit,
+      since: parse_naive_datetime(socket.assigns.since),
+      until: parse_naive_datetime(socket.assigns.until)
+    )
+  end
 
   defp normalize_limit(limit) when is_integer(limit) and limit > 0, do: min(limit, 20)
 

@@ -1,7 +1,8 @@
 defmodule Threadr.ControlPlane.BotQATest do
   use Threadr.DataCase, async: false
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.{Analysis, Service}
+  alias Threadr.ML.QARequest
   alias Threadr.TenantData.{Actor, Channel, Message, MessageEmbedding}
 
   test "answers tenant questions for bot runtimes with tenant-scoped QA" do
@@ -19,15 +20,19 @@ defmodule Threadr.ControlPlane.BotQATest do
 
     create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6], "test-embedding-model")
 
+    request =
+      QARequest.new("What did Alice and Bob talk about last week?", :bot,
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 1
+      )
+
     assert {:ok, result} =
-             Service.answer_tenant_question_for_bot(
+             Analysis.answer_tenant_question_for_bot(
                tenant.subject_name,
-               "What did Alice and Bob talk about last week?",
-               embedding_provider: Threadr.TestEmbeddingProvider,
-               embedding_model: "test-embedding-model",
-               generation_provider: Threadr.TestGenerationProvider,
-               generation_model: "test-chat",
-               limit: 1
+               request
              )
 
     assert result.mode in [:graph_rag, :semantic_qa]
@@ -60,18 +65,78 @@ defmodule Threadr.ControlPlane.BotQATest do
       "twatbot asked whether the new bot image was live."
     )
 
+    request =
+      QARequest.new("what does twatbot talk about?", :bot,
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 3
+      )
+
     assert {:ok, result} =
-             Service.answer_tenant_question_for_bot(
+             Analysis.answer_tenant_question_for_bot(
                tenant.subject_name,
-               "what does twatbot talk about?",
-               generation_provider: Threadr.TestGenerationProvider,
-               generation_model: "test-chat",
-               limit: 3
+               request
              )
 
     assert result.mode == :actor_qa
     assert result.query.actor_handle == "twatbot"
     assert result.answer.content =~ "what does twatbot talk about?"
+  end
+
+  test "routes paired-actor phrasing through generic bot QA instead of actor QA" do
+    tenant = create_tenant!("Bot QA Generic Pair")
+    actor = create_actor!(tenant.schema_name, "hyralak")
+    target_actor = create_actor!(tenant.schema_name, "sig")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    first_message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "hyralak keeps talking about deploys, IRC bots, and restart loops."
+      )
+
+    second_message =
+      create_message!(
+        tenant.schema_name,
+        target_actor.id,
+        channel.id,
+        "sig mostly talks about rollout failures, bots, and deploy recovery."
+      )
+
+    create_embedding!(
+      tenant.schema_name,
+      first_message.id,
+      [0.1, 0.2, 0.3],
+      "test-embedding-model"
+    )
+
+    create_embedding!(
+      tenant.schema_name,
+      second_message.id,
+      [0.3, 0.2, 0.1],
+      "test-embedding-model"
+    )
+
+    request =
+      QARequest.new("what do hyralak and sig mostly talk about?", :bot,
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 2
+      )
+
+    assert {:ok, result} =
+             Analysis.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               request
+             )
+
+    assert result.mode in [:graph_rag, :semantic_qa]
+    refute result.mode == :actor_qa
+    assert result.answer.content =~ "what do hyralak and sig mostly talk about?"
   end
 
   test "catches up missing embeddings before generic bot QA" do
@@ -86,15 +151,19 @@ defmodule Threadr.ControlPlane.BotQATest do
       "Alice and Bob discussed endpoint isolation last week."
     )
 
+    request =
+      QARequest.new("What did Alice and Bob talk about last week?", :bot,
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 1
+      )
+
     assert {:ok, result} =
-             Service.answer_tenant_question_for_bot(
+             Analysis.answer_tenant_question_for_bot(
                tenant.subject_name,
-               "What did Alice and Bob talk about last week?",
-               embedding_provider: Threadr.TestEmbeddingProvider,
-               embedding_model: "test-embedding-model",
-               generation_provider: Threadr.TestGenerationProvider,
-               generation_model: "test-chat",
-               limit: 1
+               request
              )
 
     assert result.mode in [:graph_rag, :semantic_qa]
@@ -104,13 +173,63 @@ defmodule Threadr.ControlPlane.BotQATest do
   test "returns insufficient context when no embeddings exist" do
     tenant = create_tenant!("Bot QA Empty")
 
+    request =
+      QARequest.new("What happened?", :bot,
+        embedding_provider: Threadr.TestEmbeddingProvider,
+        embedding_model: "test-embedding-model"
+      )
+
     assert {:error, :no_message_embeddings} =
-             Service.answer_tenant_question_for_bot(
+             Analysis.answer_tenant_question_for_bot(
                tenant.subject_name,
-               "What happened?",
-               embedding_provider: Threadr.TestEmbeddingProvider,
-               embedding_model: "test-embedding-model"
+               request
              )
+  end
+
+  test "passes embedding endpoint and provider config through catch-up embeddings" do
+    tenant = create_tenant!("Bot QA Embedding Opts")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice and Bob discussed endpoint isolation last week."
+      )
+
+    request =
+      QARequest.new("What did Alice and Bob talk about last week?", :bot,
+        embedding_provider: Threadr.TestEmbeddingOptsProvider,
+        embedding_model: "test-embedding-model",
+        embedding_endpoint: "https://embeddings.example.test",
+        embedding_api_key: "embedding-secret",
+        embedding_provider_name: "custom-embedder",
+        document_prefix: "doc:",
+        query_prefix: "query:",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat",
+        limit: 1
+      )
+
+    assert {:ok, result} =
+             Analysis.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               request
+             )
+
+    assert result.mode in [:graph_rag, :semantic_qa]
+
+    embeddings = Ash.read!(MessageEmbedding, tenant: tenant.schema_name)
+    persisted = Enum.find(embeddings, &(&1.message_id == message.id))
+    assert persisted
+    assert persisted.metadata["input_type"] == "document"
+    assert persisted.metadata["endpoint"] == "https://embeddings.example.test"
+    assert persisted.metadata["api_key"] == "embedding-secret"
+    assert persisted.metadata["provider_name"] == "custom-embedder"
+    assert persisted.metadata["document_prefix"] == "doc:"
+    assert persisted.metadata["query_prefix"] == "query:"
   end
 
   defp create_tenant!(prefix) do

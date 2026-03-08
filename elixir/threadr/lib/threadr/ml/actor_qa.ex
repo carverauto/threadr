@@ -7,8 +7,8 @@ defmodule Threadr.ML.ActorQA do
   import Ecto.Query
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{Generation, SemanticQA}
-  alias Threadr.ML.Generation.Result
+  alias Threadr.ML.{Generation, QAIntent, SemanticQA}
+  alias Threadr.ML.{GenerationProviderOpts, Generation.Result}
   alias Threadr.Repo
 
   @default_limit 8
@@ -16,57 +16,19 @@ defmodule Threadr.ML.ActorQA do
   @minimum_actor_profile_messages 3
   @minimum_targeted_messages 1
 
-  @type intent :: %{
-          kind: :talks_about | :knows_about | :says_about,
-          actor_ref: String.t(),
-          target_ref: String.t() | nil
-        }
+  @type intent :: QAIntent.t()
 
   def answer_question(tenant_subject_name, question, opts \\ [])
       when is_binary(tenant_subject_name) and is_binary(question) do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
-         {:ok, intent} <- classify_question(question) do
+         {:ok, intent} <- QAIntent.classify(question) do
       build_answer(tenant, question, intent, opts)
     end
   end
 
-  def classify_question(question) when is_binary(question) do
-    normalized = question |> String.trim() |> String.replace(~r/\s+/u, " ")
-
-    cond do
-      captures =
-          Regex.run(
-            ~r/^\s*what(?:\s+kind\s+of(?:\s+.+?)?)?\s+does\s+(.+?)\s+(?:mostly\s+)?talk\s+about[?!.]*\s*$/iu,
-            normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref] = captures
-        {:ok, %{kind: :talks_about, actor_ref: actor_ref, target_ref: nil}}
-
-      captures =
-          Regex.run(~r/^\s*what\s+do\s+you\s+know\s+about\s+(.+?)[?!.]*\s*$/iu, normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref] = captures
-        {:ok, %{kind: :knows_about, actor_ref: actor_ref, target_ref: nil}}
-
-      captures =
-          Regex.run(
-            ~r/^\s*what\s+(?:does|did|has)\s+(.+?)\s+(?:say|been\s+saying)\s+about\s+(.+?)[?!.]*\s*$/iu,
-            normalized,
-            capture: :all_but_first
-          ) ->
-        [actor_ref, target_ref] = captures
-        {:ok, %{kind: :says_about, actor_ref: actor_ref, target_ref: target_ref}}
-
-      true ->
-        {:error, :not_actor_question}
-    end
-  end
-
   defp build_answer(tenant, question, intent, opts) do
-    case resolve_actor_reference(tenant.schema_name, intent.actor_ref) do
+    case resolve_actor_reference(tenant.schema_name, intent.actor_ref, opts) do
       {:ok, actor} ->
         build_answer_with_actor(tenant, question, intent, actor, opts)
 
@@ -79,7 +41,7 @@ defmodule Threadr.ML.ActorQA do
   end
 
   defp build_answer_with_actor(tenant, question, intent, actor, opts) do
-    case resolve_target_actor(tenant.schema_name, intent) do
+    case resolve_target_actor(tenant.schema_name, intent, opts) do
       {:ok, target_actor} ->
         do_build_answer_with_actors(tenant, question, intent, actor, target_actor, opts)
 
@@ -93,9 +55,9 @@ defmodule Threadr.ML.ActorQA do
 
   defp do_build_answer_with_actors(tenant, question, intent, actor, target_actor, opts) do
     limit = actor_limit(opts)
-    stats = actor_message_stats(tenant.schema_name, actor)
+    actor_stats = actor_message_stats(tenant.schema_name, actor)
 
-    {matches, query_metadata} =
+    {matches, query_metadata, stats} =
       case intent.kind do
         :talks_about ->
           actor_messages = fetch_actor_messages(tenant.schema_name, actor, limit, opts)
@@ -103,9 +65,9 @@ defmodule Threadr.ML.ActorQA do
           {actor_messages,
            %{
              retrieval: "actor_messages",
-             actor_message_count: stats.message_count,
+             actor_message_count: actor_stats.message_count,
              actor_mention_count: 0
-           }}
+           }, actor_stats}
 
         :knows_about ->
           actor_messages = fetch_actor_messages(tenant.schema_name, actor, limit, opts)
@@ -114,9 +76,9 @@ defmodule Threadr.ML.ActorQA do
           {combine_matches(actor_messages, mention_matches, limit),
            %{
              retrieval: "actor_messages_plus_mentions",
-             actor_message_count: stats.message_count,
+             actor_message_count: actor_stats.message_count,
              actor_mention_count: mention_message_count(tenant.schema_name, actor, opts)
-           }}
+           }, actor_stats}
 
         :says_about ->
           targeted_matches =
@@ -131,12 +93,12 @@ defmodule Threadr.ML.ActorQA do
           {targeted_matches,
            %{
              retrieval: "actor_messages_about_target",
-             actor_message_count: stats.message_count,
+             actor_message_count: actor_stats.message_count,
              actor_mention_count: length(targeted_matches)
-           }}
+           }, actor_stats}
       end
 
-    if sufficient_evidence?(intent.kind, stats.message_count, matches) do
+    if sufficient_evidence?(intent.kind, stats, matches) do
       citations = build_citations(matches, tenant.schema_name)
 
       context =
@@ -176,14 +138,14 @@ defmodule Threadr.ML.ActorQA do
     end
   end
 
-  defp resolve_target_actor(_tenant_schema, %{target_ref: nil}), do: {:ok, nil}
+  defp resolve_target_actor(_tenant_schema, %{target_ref: nil}, _opts), do: {:ok, nil}
 
-  defp resolve_target_actor(tenant_schema, %{target_ref: target_ref}) do
-    resolve_actor_reference(tenant_schema, target_ref)
+  defp resolve_target_actor(tenant_schema, %{target_ref: target_ref}, opts) do
+    resolve_actor_reference(tenant_schema, target_ref, opts)
   end
 
-  defp resolve_actor_reference(tenant_schema, raw_ref) do
-    refs = actor_reference_candidates(raw_ref)
+  defp resolve_actor_reference(tenant_schema, raw_ref, opts) do
+    refs = actor_reference_candidates(raw_ref, opts)
 
     Enum.reduce_while(refs, {:error, {:actor_not_found, normalize_actor_ref(raw_ref)}}, fn ref,
                                                                                            _acc ->
@@ -401,15 +363,15 @@ defmodule Threadr.ML.ActorQA do
     |> Enum.map(&normalize_match/1)
   end
 
-  defp sufficient_evidence?(:talks_about, actor_message_count, matches) do
+  defp sufficient_evidence?(:talks_about, %{message_count: actor_message_count}, matches) do
     actor_message_count >= @minimum_actor_messages and length(matches) >= @minimum_actor_messages
   end
 
-  defp sufficient_evidence?(:knows_about, _actor_message_count, matches) do
+  defp sufficient_evidence?(:knows_about, _stats, matches) do
     length(matches) >= @minimum_actor_profile_messages
   end
 
-  defp sufficient_evidence?(:says_about, _actor_message_count, matches) do
+  defp sufficient_evidence?(:says_about, _stats, matches) do
     length(matches) >= @minimum_targeted_messages
   end
 
@@ -469,7 +431,7 @@ defmodule Threadr.ML.ActorQA do
           kind: intent.kind,
           status: "insufficient_evidence",
           actor_handle: actor.handle,
-          actor_message_count: stats.message_count,
+          actor_message_count: query_actor_message_count(stats),
           evidence_count: length(matches)
         }
         |> maybe_put_target_handle(target_actor),
@@ -508,7 +470,7 @@ defmodule Threadr.ML.ActorQA do
       [
         actor_summary_line(intent.kind, actor, target_actor),
         "Question: #{question}",
-        "Actor history: #{stats.message_count} messages across #{stats.channel_count || 0} channels#{time_range_suffix(stats)}.",
+        actor_history_line(intent.kind, actor, target_actor, stats),
         actor_retrieval_line(query_metadata)
       ]
       |> Enum.reject(&blank?/1)
@@ -530,6 +492,10 @@ defmodule Threadr.ML.ActorQA do
 
   defp actor_summary_line(:says_about, actor, target_actor),
     do: "Actor-focused QA for what #{actor.handle} said about #{target_actor.handle}."
+
+  defp actor_history_line(_kind, _actor, _target_actor, stats) do
+    "Actor history: #{stats.message_count} messages across #{stats.channel_count || 0} channels#{time_range_suffix(stats)}."
+  end
 
   defp actor_retrieval_line(%{
          retrieval: retrieval,
@@ -707,36 +673,7 @@ defmodule Threadr.ML.ActorQA do
   defp observed_day(_value), do: ~D[1970-01-01]
 
   defp generation_opts(opts) do
-    provider =
-      Keyword.get(
-        opts,
-        :generation_provider,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:generation)
-        |> Keyword.fetch!(:provider)
-      )
-
-    opts
-    |> Keyword.take([
-      :generation_model,
-      :generation_endpoint,
-      :generation_api_key,
-      :generation_system_prompt,
-      :generation_provider_name,
-      :generation_temperature,
-      :generation_max_tokens,
-      :generation_timeout
-    ])
-    |> Enum.reduce([provider: provider], fn
-      {:generation_model, value}, acc -> Keyword.put(acc, :model, value)
-      {:generation_endpoint, value}, acc -> Keyword.put(acc, :endpoint, value)
-      {:generation_api_key, value}, acc -> Keyword.put(acc, :api_key, value)
-      {:generation_system_prompt, value}, acc -> Keyword.put(acc, :system_prompt, value)
-      {:generation_provider_name, value}, acc -> Keyword.put(acc, :provider_name, value)
-      {:generation_temperature, value}, acc -> Keyword.put(acc, :temperature, value)
-      {:generation_max_tokens, value}, acc -> Keyword.put(acc, :max_tokens, value)
-      {:generation_timeout, value}, acc -> Keyword.put(acc, :timeout, value)
-    end)
+    GenerationProviderOpts.from_prefixed(opts)
   end
 
   defp static_answer(content) do
@@ -799,10 +736,17 @@ defmodule Threadr.ML.ActorQA do
     |> Enum.map(&"%#{&1}%")
   end
 
-  defp actor_reference_candidates(raw_ref) do
+  defp actor_reference_candidates(raw_ref, opts) do
     normalized = normalize_actor_ref(raw_ref)
 
-    [normalized, mention_external_id(normalized), last_token_candidate(normalized)]
+    refs =
+      if self_actor_reference?(normalized) do
+        requester_reference_candidates(opts) ++ [normalized]
+      else
+        [normalized, mention_external_id(normalized), last_token_candidate(normalized)]
+      end
+
+    refs
     |> Enum.filter(&is_binary/1)
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
@@ -832,6 +776,21 @@ defmodule Threadr.ML.ActorQA do
   defp mention_external_id(_value), do: nil
 
   defp discord_or_plain_external_id(value), do: mention_external_id(value) || value
+
+  defp requester_reference_candidates(opts) do
+    [
+      Keyword.get(opts, :requester_actor_handle),
+      Keyword.get(opts, :requester_actor_display_name),
+      Keyword.get(opts, :requester_external_id)
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&normalize_actor_ref/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp self_actor_reference?(value) do
+    String.downcase(value) in ["i", "me", "myself"]
+  end
 
   defp last_token_candidate(value) do
     value
@@ -887,6 +846,11 @@ defmodule Threadr.ML.ActorQA do
   defp format_timestamp(%DateTime{} = timestamp), do: DateTime.to_iso8601(timestamp)
   defp format_timestamp(%NaiveDateTime{} = timestamp), do: NaiveDateTime.to_iso8601(timestamp)
   defp format_timestamp(value), do: to_string(value)
+
+  defp query_actor_message_count(%{actor_message_count: actor_message_count}),
+    do: actor_message_count
+
+  defp query_actor_message_count(%{message_count: message_count}), do: message_count
 
   defp maybe_put_target_handle(query, nil), do: query
 

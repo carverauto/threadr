@@ -1,19 +1,15 @@
 defmodule ThreadrWeb.Api.V1.QaController do
   use ThreadrWeb, :controller
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.Analysis
+  alias Threadr.ML.{QARequest, SummaryRequest}
+  alias Threadr.TimeWindow
 
   def search(conn, %{"subject_name" => subject_name, "question" => question} = params) do
+    request = qa_request(question, params)
+
     with {:ok, user} <- current_user(conn),
-         {:ok, result} <-
-           Service.semantic_search_for_user(
-             user,
-             subject_name,
-             question,
-             limit: parse_limit(params["limit"]),
-             since: parse_datetime(params["since"]),
-             until: parse_datetime(params["until"])
-           ) do
+         {:ok, result} <- Analysis.semantic_search_for_user(user, subject_name, request) do
       json(conn, %{data: search_json(result)})
     else
       {:error, :unauthorized} ->
@@ -37,16 +33,10 @@ defmodule ThreadrWeb.Api.V1.QaController do
   end
 
   def answer(conn, %{"subject_name" => subject_name, "question" => question} = params) do
+    request = qa_request(question, params)
+
     with {:ok, user} <- current_user(conn),
-         {:ok, result} <-
-           Service.answer_tenant_question_for_user(
-             user,
-             subject_name,
-             question,
-             limit: parse_limit(params["limit"]),
-             since: parse_datetime(params["since"]),
-             until: parse_datetime(params["until"])
-           ) do
+         {:ok, result} <- Analysis.answer_tenant_question_for_user(user, subject_name, request) do
       json(conn, %{data: answer_json(result)})
     else
       {:error, :unauthorized} ->
@@ -70,17 +60,16 @@ defmodule ThreadrWeb.Api.V1.QaController do
   end
 
   def compare(conn, %{"subject_name" => subject_name, "question" => question} = params) do
+    request = qa_request(question, params)
+    comparison_window = comparison_window(params)
+
     with {:ok, user} <- current_user(conn),
          {:ok, result} <-
-           Service.compare_tenant_question_windows_for_user(
+           Analysis.compare_tenant_question_windows_for_user(
              user,
              subject_name,
-             question,
-             limit: parse_limit(params["limit"]),
-             since: parse_datetime(params["since"]),
-             until: parse_datetime(params["until"]),
-             compare_since: parse_datetime(params["compare_since"]),
-             compare_until: parse_datetime(params["compare_until"])
+             request,
+             comparison_window
            ) do
       json(conn, %{data: compare_json(result)})
     else
@@ -105,14 +94,11 @@ defmodule ThreadrWeb.Api.V1.QaController do
   end
 
   def graph_answer(conn, %{"subject_name" => subject_name, "question" => question} = params) do
+    request = qa_request(question, params)
+
     with {:ok, user} <- current_user(conn),
          {:ok, result} <-
-           Service.answer_tenant_graph_question_for_user(
-             user,
-             subject_name,
-             question,
-             limit: parse_limit(params["limit"])
-           ) do
+           Analysis.answer_tenant_graph_question_for_user(user, subject_name, request) do
       json(conn, %{data: graph_answer_json(result)})
     else
       {:error, :unauthorized} ->
@@ -136,14 +122,10 @@ defmodule ThreadrWeb.Api.V1.QaController do
   end
 
   def summarize(conn, %{"subject_name" => subject_name, "topic" => topic} = params) do
+    request = summary_request(topic, params)
+
     with {:ok, user} <- current_user(conn),
-         {:ok, result} <-
-           Service.summarize_tenant_topic_for_user(
-             user,
-             subject_name,
-             topic,
-             limit: parse_limit(params["limit"])
-           ) do
+         {:ok, result} <- Analysis.summarize_tenant_topic_for_user(user, subject_name, request) do
       json(conn, %{data: summary_json(result)})
     else
       {:error, :unauthorized} ->
@@ -168,6 +150,29 @@ defmodule ThreadrWeb.Api.V1.QaController do
 
   defp current_user(%{assigns: %{current_user: %{id: _} = user}}), do: {:ok, user}
   defp current_user(_conn), do: {:error, :unauthorized}
+
+  defp qa_request(question, params) do
+    QARequest.new(question, :user,
+      limit: parse_limit(params["limit"]),
+      since: parse_datetime(params["since"]),
+      until: parse_datetime(params["until"])
+    )
+  end
+
+  defp comparison_window(params) do
+    TimeWindow.new(
+      since: parse_datetime(params["compare_since"]),
+      until: parse_datetime(params["compare_until"])
+    )
+  end
+
+  defp summary_request(topic, params) do
+    SummaryRequest.new(topic,
+      limit: parse_limit(params["limit"]),
+      since: parse_datetime(params["since"]),
+      until: parse_datetime(params["until"])
+    )
+  end
 
   defp search_json(result) do
     %{

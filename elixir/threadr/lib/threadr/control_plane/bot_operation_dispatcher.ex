@@ -19,7 +19,7 @@ defmodule Threadr.ControlPlane.BotOperationDispatcher do
   end
 
   def trigger do
-    if Process.whereis(@name) do
+    if dispatcher_config().enabled and Process.whereis(@name) do
       GenServer.cast(@name, :trigger)
     else
       :ok
@@ -40,7 +40,10 @@ defmodule Threadr.ControlPlane.BotOperationDispatcher do
 
   @impl true
   def handle_cast(:trigger, state) do
-    dispatch_pending(state.batch_size, state)
+    if state.enabled do
+      dispatch_pending(state.batch_size, state)
+    end
+
     {:noreply, state}
   end
 

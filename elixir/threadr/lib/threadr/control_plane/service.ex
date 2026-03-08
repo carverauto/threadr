@@ -3,11 +3,7 @@ defmodule Threadr.ControlPlane.Service do
   Operational service layer for tenant provisioning and bot reconciliation.
   """
 
-  import Ecto.Query
-
-  alias Threadr.ML.ActorQA
-  alias Threadr.Repo
-  alias Threadr.TenantData.MessageEmbedding
+  alias Threadr.ML.RequestRuntimeOpts
 
   @manager_roles ~w(owner admin)
   @membership_roles ~w(owner admin member)
@@ -23,10 +19,10 @@ defmodule Threadr.ControlPlane.Service do
   ]
   @tenant_schema_prefix "tenant_"
   @bootstrap_password_length 24
-  @embedding_catch_up_limit 25
 
   def create_tenant(attrs, opts \\ []) do
     ash_opts = ash_opts(opts)
+    system_opts = system_ash_opts(opts)
 
     with {:ok, tenant} <-
            attrs
@@ -34,7 +30,11 @@ defmodule Threadr.ControlPlane.Service do
            |> Threadr.ControlPlane.create_tenant(ash_opts),
          {:ok, _membership} <- maybe_create_owner_membership(tenant, opts),
          {:ok, tenant} <-
-           mark_tenant_migration_succeeded(tenant, latest_tenant_migration_version(), ash_opts) do
+           mark_tenant_migration_succeeded(
+             tenant,
+             latest_tenant_migration_version(),
+             system_opts
+           ) do
       {:ok, tenant}
     end
   end
@@ -281,247 +281,6 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  def semantic_search_for_user(%{id: _user_id} = user, subject_name, question, opts \\ [])
-      when is_binary(subject_name) and is_binary(question) do
-    with {:ok, tenant, _membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         :ok <- ensure_recent_message_embeddings(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <-
-           Threadr.ML.SemanticQA.search_messages(
-             tenant.subject_name,
-             question,
-             semantic_runtime_opts(opts)
-           ) do
-      {:ok, result}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def answer_tenant_question_for_user(%{id: _user_id} = user, subject_name, question, opts \\ [])
-      when is_binary(subject_name) and is_binary(question) do
-    with {:ok, tenant, _membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <- answer_tenant_question_for_user_runtime(tenant, question, runtime_opts) do
-      {:ok, result}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def answer_tenant_question_for_bot(subject_name, question, opts \\ [])
-      when is_binary(subject_name) and is_binary(question) do
-    with {:ok, tenant} <- get_tenant_by_subject_name_system(subject_name, []),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)) do
-      answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts)
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def compare_tenant_question_windows_for_user(
-        %{id: _user_id} = user,
-        subject_name,
-        question,
-        opts \\ []
-      )
-      when is_binary(subject_name) and is_binary(question) do
-    with {:ok, tenant, _membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <-
-           Threadr.ML.SemanticQA.compare_windows(
-             tenant.subject_name,
-             question,
-             %{
-               since: Keyword.get(opts, :since),
-               until: Keyword.get(opts, :until)
-             },
-             %{
-               since: Keyword.get(opts, :compare_since),
-               until: Keyword.get(opts, :compare_until)
-             },
-             runtime_opts
-           ) do
-      {:ok, result}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def answer_tenant_graph_question_for_user(
-        %{id: _user_id} = user,
-        subject_name,
-        question,
-        opts \\ []
-      )
-      when is_binary(subject_name) and is_binary(question) do
-    with {:ok, tenant, _membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <-
-           Threadr.ML.GraphRAG.answer_question(
-             tenant.subject_name,
-             question,
-             runtime_opts
-           ) do
-      {:ok, result}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def summarize_tenant_topic_for_user(%{id: _user_id} = user, subject_name, topic, opts \\ [])
-      when is_binary(subject_name) and is_binary(topic) do
-    with {:ok, tenant, _membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, result} <-
-           Threadr.ML.GraphRAG.summarize_topic(
-             tenant.subject_name,
-             topic,
-             runtime_opts
-           ) do
-      {:ok, result}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def list_tenant_messages_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
-      when is_binary(subject_name) do
-    history_opts = history_runtime_opts(opts)
-    ash_opts = history_ash_opts(opts)
-
-    with {:ok, tenant, membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, ash_opts),
-         {:ok, listing} <-
-           Threadr.TenantData.History.list_messages(tenant.schema_name, history_opts) do
-      {:ok, Map.merge(%{tenant: tenant, membership: membership}, listing)}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def compare_tenant_history_windows_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
-      when is_binary(subject_name) do
-    history_opts = history_runtime_opts(opts)
-    ash_opts = history_ash_opts(opts)
-
-    with {:ok, tenant, membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, ash_opts),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, comparison} <-
-           Threadr.TenantData.History.compare_windows(
-             tenant.schema_name,
-             history_opts,
-             history_compare_runtime_opts(opts)
-           ),
-         {:ok, answer} <-
-           Threadr.ML.Generation.complete(
-             """
-             Compare the baseline and comparison history windows for this tenant.
-             Explain what changed in activity, participants, channels, and extracted facts using only the provided context.
-
-             #{comparison.context}
-             """,
-             runtime_opts
-           ) do
-      {:ok,
-       %{
-         tenant: tenant,
-         membership: membership,
-         comparison: comparison,
-         answer: answer
-       }}
-    else
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def get_tenant_dossier_for_user(
-        %{id: _user_id} = user,
-        subject_name,
-        node_kind,
-        node_id,
-        opts \\ []
-      )
-      when is_binary(subject_name) and is_binary(node_kind) and is_binary(node_id) do
-    with {:ok, tenant, membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, dossier} <-
-           Threadr.TenantData.GraphInspector.describe_node(node_id, node_kind, tenant.schema_name) do
-      {:ok, %{tenant: tenant, membership: membership, dossier: dossier}}
-    else
-      {:error, :not_found} -> {:error, {:resource_not_found, node_kind, node_id}}
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def compare_tenant_dossier_windows_for_user(
-        %{id: _user_id} = user,
-        subject_name,
-        node_kind,
-        node_id,
-        opts \\ []
-      )
-      when is_binary(subject_name) and is_binary(node_kind) and is_binary(node_id) do
-    with {:ok, tenant, membership} <-
-           get_user_tenant_by_subject_name(user, subject_name, semantic_ash_opts(opts)),
-         {:ok, runtime_opts} <-
-           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)),
-         {:ok, comparison} <-
-           Threadr.TenantData.GraphInspector.compare_node_windows(
-             node_id,
-             node_kind,
-             tenant.schema_name,
-             %{since: Keyword.get(opts, :since), until: Keyword.get(opts, :until)},
-             %{
-               since: Keyword.get(opts, :compare_since),
-               until: Keyword.get(opts, :compare_until)
-             }
-           ),
-         {:ok, answer} <-
-           Threadr.ML.Generation.complete(
-             """
-             Compare the baseline and comparison dossier windows for this #{node_kind}.
-             Explain what changed in relationships, activity, and extracted facts using only the provided context.
-
-             #{comparison.context}
-             """,
-             runtime_opts
-           ) do
-      {:ok,
-       %{
-         tenant: tenant,
-         membership: membership,
-         comparison: comparison,
-         answer: answer
-       }}
-    else
-      {:error, :not_found} -> {:error, {:resource_not_found, node_kind, node_id}}
-      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
-    end
-  end
-
-  def generation_runtime_opts_for_tenant_subject(subject_name, opts \\ [])
-      when is_binary(subject_name) do
-    with {:ok, tenant} <-
-           Threadr.ControlPlane.get_tenant_by_subject_name(
-             subject_name,
-             generation_ash_opts(opts)
-           ) do
-      tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts))
-    end
-  end
-
   def get_tenant_llm_config_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
       when is_binary(subject_name) do
     with {:ok, tenant, membership} <- get_user_tenant_by_subject_name(user, subject_name, opts),
@@ -688,9 +447,9 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
-  def list_user_api_keys(%{id: user_id}, opts \\ []) when is_binary(user_id) do
+  def list_user_api_keys(%{id: user_id} = user, opts \\ []) when is_binary(user_id) do
     Threadr.ControlPlane.list_api_keys(
-      Keyword.merge(actor_ash_opts(%{id: user_id}, opts),
+      Keyword.merge(actor_ash_opts(user, opts),
         query: [filter: [user_id: user_id], sort: [inserted_at: :desc]]
       )
     )
@@ -1508,142 +1267,6 @@ defmodule Threadr.ControlPlane.Service do
     )
   end
 
-  defp tenant_generation_runtime_opts(tenant, runtime_opts) do
-    with {:ok, system_config} <- fetch_system_llm_config(context: %{system: true}),
-         {:ok, tenant_config} <- fetch_tenant_llm_config(tenant.id, context: %{system: true}) do
-      resolved_opts =
-        []
-        |> merge_generation_runtime_opts(build_system_generation_runtime_opts(system_config))
-        |> merge_generation_runtime_opts(build_tenant_generation_runtime_opts(tenant_config))
-        |> Keyword.merge(runtime_opts)
-
-      {:ok, resolved_opts}
-    end
-  end
-
-  defp answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts) do
-    case ActorQA.answer_question(tenant.subject_name, question, runtime_opts) do
-      {:ok, result} ->
-        {:ok, Map.put(result, :mode, :actor_qa)}
-
-      {:error, :not_actor_question} ->
-        :ok = ensure_recent_message_embeddings(tenant, runtime_opts)
-
-        case Threadr.ML.GraphRAG.answer_question(tenant.subject_name, question, runtime_opts) do
-          {:ok, result} ->
-            {:ok, Map.put(result, :mode, :graph_rag)}
-
-          {:error, :generation_provider_not_configured} = error ->
-            error
-
-          {:error, _graph_reason} ->
-            case Threadr.ML.SemanticQA.answer_question(
-                   tenant.subject_name,
-                   question,
-                   runtime_opts
-                 ) do
-              {:ok, result} ->
-                {:ok, Map.put(result, :mode, :semantic_qa)}
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-        end
-    end
-  end
-
-  defp answer_tenant_question_for_user_runtime(tenant, question, runtime_opts) do
-    case ActorQA.answer_question(tenant.subject_name, question, runtime_opts) do
-      {:ok, result} ->
-        {:ok, Map.put(result, :mode, :actor_qa)}
-
-      {:error, :not_actor_question} ->
-        :ok = ensure_recent_message_embeddings(tenant, runtime_opts)
-
-        case Threadr.ML.SemanticQA.answer_question(tenant.subject_name, question, runtime_opts) do
-          {:ok, result} ->
-            {:ok, Map.put(result, :mode, :semantic_qa)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-    end
-  end
-
-  defp ensure_recent_message_embeddings(tenant, runtime_opts) do
-    model =
-      Keyword.get(
-        runtime_opts,
-        :embedding_model,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:embeddings)
-        |> Keyword.fetch!(:model)
-      )
-
-    provider =
-      Keyword.get(
-        runtime_opts,
-        :embedding_provider,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:embeddings)
-        |> Keyword.fetch!(:provider)
-      )
-
-    missing_messages =
-      from(m in "messages",
-        left_join: me in "message_embeddings",
-        on: me.message_id == m.id and me.model == ^model,
-        where: is_nil(me.id),
-        order_by: [desc: m.observed_at],
-        limit: ^@embedding_catch_up_limit,
-        select: %{id: m.id, body: m.body}
-      )
-      |> Repo.all(prefix: tenant.schema_name)
-
-    Enum.each(missing_messages, fn message ->
-      if is_binary(message.body) and String.trim(message.body) != "" do
-        case provider.embed_document(message.body, embedding_provider_opts(runtime_opts, model)) do
-          {:ok, embedding_result} ->
-            persist_message_embedding(tenant.schema_name, message.id, model, embedding_result)
-
-          {:error, _reason} ->
-            :ok
-        end
-      end
-    end)
-
-    :ok
-  end
-
-  defp persist_message_embedding(tenant_schema, message_id, model, embedding_result) do
-    MessageEmbedding
-    |> Ash.Changeset.for_create(
-      :create,
-      %{
-        message_id: message_id,
-        model: model,
-        dimensions: length(embedding_result.embedding),
-        embedding: embedding_result.embedding,
-        metadata: Map.get(embedding_result, :metadata, %{})
-      },
-      tenant: tenant_schema
-    )
-    |> Ash.create()
-    |> case do
-      {:ok, _embedding} -> :ok
-      {:error, _reason} -> :ok
-    end
-  end
-
-  defp embedding_provider_opts(runtime_opts, model) do
-    [model: model]
-    |> maybe_put_embedding_opt(:document_prefix, Keyword.get(runtime_opts, :document_prefix))
-    |> maybe_put_embedding_opt(:query_prefix, Keyword.get(runtime_opts, :query_prefix))
-  end
-
-  defp maybe_put_embedding_opt(opts, _key, nil), do: opts
-  defp maybe_put_embedding_opt(opts, key, value), do: Keyword.put(opts, key, value)
-
   defp build_system_generation_runtime_opts(nil), do: []
 
   defp build_system_generation_runtime_opts(config) do
@@ -1763,130 +1386,9 @@ defmodule Threadr.ControlPlane.Service do
   defp present_string?(value) when is_binary(value), do: String.trim(value) != ""
   defp present_string?(_value), do: false
 
-  defp semantic_ash_opts(opts) do
-    Keyword.drop(
-      opts,
-      [
-        :query,
-        :limit,
-        :actor_handle,
-        :channel_name,
-        :since,
-        :until,
-        :graph_message_limit,
-        :embedding_provider,
-        :embedding_model,
-        :document_prefix,
-        :query_prefix,
-        :since,
-        :until,
-        :compare_since,
-        :compare_until,
-        :generation_provider,
-        :generation_model,
-        :generation_endpoint,
-        :generation_api_key,
-        :generation_system_prompt,
-        :generation_provider_name,
-        :generation_temperature,
-        :generation_max_tokens,
-        :generation_timeout
-      ]
-    )
-  end
-
   defp semantic_runtime_opts(opts) do
-    Keyword.take(
-      opts,
-      [
-        :limit,
-        :graph_message_limit,
-        :embedding_provider,
-        :embedding_model,
-        :document_prefix,
-        :query_prefix,
-        :since,
-        :until,
-        :generation_provider,
-        :generation_model,
-        :generation_endpoint,
-        :generation_api_key,
-        :generation_system_prompt,
-        :generation_provider_name,
-        :generation_temperature,
-        :generation_max_tokens,
-        :generation_timeout
-      ]
-    )
+    RequestRuntimeOpts.take(opts, RequestRuntimeOpts.qa_keys())
   end
-
-  defp generation_ash_opts(opts) do
-    opts
-    |> system_ash_opts()
-    |> Keyword.drop([
-      :provider,
-      :provider_name,
-      :endpoint,
-      :model,
-      :api_key,
-      :system_prompt,
-      :temperature,
-      :max_tokens,
-      :timeout,
-      :generation_provider
-    ])
-    |> semantic_ash_opts()
-  end
-
-  defp history_runtime_opts(opts) do
-    Keyword.take(
-      opts,
-      [
-        :query,
-        :actor_handle,
-        :channel_name,
-        :entity_name,
-        :entity_type,
-        :fact_type,
-        :since,
-        :until,
-        :limit
-      ]
-    )
-  end
-
-  defp history_ash_opts(opts) do
-    opts
-    |> Keyword.drop([
-      :query,
-      :actor_handle,
-      :channel_name,
-      :entity_name,
-      :entity_type,
-      :fact_type,
-      :since,
-      :until,
-      :limit
-    ])
-    |> semantic_ash_opts()
-  end
-
-  defp history_compare_runtime_opts(opts) do
-    []
-    |> put_if_present(:query, Keyword.get(opts, :query))
-    |> put_if_present(:actor_handle, Keyword.get(opts, :actor_handle))
-    |> put_if_present(:channel_name, Keyword.get(opts, :channel_name))
-    |> put_if_present(:entity_name, Keyword.get(opts, :entity_name))
-    |> put_if_present(:entity_type, Keyword.get(opts, :entity_type))
-    |> put_if_present(:fact_type, Keyword.get(opts, :fact_type))
-    |> put_if_present(:since, Keyword.get(opts, :compare_since))
-    |> put_if_present(:until, Keyword.get(opts, :compare_until))
-    |> put_if_present(:limit, Keyword.get(opts, :limit))
-  end
-
-  defp put_if_present(opts, _key, nil), do: opts
-  defp put_if_present(opts, _key, ""), do: opts
-  defp put_if_present(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp actor_ash_opts(user, opts) do
     opts

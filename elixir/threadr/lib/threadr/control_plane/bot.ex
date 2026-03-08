@@ -190,7 +190,12 @@ defmodule Threadr.ControlPlane.Bot do
     end
 
     policy action_type(:read) do
-      authorize_if relates_to_actor_via([:tenant, :tenant_memberships, :user])
+      authorize_if expr(
+                     exists(
+                       Threadr.ControlPlane.TenantMembership,
+                       tenant_id == parent(tenant_id) and user_id == ^actor(:id)
+                     )
+                   )
     end
 
     policy action_type([:create, :update, :destroy]) do

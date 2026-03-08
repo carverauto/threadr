@@ -6,8 +6,8 @@ defmodule Threadr.TenantData.Extraction do
   import Ash.Expr
   require Ash.Query
 
-  alias Threadr.ControlPlane.Service
-  alias Threadr.ML.Extraction, as: MlExtraction
+  alias Threadr.ControlPlane.Analysis
+  alias Threadr.ML.{Extraction, ExtractionProviderOpts}
   alias Threadr.TenantData.{ExtractedEntity, ExtractedFact, Message}
 
   def extract_and_persist_message(
@@ -17,7 +17,7 @@ defmodule Threadr.TenantData.Extraction do
         opts \\ []
       ) do
     with {:ok, runtime_opts} <- extraction_runtime_opts(tenant_subject_name, opts),
-         {:ok, result} <- MlExtraction.extract_message(message, tenant_subject_name, runtime_opts),
+         {:ok, result} <- Extraction.extract_message(message, tenant_subject_name, runtime_opts),
          {:ok, persisted} <- persist_result(message.id, result, tenant_schema) do
       {:ok, %{result: result, persisted: persisted}}
     end
@@ -44,14 +44,14 @@ defmodule Threadr.TenantData.Extraction do
 
   defp extraction_runtime_opts(tenant_subject_name, opts) do
     with {:ok, generation_opts} <-
-           Service.generation_runtime_opts_for_tenant_subject(tenant_subject_name, opts) do
+           Analysis.generation_runtime_opts_for_tenant_subject(tenant_subject_name, opts) do
       extraction_config =
         Application.get_env(:threadr, Threadr.ML, [])
         |> Keyword.get(:extraction, [])
 
       {:ok,
        generation_opts
-       |> normalize_generation_runtime_opts()
+       |> ExtractionProviderOpts.from_generation_runtime()
        |> Keyword.merge(
          [
            provider: Keyword.get(extraction_config, :provider),
@@ -59,27 +59,13 @@ defmodule Threadr.TenantData.Extraction do
            system_prompt: Keyword.get(extraction_config, :system_prompt),
            temperature: Keyword.get(extraction_config, :temperature),
            max_tokens: Keyword.get(extraction_config, :max_tokens),
-           timeout: Keyword.get(extraction_config, :timeout),
-           generation_provider: Keyword.get(generation_opts, :generation_provider)
+           timeout: Keyword.get(extraction_config, :timeout)
          ]
          |> Enum.reject(fn {_key, value} -> is_nil(value) end)
        )
        |> Keyword.merge(opts)}
     end
   end
-
-  defp normalize_generation_runtime_opts(generation_opts) do
-    []
-    |> maybe_put(:generation_provider, Keyword.get(generation_opts, :generation_provider))
-    |> maybe_put(:provider_name, Keyword.get(generation_opts, :generation_provider_name))
-    |> maybe_put(:endpoint, Keyword.get(generation_opts, :generation_endpoint))
-    |> maybe_put(:model, Keyword.get(generation_opts, :generation_model))
-    |> maybe_put(:api_key, Keyword.get(generation_opts, :generation_api_key))
-    |> maybe_put(:timeout, Keyword.get(generation_opts, :generation_timeout))
-  end
-
-  defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp fetch_message(message_id, tenant_schema) do
     query =

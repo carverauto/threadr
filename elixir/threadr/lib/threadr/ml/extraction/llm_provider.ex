@@ -6,7 +6,7 @@ defmodule Threadr.ML.Extraction.LlmProvider do
   @behaviour Threadr.ML.Extraction.Provider
 
   alias Threadr.ML.Extraction.{Request, Result}
-  alias Threadr.ML.Generation
+  alias Threadr.ML.{ExtractionProviderOpts, Generation}
 
   @default_system_prompt """
   Extract structured intelligence from the provided chat message.
@@ -76,32 +76,19 @@ defmodule Threadr.ML.Extraction.LlmProvider do
   end
 
   defp generation_opts(opts, request) do
-    provider =
-      Keyword.get(
-        opts,
-        :generation_provider,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:generation)
-        |> Keyword.fetch!(:provider)
-      )
-
-    [
-      provider: provider,
-      provider_name: Keyword.get(opts, :provider_name),
-      endpoint: Keyword.get(opts, :endpoint),
-      model: Keyword.get(opts, :model),
-      api_key: Keyword.get(opts, :api_key),
-      system_prompt: Keyword.get(opts, :system_prompt, @default_system_prompt),
-      temperature: Keyword.get(opts, :temperature, 0.0),
-      max_tokens: Keyword.get(opts, :max_tokens, 600),
-      timeout: Keyword.get(opts, :timeout)
-    ]
-    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-    |> Keyword.put(:mode, :extraction)
-    |> Keyword.put(:context, %{
-      "tenant_subject_name" => request.tenant_subject_name,
-      "message_id" => request.message_id
-    })
+    ExtractionProviderOpts.to_generation_opts(
+      opts,
+      [
+        mode: :extraction,
+        context: %{
+          "tenant_subject_name" => request.tenant_subject_name,
+          "message_id" => request.message_id
+        }
+      ],
+      system_prompt: @default_system_prompt,
+      temperature: 0.0,
+      max_tokens: 600
+    )
   end
 
   defp parse_payload(content) when is_binary(content) do

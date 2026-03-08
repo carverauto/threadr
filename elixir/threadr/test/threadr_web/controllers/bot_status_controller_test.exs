@@ -180,7 +180,9 @@ defmodule ThreadrWeb.BotStatusControllerTest do
       |> control_plane_conn()
       |> get(~p"/api/control-plane/bot-contracts")
 
-    assert %{"data" => [contract | _rest]} = json_response(conn, 200)
+    assert %{"data" => contracts} = json_response(conn, 200)
+    contract = Enum.find(contracts, &(&1["bot_id"] == bot.id))
+    assert contract
     assert contract["bot_id"] == bot.id
     assert contract["generation"] == 1
     assert contract["deployment_name"] == bot.deployment_name
@@ -222,7 +224,7 @@ defmodule ThreadrWeb.BotStatusControllerTest do
   end
 
   defp create_user!(prefix) do
-    suffix = System.unique_integer([:positive])
+    suffix = Ecto.UUID.generate()
 
     {:ok, user} =
       ControlPlane.register_user(%{

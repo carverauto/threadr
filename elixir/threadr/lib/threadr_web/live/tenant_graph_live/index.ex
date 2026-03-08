@@ -2,6 +2,7 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
   use ThreadrWeb, :live_view
 
   alias Threadr.ControlPlane.Service
+  alias Threadr.TimeWindow
 
   @filter_labels %{
     root_cause: "Actors",
@@ -63,18 +64,19 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
 
   @impl true
   def handle_params(params, _uri, socket) do
+    baseline_window = time_window_from_params(params, socket.assigns.since, socket.assigns.until)
+
+    comparison_window =
+      compare_window_from_params(
+        params,
+        socket.assigns.compare_since,
+        socket.assigns.compare_until
+      )
+
     {:noreply,
      socket
-     |> assign(:since, normalize_blank(Map.get(params, "since", socket.assigns.since)))
-     |> assign(:until, normalize_blank(Map.get(params, "until", socket.assigns.until)))
-     |> assign(
-       :compare_since,
-       normalize_blank(Map.get(params, "compare_since", socket.assigns.compare_since))
-     )
-     |> assign(
-       :compare_until,
-       normalize_blank(Map.get(params, "compare_until", socket.assigns.compare_until))
-     )
+     |> assign_window(:since, :until, baseline_window)
+     |> assign_window(:compare_since, :compare_until, comparison_window)
      |> assign(:focus_node_kind, normalize_focus_value(Map.get(params, "node_kind")))
      |> assign(:focus_node_id, normalize_focus_value(Map.get(params, "node_id")))}
   end
@@ -148,10 +150,8 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
   def handle_event("apply_window", _params, socket) do
     params =
       %{}
-      |> put_param_if_present("since", socket.assigns.since)
-      |> put_param_if_present("until", socket.assigns.until)
-      |> put_param_if_present("compare_since", socket.assigns.compare_since)
-      |> put_param_if_present("compare_until", socket.assigns.compare_until)
+      |> Map.merge(window_params(baseline_window(socket)))
+      |> Map.merge(window_params(comparison_window(socket), :compare))
       |> put_param_if_present("node_kind", socket.assigns.focus_node_kind)
       |> put_param_if_present("node_id", socket.assigns.focus_node_id)
 
@@ -175,12 +175,12 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
           <:actions>
             <div class="flex gap-2">
               <.button navigate={
-                ~p"/control-plane/tenants/#{@tenant.subject_name}/history?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/history?#{history_link_params(assigns)}"
               }>
                 History
               </.button>
               <.button navigate={
-                ~p"/control-plane/tenants/#{@tenant.subject_name}/qa?#{%{since: @since, until: @until, compare_since: @compare_since, compare_until: @compare_until}}"
+                ~p"/control-plane/tenants/#{@tenant.subject_name}/qa?#{qa_link_params(assigns)}"
               }>
                 QA Workspace
               </.button>
@@ -286,6 +286,86 @@ defmodule ThreadrWeb.TenantGraphLive.Index do
     value
     |> to_string()
     |> String.trim()
+  end
+
+  defp baseline_window(socket) do
+    TimeWindow.new(
+      since: parse_naive_datetime(socket.assigns.since),
+      until: parse_naive_datetime(socket.assigns.until)
+    )
+  end
+
+  defp comparison_window(socket) do
+    TimeWindow.new(
+      since: parse_naive_datetime(socket.assigns.compare_since),
+      until: parse_naive_datetime(socket.assigns.compare_until)
+    )
+  end
+
+  defp time_window_from_params(params, fallback_since, fallback_until) do
+    TimeWindow.new(
+      since: parse_naive_datetime(Map.get(params, "since", fallback_since)),
+      until: parse_naive_datetime(Map.get(params, "until", fallback_until))
+    )
+  end
+
+  defp compare_window_from_params(params, fallback_since, fallback_until) do
+    TimeWindow.new(
+      since: parse_naive_datetime(Map.get(params, "compare_since", fallback_since)),
+      until: parse_naive_datetime(Map.get(params, "compare_until", fallback_until))
+    )
+  end
+
+  defp assign_window(socket, since_key, until_key, %TimeWindow{} = window) do
+    socket
+    |> assign(since_key, format_window_value(window.since))
+    |> assign(until_key, format_window_value(window.until))
+  end
+
+  defp history_link_params(assigns) do
+    %{}
+    |> Map.merge(window_params(baseline_window(%{assigns: assigns})))
+    |> Map.merge(window_params(comparison_window(%{assigns: assigns}), :compare))
+  end
+
+  defp qa_link_params(assigns), do: history_link_params(assigns)
+
+  defp window_params(%TimeWindow{} = window, prefix \\ nil) do
+    window
+    |> TimeWindow.to_map()
+    |> Enum.reduce(%{}, fn
+      {:since, nil}, acc ->
+        acc
+
+      {:until, nil}, acc ->
+        acc
+
+      {:since, value}, acc ->
+        Map.put(acc, window_param_key(prefix, :since), format_window_value(value))
+
+      {:until, value}, acc ->
+        Map.put(acc, window_param_key(prefix, :until), format_window_value(value))
+    end)
+  end
+
+  defp window_param_key(nil, :since), do: "since"
+  defp window_param_key(nil, :until), do: "until"
+  defp window_param_key(:compare, :since), do: "compare_since"
+  defp window_param_key(:compare, :until), do: "compare_until"
+
+  defp format_window_value(nil), do: ""
+  defp format_window_value(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
+  defp format_window_value(%DateTime{} = value), do: DateTime.to_iso8601(value)
+  defp format_window_value(value), do: to_string(value)
+
+  defp parse_naive_datetime(nil), do: nil
+  defp parse_naive_datetime(""), do: nil
+
+  defp parse_naive_datetime(value) when is_binary(value) do
+    case NaiveDateTime.from_iso8601(value) do
+      {:ok, datetime} -> datetime
+      _ -> nil
+    end
   end
 
   defp put_param_if_present(params, _key, value) when value in [nil, ""], do: params

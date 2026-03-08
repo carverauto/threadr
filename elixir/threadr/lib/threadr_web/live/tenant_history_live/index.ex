@@ -1,7 +1,8 @@
 defmodule ThreadrWeb.TenantHistoryLive.Index do
   use ThreadrWeb, :live_view
 
-  alias Threadr.ControlPlane.Service
+  alias Threadr.ControlPlane.{Analysis, Service}
+  alias Threadr.HistoryRequest
   alias Threadr.TenantData.LiveUpdates
 
   @default_filters %{
@@ -78,10 +79,10 @@ defmodule ThreadrWeb.TenantHistoryLive.Index do
   def handle_event("compare_windows", _params, socket) do
     filters = socket.assigns.filters
 
-    case Service.compare_tenant_history_windows_for_user(
+    case Analysis.compare_tenant_history_windows_for_user(
            socket.assigns.current_user,
            socket.assigns.tenant.subject_name,
-           history_compare_opts(filters)
+           history_request(filters)
          ) do
       {:ok, result} ->
         {:noreply, socket |> assign(:comparison_result, result) |> clear_flash()}
@@ -499,7 +500,7 @@ defmodule ThreadrWeb.TenantHistoryLive.Index do
   end
 
   defp load_history(user, subject_name, filters) do
-    case Service.list_tenant_messages_for_user(user, subject_name, history_opts(filters)) do
+    case Analysis.list_tenant_messages_for_user(user, subject_name, history_request(filters)) do
       {:ok, listing} -> {:ok, listing}
       {:error, reason} -> {:error, history_error(reason)}
     end
@@ -511,28 +512,21 @@ defmodule ThreadrWeb.TenantHistoryLive.Index do
     |> Enum.into(%{}, fn {key, value} -> {key, normalize_blank(value)} end)
   end
 
-  defp history_opts(filters) do
-    []
-    |> put_opt(:query, filters["query"])
-    |> put_opt(:actor_handle, filters["actor_handle"])
-    |> put_opt(:channel_name, filters["channel_name"])
-    |> put_opt(:entity_name, filters["entity_name"])
-    |> put_opt(:entity_type, filters["entity_type"])
-    |> put_opt(:fact_type, filters["fact_type"])
-    |> put_opt(:since, parse_naive_datetime(filters["since"]))
-    |> put_opt(:until, parse_naive_datetime(filters["until"]))
-    |> put_opt(:limit, filters["limit"])
+  defp history_request(filters) do
+    HistoryRequest.new(
+      query: filters["query"],
+      actor_handle: filters["actor_handle"],
+      channel_name: filters["channel_name"],
+      entity_name: filters["entity_name"],
+      entity_type: filters["entity_type"],
+      fact_type: filters["fact_type"],
+      since: parse_naive_datetime(filters["since"]),
+      until: parse_naive_datetime(filters["until"]),
+      compare_since: parse_naive_datetime(filters["compare_since"]),
+      compare_until: parse_naive_datetime(filters["compare_until"]),
+      limit: filters["limit"]
+    )
   end
-
-  defp history_compare_opts(filters) do
-    history_opts(filters)
-    |> put_opt(:compare_since, parse_naive_datetime(filters["compare_since"]))
-    |> put_opt(:compare_until, parse_naive_datetime(filters["compare_until"]))
-  end
-
-  defp put_opt(opts, _key, nil), do: opts
-  defp put_opt(opts, _key, ""), do: opts
-  defp put_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp normalize_blank(nil), do: ""
   defp normalize_blank(value), do: value |> to_string() |> String.trim()

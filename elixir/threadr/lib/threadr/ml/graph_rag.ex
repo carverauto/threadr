@@ -5,22 +5,27 @@ defmodule Threadr.ML.GraphRAG do
   """
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{Generation, SemanticQA}
+  alias Threadr.ML.{Generation, GenerationProviderOpts, QARequest, SemanticQA, SummaryRequest}
   alias Threadr.TenantData.Graph
 
   @default_graph_message_limit 5
 
-  def answer_question(tenant_subject_name, question, opts \\ [])
-      when is_binary(tenant_subject_name) and is_binary(question) do
-    with {:ok, retrieval} <- retrieve_context(tenant_subject_name, question, opts),
+  def answer_question(tenant_subject_name, %QARequest{} = request)
+      when is_binary(tenant_subject_name) do
+    with {:ok, retrieval} <-
+           retrieve_context(
+             tenant_subject_name,
+             request.question,
+             QARequest.to_runtime_opts(request)
+           ),
          {:ok, answer} <-
            Generation.answer_question(
-             question,
+             request.question,
              retrieval.context,
              generation_opts(
-               opts,
+               QARequest.to_runtime_opts(request),
                context: %{
-                 "question" => question,
+                 "question" => request.question,
                  "semantic_citations" => Enum.map(retrieval.semantic.citations, & &1.label),
                  "graph_citations" => Enum.map(retrieval.graph.citations, & &1.label)
                }
@@ -30,7 +35,7 @@ defmodule Threadr.ML.GraphRAG do
        %{
          tenant_subject_name: retrieval.tenant_subject_name,
          tenant_schema: retrieval.tenant_schema,
-         question: question,
+         question: request.question,
          semantic: retrieval.semantic,
          graph: retrieval.graph,
          context: retrieval.context,
@@ -39,17 +44,22 @@ defmodule Threadr.ML.GraphRAG do
     end
   end
 
-  def summarize_topic(tenant_subject_name, topic, opts \\ [])
-      when is_binary(tenant_subject_name) and is_binary(topic) do
-    with {:ok, retrieval} <- retrieve_context(tenant_subject_name, topic, opts),
-         prompt <- summary_prompt(topic, retrieval.context),
+  def summarize_topic(tenant_subject_name, %SummaryRequest{} = request)
+      when is_binary(tenant_subject_name) do
+    with {:ok, retrieval} <-
+           retrieve_context(
+             tenant_subject_name,
+             request.topic,
+             SummaryRequest.to_runtime_opts(request)
+           ),
+         prompt <- summary_prompt(request.topic, retrieval.context),
          {:ok, summary} <-
            Generation.summarize(
              prompt,
              generation_opts(
-               opts,
+               SummaryRequest.to_runtime_opts(request),
                context: %{
-                 "topic" => topic,
+                 "topic" => request.topic,
                  "semantic_citations" => Enum.map(retrieval.semantic.citations, & &1.label),
                  "graph_citations" => Enum.map(retrieval.graph.citations, & &1.label)
                },
@@ -61,7 +71,7 @@ defmodule Threadr.ML.GraphRAG do
        %{
          tenant_subject_name: retrieval.tenant_subject_name,
          tenant_schema: retrieval.tenant_schema,
-         topic: topic,
+         topic: request.topic,
          semantic: retrieval.semantic,
          graph: retrieval.graph,
          context: retrieval.context,
@@ -199,38 +209,6 @@ defmodule Threadr.ML.GraphRAG do
   end
 
   defp generation_opts(opts, extra) do
-    provider =
-      Keyword.get(
-        opts,
-        :generation_provider,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:generation)
-        |> Keyword.fetch!(:provider)
-      )
-
-    base =
-      opts
-      |> Keyword.take([
-        :generation_model,
-        :generation_endpoint,
-        :generation_api_key,
-        :generation_system_prompt,
-        :generation_provider_name,
-        :generation_temperature,
-        :generation_max_tokens,
-        :generation_timeout
-      ])
-      |> Enum.reduce([provider: provider], fn
-        {:generation_model, value}, acc -> Keyword.put(acc, :model, value)
-        {:generation_endpoint, value}, acc -> Keyword.put(acc, :endpoint, value)
-        {:generation_api_key, value}, acc -> Keyword.put(acc, :api_key, value)
-        {:generation_system_prompt, value}, acc -> Keyword.put(acc, :system_prompt, value)
-        {:generation_provider_name, value}, acc -> Keyword.put(acc, :provider_name, value)
-        {:generation_temperature, value}, acc -> Keyword.put(acc, :temperature, value)
-        {:generation_max_tokens, value}, acc -> Keyword.put(acc, :max_tokens, value)
-        {:generation_timeout, value}, acc -> Keyword.put(acc, :timeout, value)
-      end)
-
-    Keyword.merge(base, extra)
+    GenerationProviderOpts.from_prefixed(opts, extra)
   end
 end

@@ -127,7 +127,12 @@ defmodule Threadr.ControlPlane.Tenant do
     end
 
     policy action(:read) do
-      authorize_if expr(exists(tenant_memberships, user_id == ^actor(:id)))
+      authorize_if expr(
+                     exists(
+                       Threadr.ControlPlane.TenantMembership,
+                       tenant_id == parent(id) and user_id == ^actor(:id)
+                     )
+                   )
     end
 
     policy action([:update, :destroy]) do

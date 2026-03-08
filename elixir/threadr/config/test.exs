@@ -42,6 +42,12 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :threadr, Threadr.ML,
+  embeddings: [
+    provider: Threadr.ML.Embeddings.HashProvider,
+    model: "term-hash-384-v1",
+    document_prefix: "passage: ",
+    query_prefix: "query: "
+  ],
   extraction: [
     enabled: true,
     provider: Threadr.ML.Extraction.NoopProvider,
