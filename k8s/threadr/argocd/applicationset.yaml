@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: threadr
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: threadr-cnpg
+            path: k8s/threadr/cnpg
+            namespace: threadr
+            sync_wave: "-20"
+          - name: threadr-nats
+            path: k8s/threadr/nats
+            namespace: threadr
+            sync_wave: "-10"
+          - name: threadr-control-plane
+            path: k8s/threadr/overlays/control-plane/production
+            namespace: threadr
+            sync_wave: "10"
+          - name: threadr-worker
+            path: k8s/threadr/overlays/worker/production
+            namespace: threadr
+            sync_wave: "20"
+  template:
+    metadata:
+      name: "{{name}}"
+      namespace: argocd
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{sync_wave}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/carverauto/threadr.git
+        targetRevision: main
+        path: "{{path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

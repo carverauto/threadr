@@ -48,20 +48,30 @@ defmodule Threadr.ControlPlane.Smoke do
       }
       |> Service.normalize_tenant_attrs()
 
-    case ControlPlane.get_tenant_by_subject_name(attrs.subject_name, context: %{system: true}) do
+    case fetch_tenant_by_subject(attrs.subject_name) do
       {:ok, tenant} ->
         tenant
 
       {:error, _reason} ->
         case Service.create_tenant(attrs) do
-          {:ok, tenant} -> tenant
-          {:error, reason} -> raise "failed to create smoke tenant: #{inspect(reason)}"
+          {:ok, tenant} ->
+            tenant
+
+          {:error, reason} ->
+            case fetch_tenant_by_subject(attrs.subject_name) do
+              {:ok, tenant} ->
+                tenant
+
+              {:error, _lookup_reason} ->
+                raise "failed to create smoke tenant: #{inspect(reason)}"
+            end
         end
     end
   end
 
   def create_or_reuse_bot!(tenant, opts) do
     name = Keyword.get(opts, :bot_name, @default_bot_name)
+    platform = Keyword.get(opts, :platform, @default_platform)
 
     existing_bot =
       ControlPlane.list_bots(
@@ -78,17 +88,64 @@ defmodule Threadr.ControlPlane.Smoke do
         case Service.create_bot(%{
                tenant_id: tenant.id,
                name: name,
-               platform: Keyword.get(opts, :platform, @default_platform),
-               channels: [Keyword.get(opts, :channel, @default_channel)]
+               platform: platform,
+               channels: [Keyword.get(opts, :channel, @default_channel)],
+               settings: smoke_bot_settings(platform, name)
              }) do
-          {:ok, bot} -> bot
-          {:error, reason} -> raise "failed to create smoke bot: #{inspect(reason)}"
+          {:ok, bot} ->
+            bot
+
+          {:error, reason} ->
+            case fetch_existing_bot(tenant.id, name) do
+              {:ok, bot} -> bot
+              :error -> raise "failed to create smoke bot: #{inspect(reason)}"
+            end
         end
 
       bot ->
         bot
     end
   end
+
+  defp fetch_tenant_by_subject(subject_name) do
+    ControlPlane.get_tenant_by_subject_name(subject_name, context: %{system: true})
+  end
+
+  defp fetch_existing_bot(tenant_id, name) do
+    ControlPlane.list_bots(
+      context: %{system: true},
+      query: [filter: [tenant_id: tenant_id], sort: [inserted_at: :desc]]
+    )
+    |> case do
+      {:ok, bots} ->
+        case Enum.find(bots, &(&1.name == name)) do
+          nil -> :error
+          bot -> {:ok, bot}
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp smoke_bot_settings("irc", bot_name) do
+    %{
+      "env" => %{
+        "THREADR_IRC_HOST" => "irc.example.test",
+        "THREADR_IRC_NICK" => "#{bot_name}-smoke"
+      }
+    }
+  end
+
+  defp smoke_bot_settings("discord", _bot_name) do
+    %{
+      "env" => %{
+        "THREADR_DISCORD_TOKEN" => "discord-smoke-token"
+      }
+    }
+  end
+
+  defp smoke_bot_settings(_platform, _bot_name), do: %{}
 
   def drain_bot_operations! do
     case Threadr.ControlPlane.BotOperationDispatcher.process_pending_once() do
