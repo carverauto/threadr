@@ -3,40 +3,47 @@ defmodule ThreadrWeb.TenantBotLive.Index do
 
   alias Threadr.ControlPlane.BotConfig
   alias Threadr.ControlPlane.Service
+  alias ThreadrWeb.UserRoutes
 
   @default_platform "irc"
   @desired_states ~w(running stopped)
 
   @impl true
-  def mount(%{"subject_name" => subject_name}, _session, socket) do
-    with {:ok, tenant, membership} <-
-           Service.get_user_tenant_by_subject_name(socket.assigns.current_user, subject_name),
-         :ok <- Service.authorize_manager_role(membership) do
-      platform_schemas = BotConfig.platform_schemas()
-      bot_form = default_bot_form()
+  def mount(params, _session, socket) do
+    case params do
+      %{"subject_name" => subject_name} ->
+        case load_operator_workspace(socket, subject_name) do
+          {:ok, tenant, membership} ->
+            {:ok, mount_workspace(socket, tenant, membership, operator_view?: true)}
 
-      {:ok,
-       socket
-       |> assign(:tenant, tenant)
-       |> assign(:membership_role, membership.role)
-       |> assign(:desired_states, @desired_states)
-       |> assign(:bots, load_bots(socket.assigns.current_user, subject_name))
-       |> assign(:platform_schemas, platform_schemas)
-       |> assign(:bot_form, bot_form)
-       |> assign(:selected_platform_schema, Map.fetch!(platform_schemas, bot_form["platform"]))
-       |> assign(:editing_bot_id, nil)}
-    else
-      {:error, :forbidden} ->
-        {:ok,
-         socket
-         |> put_flash(:error, "You do not have permission to manage tenant bots")
-         |> push_navigate(to: ~p"/control-plane/tenants")}
+          {:error, :forbidden} ->
+            {:ok,
+             socket
+             |> put_flash(:error, "You do not have permission to manage tenant bots")
+             |> push_navigate(to: UserRoutes.home_path(socket.assigns.current_user))}
 
-      {:error, _reason} ->
-        {:ok,
-         socket
-         |> put_flash(:error, "Tenant not found")
-         |> push_navigate(to: ~p"/control-plane/tenants")}
+          {:error, _reason} ->
+            {:ok,
+             socket
+             |> put_flash(:error, "Tenant not found")
+             |> push_navigate(to: UserRoutes.home_path(socket.assigns.current_user))}
+        end
+
+      _other ->
+        if Service.operator_admin?(socket.assigns.current_user) do
+          {:ok, push_navigate(socket, to: ~p"/control-plane/tenants")}
+        else
+          case Service.ensure_personal_tenant_for_user(socket.assigns.current_user) do
+            {:ok, tenant, membership} ->
+              {:ok, mount_workspace(socket, tenant, membership, operator_view?: false)}
+
+            {:error, _reason} ->
+              {:ok,
+               socket
+               |> put_flash(:error, "Unable to open your bot workspace")
+               |> push_navigate(to: ~p"/settings/api-keys")}
+          end
+        end
     end
   end
 
@@ -138,11 +145,13 @@ defmodule ThreadrWeb.TenantBotLive.Index do
     <Layouts.app flash={@flash} current_user={@current_user}>
       <section class="space-y-6">
         <.header>
-          Tenant Bots
+          {if @operator_view?, do: "Tenant Bots", else: "My Bots"}
           <:subtitle>
-            Create, update, and retire IRC or Discord bots for {@tenant.name}.
+            {if @operator_view?,
+              do: "Create, update, and retire IRC or Discord bots for #{@tenant.name}.",
+              else: "Create, update, and retire your IRC or Discord bots."}
           </:subtitle>
-          <:actions>
+          <:actions :if={@operator_view?}>
             <div class="flex gap-2">
               <.button navigate={~p"/control-plane/tenants"}>Tenants</.button>
               <.button navigate={~p"/control-plane/tenants/#{@tenant.subject_name}/history"}>
@@ -157,7 +166,10 @@ defmodule ThreadrWeb.TenantBotLive.Index do
 
         <div class="grid gap-6 xl:grid-cols-[26rem_minmax(0,1fr)]">
           <div class="space-y-4">
-            <div class="rounded-box border border-base-300 bg-base-100 p-5">
+            <div
+              :if={@operator_view?}
+              class="rounded-box border border-base-300 bg-base-100 p-5"
+            >
               <div class="flex items-center justify-between gap-4">
                 <div>
                   <div class="text-sm text-base-content/60">Tenant</div>
@@ -173,7 +185,11 @@ defmodule ThreadrWeb.TenantBotLive.Index do
                 {if @editing_bot_id, do: "Edit Bot", else: "Create Bot"}
               </div>
               <div class="mt-2 text-sm text-base-content/70">
-                Tenant bots publish normalized chat events into JetStream and reconcile into controller-owned workload contracts.
+                {if @operator_view?,
+                  do:
+                    "Tenant bots publish normalized chat events into JetStream and reconcile into controller-owned workload contracts.",
+                  else:
+                    "Your bots publish normalized chat events into JetStream and reconcile into controller-owned workload contracts."}
               </div>
 
               <.form
@@ -360,7 +376,9 @@ defmodule ThreadrWeb.TenantBotLive.Index do
                   Bot Inventory
                 </div>
                 <div class="mt-2 text-sm text-base-content/70">
-                  Tenant-managed bot definitions and their latest desired or observed state.
+                  {if @operator_view?,
+                    do: "Tenant-managed bot definitions and their latest desired or observed state.",
+                    else: "Your bot definitions and their latest desired or observed state."}
                 </div>
               </div>
               <span class="badge badge-outline">{length(@bots)} bots</span>
@@ -490,6 +508,31 @@ defmodule ThreadrWeb.TenantBotLive.Index do
       {:ok, bots} -> bots
       {:error, _reason} -> []
     end
+  end
+
+  defp load_operator_workspace(socket, subject_name) do
+    with {:ok, tenant, membership} <-
+           Service.get_user_tenant_by_subject_name(socket.assigns.current_user, subject_name),
+         :ok <- Service.authorize_manager_role(membership) do
+      {:ok, tenant, membership}
+    end
+  end
+
+  defp mount_workspace(socket, tenant, membership, opts) do
+    operator_view? = Keyword.get(opts, :operator_view?, false)
+    platform_schemas = BotConfig.platform_schemas()
+    bot_form = default_bot_form()
+
+    socket
+    |> assign(:tenant, tenant)
+    |> assign(:membership_role, membership.role)
+    |> assign(:operator_view?, operator_view?)
+    |> assign(:desired_states, @desired_states)
+    |> assign(:bots, load_bots(socket.assigns.current_user, tenant.subject_name))
+    |> assign(:platform_schemas, platform_schemas)
+    |> assign(:bot_form, bot_form)
+    |> assign(:selected_platform_schema, Map.fetch!(platform_schemas, bot_form["platform"]))
+    |> assign(:editing_bot_id, nil)
   end
 
   defp save_bot(socket, bot_form) do

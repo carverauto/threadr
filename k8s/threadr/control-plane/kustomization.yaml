@@ -3,6 +3,7 @@ namespace: threadr
 resources:
   - namespace.yaml
   - control-plane-config.yaml
+  - bot-workload-serviceaccount.yaml
   - serviceaccount.yaml
   - service.yaml
   - ingress.yaml

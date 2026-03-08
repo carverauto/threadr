@@ -34,6 +34,10 @@ defmodule Threadr.TestIRCClient do
     GenServer.call(client, {:join, channel, key})
   end
 
+  def cmd(client, raw_cmd) do
+    GenServer.call(client, {:cmd, raw_cmd})
+  end
+
   @impl true
   def init(options) do
     {:ok,
@@ -74,5 +78,17 @@ defmodule Threadr.TestIRCClient do
   def handle_call({:join, channel, key}, _from, state) do
     send(state.test_pid, {:irc_client_join, channel, key})
     {:reply, :ok, state}
+  end
+
+  def handle_call({:cmd, raw_cmd}, _from, state) do
+    send(state.test_pid, {:irc_client_cmd, raw_cmd})
+    {:reply, :ok, state}
+  end
+end
+
+defmodule Threadr.TestDiscordApi do
+  def create_message(channel_id, options, pid) do
+    send(pid, {:discord_api_create_message, channel_id, options})
+    {:ok, %{id: "discord-reply-1"}}
   end
 end

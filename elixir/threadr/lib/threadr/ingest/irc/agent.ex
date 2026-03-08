@@ -10,6 +10,7 @@ defmodule Threadr.Ingest.IRC.Agent do
   alias ExIRC.Client
   alias ExIRC.Message
   alias Threadr.Ingest
+  alias Threadr.Ingest.BotQA
 
   @reconnect_backoff_ms 5_000
 
@@ -134,6 +135,32 @@ defmodule Threadr.Ingest.IRC.Agent do
         %Message{cmd: "PRIVMSG", nick: nick, user: user, host: host, args: [channel, body]},
         state
       ) do
+    handle_channel_message(state, nick, user, host, channel, body)
+
+    {:noreply, state}
+  end
+
+  def handle_info({:received, body, %{nick: nick, user: user, host: host}, channel}, state)
+      when is_binary(channel) do
+    handle_channel_message(state, nick, user, host, channel, body)
+
+    {:noreply, state}
+  end
+
+  def handle_info({:joined, channel}, state) do
+    Logger.info("IRC ingest joined #{channel}")
+    {:noreply, state}
+  end
+
+  def handle_info(_message, state) do
+    {:noreply, state}
+  end
+
+  defp schedule_reconnect do
+    Process.send_after(self(), :connect, @reconnect_backoff_ms)
+  end
+
+  defp handle_channel_message(state, nick, user, host, channel, body) do
     cond do
       blank?(body) ->
         :ok
@@ -155,22 +182,14 @@ defmodule Threadr.Ingest.IRC.Agent do
               "nick" => nick
             }
           })
+
+        :ok =
+          BotQA.maybe_answer_irc(state.config, state.client, state.client_module, %{
+            actor: nick,
+            body: body,
+            channel: channel
+          })
     end
-
-    {:noreply, state}
-  end
-
-  def handle_info({:joined, channel}, state) do
-    Logger.info("IRC ingest joined #{channel}")
-    {:noreply, state}
-  end
-
-  def handle_info(_message, state) do
-    {:noreply, state}
-  end
-
-  defp schedule_reconnect do
-    Process.send_after(self(), :connect, @reconnect_backoff_ms)
   end
 
   defp blank?(value) when is_binary(value), do: String.trim(value) == ""

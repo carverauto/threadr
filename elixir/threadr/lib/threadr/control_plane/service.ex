@@ -129,6 +129,18 @@ defmodule Threadr.ControlPlane.Service do
     end
   end
 
+  def ensure_personal_tenant_for_user(%{id: _user_id} = user, opts \\ []) do
+    with {:ok, memberships} <- list_user_memberships(user, opts) do
+      case Enum.find(memberships, &personal_workspace_membership?(&1, user)) do
+        %{tenant: tenant} = membership ->
+          {:ok, tenant, membership}
+
+        nil ->
+          create_personal_tenant_for_user(user, opts)
+      end
+    end
+  end
+
   def operator_admin?(%{is_operator_admin: true}), do: true
   def operator_admin?(_user), do: false
 
@@ -291,6 +303,17 @@ defmodule Threadr.ControlPlane.Service do
              runtime_opts
            ) do
       {:ok, result}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
+  def answer_tenant_question_for_bot(subject_name, question, opts \\ [])
+      when is_binary(subject_name) and is_binary(question) do
+    with {:ok, tenant} <- get_tenant_by_subject_name_system(subject_name, []),
+         {:ok, runtime_opts} <-
+           tenant_generation_runtime_opts(tenant, semantic_runtime_opts(opts)) do
+      answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts)
     else
       {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
     end
@@ -1069,6 +1092,55 @@ defmodule Threadr.ControlPlane.Service do
   def authorize_manager_role(%{role: role}) when role in @manager_roles, do: :ok
   def authorize_manager_role(_membership), do: {:error, :forbidden}
 
+  defp create_personal_tenant_for_user(user, opts) do
+    attrs = personal_tenant_attrs(user)
+
+    case create_tenant_for_user(user, attrs, opts) do
+      {:ok, _tenant} ->
+        get_user_tenant_by_subject_name(user, attrs.subject_name, opts)
+
+      {:error, reason} ->
+        case get_user_tenant_by_subject_name(user, attrs.subject_name, opts) do
+          {:ok, tenant, membership} -> {:ok, tenant, membership}
+          {:error, _lookup_reason} -> {:error, reason}
+        end
+    end
+  end
+
+  defp personal_tenant_attrs(user) do
+    slug = "user-#{user.id}"
+
+    %{
+      name: "#{personal_workspace_name(user)} Workspace",
+      slug: slug,
+      subject_name: slug,
+      schema_name: schema_name_from_slug(slug),
+      metadata: %{
+        "workspace" => "personal",
+        "owner_user_id" => user.id
+      }
+    }
+  end
+
+  defp personal_workspace_name(user) do
+    normalize_blank(fetch(user, :name)) ||
+      user
+      |> fetch(:email)
+      |> to_string()
+      |> String.split("@")
+      |> List.first()
+  end
+
+  defp personal_workspace_membership?(%{tenant: tenant} = membership, user) do
+    manager_role?(membership.role) and personal_workspace_tenant?(tenant, user)
+  end
+
+  defp personal_workspace_tenant?(tenant, user) do
+    metadata = Map.get(tenant, :metadata) || %{}
+
+    Map.get(metadata, "workspace") == "personal" and Map.get(metadata, "owner_user_id") == user.id
+  end
+
   defp normalize_membership_role(role) when role in @membership_roles, do: {:ok, role}
   defp normalize_membership_role(role) when is_binary(role), do: {:error, {:invalid_role, role}}
   defp normalize_membership_role(nil), do: {:error, {:invalid_role, nil}}
@@ -1365,6 +1437,28 @@ defmodule Threadr.ControlPlane.Service do
         |> Keyword.merge(runtime_opts)
 
       {:ok, resolved_opts}
+    end
+  end
+
+  defp answer_tenant_question_for_bot_runtime(tenant, question, runtime_opts) do
+    case Threadr.ML.GraphRAG.answer_question(tenant.subject_name, question, runtime_opts) do
+      {:ok, result} ->
+        {:ok, Map.put(result, :mode, :graph_rag)}
+
+      {:error, :no_message_embeddings} = error ->
+        error
+
+      {:error, :generation_provider_not_configured} = error ->
+        error
+
+      {:error, _graph_reason} ->
+        case Threadr.ML.SemanticQA.answer_question(tenant.subject_name, question, runtime_opts) do
+          {:ok, result} ->
+            {:ok, Map.put(result, :mode, :semantic_qa)}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 

@@ -354,12 +354,28 @@ observer_config =
 reconciler_defaults =
   Application.get_env(:threadr, Threadr.ControlPlane.KubernetesBotReconciler, [])
 
+reconciler_default_images =
+  reconciler_defaults
+  |> Keyword.get(:default_images, %{})
+  |> Map.new()
+  |> Map.merge(%{
+    "irc" =>
+      System.get_env("THREADR_IRC_BOT_DEFAULT_IMAGE") ||
+        Map.get(Keyword.get(reconciler_defaults, :default_images, %{}), "irc"),
+    "discord" =>
+      System.get_env("THREADR_DISCORD_BOT_DEFAULT_IMAGE") ||
+        Map.get(Keyword.get(reconciler_defaults, :default_images, %{}), "discord")
+  })
+  |> Enum.reject(fn {_platform, image} -> is_nil(image) or image == "" end)
+  |> Map.new()
+
 reconciler_config =
   reconciler_defaults
   |> Keyword.merge(
     default_image:
       System.get_env("THREADR_BOT_DEFAULT_IMAGE") ||
         Keyword.get(reconciler_defaults, :default_image),
+    default_images: reconciler_default_images,
     container_name:
       System.get_env("THREADR_BOT_CONTAINER_NAME") ||
         Keyword.get(reconciler_defaults, :container_name)
@@ -537,6 +553,30 @@ config :threadr, Threadr.ML,
   extraction: ml_extraction_config
 
 if config_env() == :prod do
+  db_ssl_enabled = parse_bool.(System.get_env("THREADR_DB_SSL"))
+
+  strip_query_param = fn url, param ->
+    uri = URI.parse(url)
+
+    filtered_query =
+      case uri.query do
+        nil ->
+          nil
+
+        query ->
+          query
+          |> URI.decode_query()
+          |> Map.delete(param)
+          |> case do
+            params when map_size(params) == 0 -> nil
+            params -> URI.encode_query(params)
+          end
+      end
+
+    %{uri | query: filtered_query}
+    |> URI.to_string()
+  end
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
@@ -544,9 +584,14 @@ if config_env() == :prod do
       For example: ecto://USER:PASS@HOST/DATABASE
       """
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+  database_url =
+    if db_ssl_enabled do
+      strip_query_param.(database_url, "ssl")
+    else
+      database_url
+    end
 
-  db_ssl_enabled = parse_bool.(System.get_env("THREADR_DB_SSL"))
+  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
   db_ssl_verify =
     case System.get_env("THREADR_DB_SSL_VERIFY") do
@@ -602,6 +647,7 @@ if config_env() == :prod do
 
   config :threadr, ThreadrWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
+    check_origin: ["https://#{host}", "//#{host}"],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.

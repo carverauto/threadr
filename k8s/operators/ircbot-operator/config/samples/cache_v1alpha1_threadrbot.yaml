@@ -21,7 +21,7 @@ spec:
   - "#threadr"
   workload:
     deploymentName: threadr-acme-threat-intel-irc-main
-    image: ghcr.io/carverauto/threadr-bot:latest
+    image: ghcr.io/carverauto/threadr-irc:v0.0.28
     replicas: 1
     env:
     - name: THREADR_BOT_ID

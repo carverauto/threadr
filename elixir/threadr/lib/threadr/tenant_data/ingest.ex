@@ -5,9 +5,12 @@ defmodule Threadr.TenantData.Ingest do
 
   import Ash.Expr
   require Ash.Query
+  require Logger
 
   alias Threadr.Events.{ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
+  alias Threadr.ML.Embeddings
+  alias Threadr.ML.Embeddings.InlinePublisher
 
   alias Threadr.TenantData.{
     Actor,
@@ -70,6 +73,7 @@ defmodule Threadr.TenantData.Ingest do
              mention_result.relationships ++ inferred_relationships,
              tenant_schema
            ),
+         :ok <- maybe_embed_message(message, tenant_subject_name),
          :ok <-
            maybe_extract_message(
              message,
@@ -407,6 +411,23 @@ defmodule Threadr.TenantData.Ingest do
 
   defp maybe_prepend_relationship(relationships, nil), do: relationships
   defp maybe_prepend_relationship(relationships, relationship), do: [relationship | relationships]
+
+  defp maybe_embed_message(message, tenant_subject_name) do
+    case Embeddings.generate_for_message(message, tenant_subject_name, publisher: InlinePublisher) do
+      {:ok, _envelope} ->
+        :ok
+
+      {:error, :embedding_provider_not_configured} ->
+        :ok
+
+      {:error, :blank_text} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("message embedding failed for #{tenant_subject_name}: #{inspect(reason)}")
+        :ok
+    end
+  end
 
   defp maybe_extract_message(message, tenant_subject_name, tenant_schema) do
     if Extraction.enabled?() do

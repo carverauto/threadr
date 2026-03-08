@@ -8,7 +8,7 @@ resources:
 images:
   - name: ghcr.io/carverauto/threadr-ircbot-operator
     newName: ghcr.io/carverauto/threadr-ircbot-operator
-    newTag: v0.0.11-dev-20260308-3
+    newTag: v0.0.11-dev-20260308-7
 
 patches:
   - path: manager_env_patch.yaml

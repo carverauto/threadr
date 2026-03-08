@@ -5,6 +5,7 @@ defmodule ThreadrWeb.Layouts do
   """
   use ThreadrWeb, :html
   alias Threadr.ControlPlane.Service
+  alias ThreadrWeb.UserRoutes
 
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
@@ -54,7 +55,14 @@ defmodule ThreadrWeb.Layouts do
 
             <nav class="hidden items-center gap-2 md:flex">
               <.link
-                :if={@current_user}
+                :if={@current_user && !Service.operator_admin?(@current_user)}
+                navigate={~p"/bots"}
+                class="btn btn-ghost btn-sm"
+              >
+                My Bots
+              </.link>
+              <.link
+                :if={@current_user && Service.operator_admin?(@current_user)}
                 navigate={~p"/control-plane/tenants"}
                 class="btn btn-ghost btn-sm"
               >
@@ -93,6 +101,12 @@ defmodule ThreadrWeb.Layouts do
             <.theme_toggle />
 
             <div :if={@current_user} class="flex items-center gap-2">
+              <.link
+                navigate={UserRoutes.home_path(@current_user)}
+                class="btn btn-ghost btn-sm md:hidden"
+              >
+                {if Service.operator_admin?(@current_user), do: "Tenants", else: "My Bots"}
+              </.link>
               <.link href={~p"/sign-out"} class="btn btn-outline btn-sm">
                 Sign out
               </.link>

@@ -32,95 +32,112 @@ defmodule Threadr.TenantData.Graph do
         tenant_schema
       )
       when is_list(mentioned_actors) do
-    graph_name = graph_name(tenant_schema)
+    with_age_session(fn ->
+      graph_name = graph_name(tenant_schema)
 
-    with :ok <- ensure_graph(graph_name),
-         :ok <- upsert_actor_vertex(graph_name, actor),
-         :ok <- upsert_channel_vertex(graph_name, channel),
-         :ok <- upsert_message_vertex(graph_name, message),
-         :ok <-
-           upsert_structural_edge(graph_name, "SENT", "Actor", actor.id, "Message", message.id, %{
-             "message_id" => message.id,
-             "observed_at" => iso8601(message.observed_at)
-           }),
-         :ok <-
-           upsert_structural_edge(
-             graph_name,
-             "IN_CHANNEL",
-             "Message",
-             message.id,
-             "Channel",
-             channel.id,
-             %{
-               "message_id" => message.id,
-               "observed_at" => iso8601(message.observed_at)
-             }
-           ) do
-      Enum.reduce_while(mentioned_actors, :ok, fn mentioned_actor, :ok ->
-        with :ok <- upsert_actor_vertex(graph_name, mentioned_actor),
-             :ok <-
-               upsert_structural_edge(
-                 graph_name,
-                 "MENTIONS",
-                 "Message",
-                 message.id,
-                 "Actor",
-                 mentioned_actor.id,
-                 %{
-                   "message_id" => message.id,
-                   "observed_at" => iso8601(message.observed_at)
-                 }
-               ) do
-          {:cont, :ok}
-        else
-          error -> {:halt, error}
-        end
-      end)
-    end
+      with :ok <- ensure_graph(graph_name),
+           :ok <- upsert_actor_vertex(graph_name, actor),
+           :ok <- upsert_channel_vertex(graph_name, channel),
+           :ok <- upsert_message_vertex(graph_name, message),
+           :ok <-
+             upsert_structural_edge(
+               graph_name,
+               "SENT",
+               "Actor",
+               actor.id,
+               "Message",
+               message.id,
+               %{
+                 "message_id" => message.id,
+                 "observed_at" => iso8601(message.observed_at)
+               }
+             ),
+           :ok <-
+             upsert_structural_edge(
+               graph_name,
+               "IN_CHANNEL",
+               "Message",
+               message.id,
+               "Channel",
+               channel.id,
+               %{
+                 "message_id" => message.id,
+                 "observed_at" => iso8601(message.observed_at)
+               }
+             ) do
+        Enum.reduce_while(mentioned_actors, :ok, fn mentioned_actor, :ok ->
+          with :ok <- upsert_actor_vertex(graph_name, mentioned_actor),
+               :ok <-
+                 upsert_structural_edge(
+                   graph_name,
+                   "MENTIONS",
+                   "Message",
+                   message.id,
+                   "Actor",
+                   mentioned_actor.id,
+                   %{
+                     "message_id" => message.id,
+                     "observed_at" => iso8601(message.observed_at)
+                   }
+                 ) do
+            {:cont, :ok}
+          else
+            error -> {:halt, error}
+          end
+        end)
+      end
+    end)
   end
 
   def sync_relationships(relationships, tenant_schema) when is_list(relationships) do
-    graph_name = graph_name(tenant_schema)
+    with_age_session(fn ->
+      graph_name = graph_name(tenant_schema)
 
-    with :ok <- ensure_graph(graph_name) do
-      relationships
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq_by(& &1.id)
-      |> Enum.reduce_while(:ok, fn relationship, :ok ->
-        case sync_relationship(relationship, graph_name) do
-          :ok -> {:cont, :ok}
-          error -> {:halt, error}
-        end
-      end)
-    end
+      with :ok <- ensure_graph(graph_name) do
+        relationships
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.reduce_while(:ok, fn relationship, :ok ->
+          case sync_relationship(relationship, graph_name) do
+            :ok -> {:cont, :ok}
+            error -> {:halt, error}
+          end
+        end)
+      end
+    end)
   end
 
   def infer_co_mentions(message_id, tenant_schema)
       when is_binary(message_id) and is_binary(tenant_schema) do
-    graph_name = graph_name(tenant_schema)
+    with_age_session(fn ->
+      graph_name = graph_name(tenant_schema)
 
-    with :ok <- ensure_graph(graph_name),
-         {:ok, %{rows: rows}} <- Repo.query(co_mentions_sql(graph_name), [message_id]) do
-      {:ok, Enum.map(rows, fn [from_actor_id, to_actor_id] -> {from_actor_id, to_actor_id} end)}
-    end
+      with :ok <- ensure_graph(graph_name),
+           {:ok, %{rows: rows}} <- Repo.query(co_mentions_sql(graph_name), [message_id]) do
+        {:ok, Enum.map(rows, fn [from_actor_id, to_actor_id] -> {from_actor_id, to_actor_id} end)}
+      end
+    end)
   end
 
   def neighborhood(message_ids, tenant_schema, opts \\ [])
       when is_list(message_ids) and is_binary(tenant_schema) do
-    graph_name = graph_name(tenant_schema)
-    related_limit = Keyword.get(opts, :graph_message_limit, 5)
+    with_age_session(fn ->
+      graph_name = graph_name(tenant_schema)
+      related_limit = Keyword.get(opts, :graph_message_limit, 5)
 
-    with :ok <- ensure_graph(graph_name),
-         {:ok, actors} <- fetch_neighbor_actors(graph_name, message_ids),
-         {:ok, relationships} <- fetch_actor_relationships(graph_name, actors),
-         {:ok, messages} <- fetch_related_messages(graph_name, actors, message_ids, related_limit) do
-      {:ok,
-       %{
-         actors: actors,
-         relationships: relationships,
-         messages: messages
-       }}
-    end
+      with :ok <- ensure_graph(graph_name),
+           {:ok, actors} <- fetch_neighbor_actors(graph_name, message_ids),
+           {:ok, relationships} <- fetch_actor_relationships(graph_name, actors),
+           {:ok, messages} <-
+             fetch_related_messages(graph_name, actors, message_ids, related_limit) do
+        {:ok,
+         %{
+           actors: actors,
+           relationships: relationships,
+           messages: messages
+         }}
+      end
+    end)
   end
 
   defp sync_relationship(%Relationship{} = relationship, graph_name) do
@@ -646,4 +663,21 @@ defmodule Threadr.TenantData.Graph do
 
   defp normalize_repo_result({:ok, _result}), do: :ok
   defp normalize_repo_result(error), do: error
+
+  defp with_age_session(fun) when is_function(fun, 0) do
+    case Repo.transaction(fn ->
+           with {:ok, _result} <- Repo.query("SET LOCAL search_path = ag_catalog, public") do
+             case fun.() do
+               :ok = ok -> ok
+               {:ok, _result} = ok -> ok
+               error -> Repo.rollback(error)
+             end
+           else
+             error -> Repo.rollback(error)
+           end
+         end) do
+      {:ok, result} -> result
+      {:error, error} -> error
+    end
+  end
 end

@@ -2,6 +2,7 @@ defmodule ThreadrWeb.PasswordSettingsLive.Index do
   use ThreadrWeb, :live_view
 
   alias Threadr.ControlPlane.Service
+  alias ThreadrWeb.UserRoutes
 
   @impl true
   def mount(_params, _session, socket) do
@@ -31,10 +32,10 @@ defmodule ThreadrWeb.PasswordSettingsLive.Index do
            "password_confirmation" => ""
          })
          |> put_flash(:info, "Password updated.")
-         |> push_navigate(to: ~p"/control-plane/tenants")}
+         |> push_navigate(to: UserRoutes.home_path(user))}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Password update failed: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, password_error_message(reason))}
     end
   end
 
@@ -86,7 +87,7 @@ defmodule ThreadrWeb.PasswordSettingsLive.Index do
                 <button class="btn btn-primary" type="submit">Update password</button>
                 <.link
                   :if={!@current_user.must_rotate_password}
-                  navigate={~p"/control-plane/tenants"}
+                  navigate={UserRoutes.home_path(@current_user)}
                   class="btn btn-ghost"
                 >
                   Cancel
@@ -99,4 +100,20 @@ defmodule ThreadrWeb.PasswordSettingsLive.Index do
     </Layouts.app>
     """
   end
+
+  defp password_error_message(%Ash.Error.Invalid{errors: errors}) when is_list(errors) do
+    details =
+      errors
+      |> Enum.map(&Exception.message/1)
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(", ")
+
+    if details == "" do
+      "Password update failed."
+    else
+      "Password update failed: #{details}"
+    end
+  end
+
+  defp password_error_message(_reason), do: "Password update failed."
 end

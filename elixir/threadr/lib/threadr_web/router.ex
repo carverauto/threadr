@@ -59,6 +59,7 @@ defmodule ThreadrWeb.Router do
         {ThreadrWeb.LiveUserAuth, :live_user_required},
         {ThreadrWeb.LiveUserAuth, :password_rotation_required}
       ] do
+      live("/bots", TenantBotLive.Index, :index)
       live("/control-plane/admin/llm", SystemLlmSettingsLive.Index, :index)
       live("/control-plane/tenants", TenantLive.Index, :index)
       live("/control-plane/tenants/:subject_name/bots", TenantBotLive.Index, :index)

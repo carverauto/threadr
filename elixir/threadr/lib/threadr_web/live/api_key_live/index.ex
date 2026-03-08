@@ -2,6 +2,7 @@ defmodule ThreadrWeb.ApiKeyLive.Index do
   use ThreadrWeb, :live_view
 
   alias Threadr.ControlPlane.Service
+  alias ThreadrWeb.UserRoutes
 
   @impl true
   def mount(_params, _session, socket) do
@@ -53,7 +54,9 @@ defmodule ThreadrWeb.ApiKeyLive.Index do
             Create personal API keys for tenant-facing automation. Plaintext secrets are shown once.
           </:subtitle>
           <:actions>
-            <.button navigate={~p"/control-plane/tenants"}>Tenants</.button>
+            <.button navigate={UserRoutes.home_path(@current_user)}>
+              {if Service.operator_admin?(@current_user), do: "Tenants", else: "My Bots"}
+            </.button>
           </:actions>
         </.header>
 
