@@ -19,13 +19,24 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
   end
 
   defp summary_question?(question) do
+    happened_summary_question?(question) or
+      starts_with_any?(question, [
+        "what was discussed",
+        "what were people talking about",
+        "what did people talk about",
+        "summarize the conversations",
+        "summarize what happened"
+      ])
+  end
+
+  defp happened_summary_question?(question) do
     starts_with_any?(question, [
-      "what happened",
-      "what was discussed",
-      "what were people talking about",
-      "what did people talk about",
-      "summarize the conversations",
-      "summarize what happened"
+      "what happened today",
+      "what happened yesterday",
+      "what happened last week",
+      "what happened last month",
+      "what happened in ",
+      "what happened here"
     ])
   end
 

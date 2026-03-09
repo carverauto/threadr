@@ -12,4 +12,9 @@ defmodule Threadr.ML.ConversationSummaryQAIntentTest do
     assert {:error, :not_conversation_summary_question} =
              ConversationSummaryQAIntent.classify("Who did Alice mention?")
   end
+
+  test "does not classify actor-specific happened questions as summaries" do
+    assert {:error, :not_conversation_summary_question} =
+             ConversationSummaryQAIntent.classify("What happened to leku?")
+  end
 end

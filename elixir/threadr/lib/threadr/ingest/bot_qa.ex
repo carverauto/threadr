@@ -5,12 +5,52 @@ defmodule Threadr.Ingest.BotQA do
 
   require Logger
 
+  alias Threadr.ControlPlane
   alias Threadr.ControlPlane.Analysis
-  alias Threadr.ML.{BotIntent, Generation, GenerationProviderOpts, QARequest}
+  alias Threadr.ML.{ActorReference, BotIntent, Generation, GenerationProviderOpts, QARequest}
   alias ExIRC.Commands
 
   @irc_reply_limit 350
   @discord_reply_limit 1_800
+  @question_prefixes ["who ", "what ", "when ", "where ", "why ", "how ", "which "]
+  @question_stopwords MapSet.new([
+                        "a",
+                        "about",
+                        "all",
+                        "an",
+                        "and",
+                        "did",
+                        "does",
+                        "for",
+                        "happened",
+                        "have",
+                        "has",
+                        "how",
+                        "in",
+                        "is",
+                        "it",
+                        "last",
+                        "month",
+                        "people",
+                        "said",
+                        "talk",
+                        "talked",
+                        "that",
+                        "the",
+                        "this",
+                        "to",
+                        "today",
+                        "was",
+                        "week",
+                        "were",
+                        "what",
+                        "when",
+                        "where",
+                        "who",
+                        "why",
+                        "with",
+                        "yesterday"
+                      ])
   @qa_option_keys [
     :embedding_provider,
     :embedding_model,
@@ -155,9 +195,23 @@ defmodule Threadr.Ingest.BotQA do
   defp build_discord_request(_attrs, _config), do: :ignore
 
   defp answer_request(config, request) do
-    case BotIntent.classify(request.question) do
+    case classify_request(config, request) do
       :chat -> answer_chat_request(config, request)
       :qa -> answer_qa_request(config, request)
+    end
+  end
+
+  defp classify_request(config, request) do
+    case BotIntent.classify(request.question) do
+      :qa ->
+        :qa
+
+      :chat ->
+        if actor_history_question?(config, request) do
+          :qa
+        else
+          :chat
+        end
     end
   end
 
@@ -377,6 +431,70 @@ defmodule Threadr.Ingest.BotQA do
     |> put_request_opt(:requester_actor_handle, Map.get(request, :actor))
     |> put_request_opt(:requester_external_id, stringify(Map.get(request, :actor_id)))
     |> put_request_opt(:requester_channel_name, Map.get(request, :channel))
+  end
+
+  defp actor_history_question?(config, request) do
+    starts_with_question_word?(request.question) and
+      mentions_known_actor?(config, request.question, requester_runtime_opts(request))
+  end
+
+  defp mentions_known_actor?(config, question, requester_opts) do
+    tenant_subject_name = Keyword.get(config, :tenant_subject_name)
+
+    with tenant_subject_name when is_binary(tenant_subject_name) <- tenant_subject_name,
+         {:ok, tenant} <-
+           ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}) do
+      question
+      |> actor_reference_candidates()
+      |> Enum.any?(fn candidate ->
+        match?(
+          {:ok, _actor},
+          ActorReference.resolve(tenant.schema_name, candidate, requester_opts)
+        )
+      end)
+    else
+      _ -> false
+    end
+  end
+
+  defp actor_reference_candidates(question) do
+    tokens =
+      question
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9@<_!>'-]+/u, " ")
+      |> String.split(~r/\s+/u, trim: true)
+
+    if tokens == [] do
+      []
+    else
+      max_size = min(length(tokens), 3)
+      sizes = Range.new(max_size, 1, -1)
+
+      for size <- sizes,
+          start <- 0..(length(tokens) - size),
+          candidate = tokens |> Enum.slice(start, size) |> Enum.join(" "),
+          candidate != "",
+          not MapSet.member?(@question_stopwords, candidate),
+          not all_stopwords?(candidate) do
+        candidate
+      end
+      |> Enum.uniq()
+    end
+  end
+
+  defp all_stopwords?(candidate) do
+    candidate
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.all?(&MapSet.member?(@question_stopwords, &1))
+  end
+
+  defp starts_with_question_word?(question) when is_binary(question) do
+    normalized =
+      question
+      |> String.trim()
+      |> String.downcase()
+
+    Enum.any?(@question_prefixes, &String.starts_with?(normalized, &1))
   end
 
   defp discord_api(config) do
