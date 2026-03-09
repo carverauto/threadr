@@ -4,8 +4,15 @@ defmodule Threadr.ML.ConversationSummaryQAIntentTest do
   alias Threadr.ML.ConversationSummaryQAIntent
 
   test "classifies time-bounded conversation summary questions" do
-    assert {:ok, %{kind: :time_bounded_summary}} =
+    assert {:ok, %{kind: :time_bounded_summary, time_scope: :last_week}} =
              ConversationSummaryQAIntent.classify("What happened last week?")
+  end
+
+  test "classifies recap requests for the current channel" do
+    assert {:ok, %{kind: :time_bounded_summary, time_scope: :today, scope_current_channel: true}} =
+             ConversationSummaryQAIntent.classify(
+               "can you recap the channel discussions for today please"
+             )
   end
 
   test "leaves non-summary questions alone" do

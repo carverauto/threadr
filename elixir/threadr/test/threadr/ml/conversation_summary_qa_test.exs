@@ -106,6 +106,181 @@ defmodule Threadr.ML.ConversationSummaryQATest do
              )
   end
 
+  test "infers time bounds and current-channel scope for recap questions" do
+    tenant = create_tenant!("Conversation Summary QA Recap")
+    alice = create_actor!(tenant.schema_name, "alice")
+    bob = create_actor!(tenant.schema_name, "bob")
+    carol = create_actor!(tenant.schema_name, "carol")
+    chases = create_channel!(tenant.schema_name, "#!chases")
+    ops = create_channel!(tenant.schema_name, "#ops")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    chases_request =
+      create_message!(
+        tenant.schema_name,
+        alice.id,
+        chases.id,
+        "Can you validate web-9 before deploy?",
+        "msg-chases-question",
+        now,
+        %{
+          "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    chases_response =
+      create_message!(
+        tenant.schema_name,
+        bob.id,
+        chases.id,
+        "Yes, I validated web-9 and the release looks clean.",
+        "msg-chases-answer",
+        DateTime.add(now, 120, :second),
+        %{
+          "dialogue_act" => %{"label" => "status_update", "confidence" => 0.86},
+          "reply_to_external_id" => chases_request.external_id,
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    ops_request =
+      create_message!(
+        tenant.schema_name,
+        carol.id,
+        ops.id,
+        "Can you reboot the worker after hours?",
+        "msg-ops-question",
+        DateTime.add(now, 240, :second),
+        %{
+          "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+          "conversation_external_id" => "#ops"
+        }
+      )
+
+    ops_response =
+      create_message!(
+        tenant.schema_name,
+        bob.id,
+        ops.id,
+        "Yes, I will reboot it tonight after the queue drains.",
+        "msg-ops-answer",
+        DateTime.add(now, 360, :second),
+        %{
+          "dialogue_act" => %{"label" => "status_update", "confidence" => 0.86},
+          "reply_to_external_id" => ops_request.external_id,
+          "conversation_external_id" => "#ops"
+        }
+      )
+
+    {:ok, _} = ConversationAttachment.attach_message(chases_request.id, tenant.schema_name)
+
+    {:ok, chases_inference} =
+      MessageLinkInference.infer_and_persist(chases_response.id, tenant.schema_name)
+
+    {:ok, _} =
+      ConversationAttachment.attach_message(
+        chases_response.id,
+        tenant.schema_name,
+        inference: chases_inference
+      )
+
+    {:ok, _} = ConversationAttachment.attach_message(ops_request.id, tenant.schema_name)
+
+    {:ok, ops_inference} =
+      MessageLinkInference.infer_and_persist(ops_response.id, tenant.schema_name)
+
+    {:ok, _} =
+      ConversationAttachment.attach_message(
+        ops_response.id,
+        tenant.schema_name,
+        inference: ops_inference
+      )
+
+    assert {:ok, result} =
+             ConversationSummaryQA.answer_question(
+               tenant.subject_name,
+               "can you recap the channel discussions for today please",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.kind == :time_bounded_summary
+    assert result.query.channel_name == "#!chases"
+    assert result.query.conversation_count == 1
+    assert result.context =~ "#!chases"
+    refute result.context =~ "#ops"
+    assert result.answer.content =~ "can you recap the channel discussions for today please"
+  end
+
+  test "recap questions include more than the latest five same-day conversations" do
+    tenant = create_tenant!("Conversation Summary QA Wider Recall")
+    alice = create_actor!(tenant.schema_name, "alice")
+    bob = create_actor!(tenant.schema_name, "bob")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    for index <- 1..7 do
+      request_message =
+        create_message!(
+          tenant.schema_name,
+          alice.id,
+          channel.id,
+          "Conversation #{index} request about topic #{index}",
+          "msg-recap-request-#{index}",
+          DateTime.add(now, index * 120, :second),
+          %{
+            "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+            "conversation_external_id" => "recap-#{index}"
+          }
+        )
+
+      response_message =
+        create_message!(
+          tenant.schema_name,
+          bob.id,
+          channel.id,
+          "Conversation #{index} response about topic #{index}",
+          "msg-recap-response-#{index}",
+          DateTime.add(now, index * 120 + 60, :second),
+          %{
+            "dialogue_act" => %{"label" => "status_update", "confidence" => 0.86},
+            "reply_to_external_id" => request_message.external_id,
+            "conversation_external_id" => "recap-#{index}"
+          }
+        )
+
+      create_entity!(tenant.schema_name, request_message.id, "topic", "topic-#{index}")
+      create_entity!(tenant.schema_name, response_message.id, "topic", "topic-#{index}")
+
+      {:ok, _} = ConversationAttachment.attach_message(request_message.id, tenant.schema_name)
+
+      {:ok, inference} =
+        MessageLinkInference.infer_and_persist(response_message.id, tenant.schema_name)
+
+      {:ok, _} =
+        ConversationAttachment.attach_message(
+          response_message.id,
+          tenant.schema_name,
+          inference: inference
+        )
+    end
+
+    assert {:ok, result} =
+             ConversationSummaryQA.answer_question(
+               tenant.subject_name,
+               "can you recap the channel discussions for today please",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.conversation_count == 7
+    assert length(result.conversations) == 7
+    assert length(result.citations) >= 7
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 
