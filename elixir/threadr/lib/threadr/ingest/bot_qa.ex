@@ -249,10 +249,22 @@ defmodule Threadr.Ingest.BotQA do
   end
 
   defp send_irc_reply(client, client_module, channel, content) do
-    channel
-    |> Commands.privmsg!(content)
-    |> IO.iodata_to_binary()
-    |> then(&client_module.cmd(client, &1))
+    content
+    |> List.wrap()
+    |> Enum.reduce_while(:ok, fn line, _acc ->
+      result =
+        channel
+        |> Commands.privmsg!(line)
+        |> IO.iodata_to_binary()
+        |> then(&client_module.cmd(client, &1))
+
+      case result do
+        :ok -> {:cont, :ok}
+        {:ok, _value} -> {:cont, result}
+        {:error, _reason} = error -> {:halt, error}
+        _other -> {:cont, result}
+      end
+    end)
   end
 
   defp send_discord_reply(api, channel_id, content) do
@@ -260,7 +272,7 @@ defmodule Threadr.Ingest.BotQA do
   end
 
   defp format_reply(%{platform: "irc", reply_prefix: prefix}, content) do
-    truncate("#{prefix} #{content}", @irc_reply_limit)
+    split_irc_reply_lines("#{prefix} ", content, @irc_reply_limit)
   end
 
   defp format_reply(%{platform: "discord", reply_prefix: prefix}, content) do
@@ -424,6 +436,102 @@ defmodule Threadr.Ingest.BotQA do
 
   defp truncate(content, max_length) do
     binary_part(content, 0, max_length - 3) <> "..."
+  end
+
+  defp split_irc_reply_lines(prefix, content, max_length) do
+    available_bytes = max(max_length - byte_size(prefix), 1)
+
+    content
+    |> split_content_lines(available_bytes)
+    |> Enum.map(&(prefix <> &1))
+  end
+
+  defp split_content_lines(content, max_bytes) do
+    content
+    |> String.trim()
+    |> do_split_content_lines(max_bytes, [])
+  end
+
+  defp do_split_content_lines("", _max_bytes, acc), do: Enum.reverse(acc)
+
+  defp do_split_content_lines(content, max_bytes, acc) when byte_size(content) <= max_bytes do
+    Enum.reverse([content | acc])
+  end
+
+  defp do_split_content_lines(content, max_bytes, acc) do
+    {line, rest} = take_content_line(content, max_bytes)
+    do_split_content_lines(String.trim_leading(rest), max_bytes, [line | acc])
+  end
+
+  defp take_content_line(content, max_bytes) do
+    graphemes = String.graphemes(content)
+
+    {taken, rest, _bytes} =
+      Enum.reduce_while(graphemes, {[], graphemes, 0}, fn grapheme, {taken, remaining, bytes} ->
+        next_bytes = bytes + byte_size(grapheme)
+
+        if next_bytes <= max_bytes do
+          [_current | rest] = remaining
+          {:cont, {[grapheme | taken], rest, next_bytes}}
+        else
+          {:halt, {Enum.reverse(taken), remaining, bytes}}
+        end
+      end)
+
+    case taken do
+      [] ->
+        {hard_chunk, hard_rest} = split_long_graphemes(graphemes, max_bytes)
+        {hard_chunk, hard_rest}
+
+      _ ->
+        maybe_split_at_word_boundary(taken, rest)
+    end
+  end
+
+  defp maybe_split_at_word_boundary(taken, rest) do
+    case last_whitespace_index(taken) do
+      nil ->
+        {IO.iodata_to_binary(taken), IO.iodata_to_binary(rest)}
+
+      split_index when split_index == length(taken) - 1 ->
+        {IO.iodata_to_binary(taken) |> String.trim_trailing(), IO.iodata_to_binary(rest)}
+
+      split_index ->
+        {line, overflow} = Enum.split(taken, split_index + 1)
+
+        {
+          IO.iodata_to_binary(line) |> String.trim_trailing(),
+          IO.iodata_to_binary(overflow ++ rest)
+        }
+    end
+  end
+
+  defp split_long_graphemes(graphemes, max_bytes) do
+    {line, rest, _bytes} =
+      Enum.reduce_while(graphemes, {[], graphemes, 0}, fn grapheme, {taken, remaining, bytes} ->
+        next_bytes = bytes + byte_size(grapheme)
+
+        if next_bytes <= max_bytes do
+          [_current | tail] = remaining
+          {:cont, {[grapheme | taken], tail, next_bytes}}
+        else
+          {:halt, {Enum.reverse(taken), remaining, bytes}}
+        end
+      end)
+
+    {IO.iodata_to_binary(line), IO.iodata_to_binary(rest)}
+  end
+
+  defp last_whitespace_index(graphemes) do
+    graphemes
+    |> Enum.with_index()
+    |> Enum.reduce(nil, fn {grapheme, index}, acc ->
+      if String.trim(grapheme) == "" do
+        index
+      else
+        acc
+      end
+    end)
   end
 
   defp normalize_reply_content(content) when is_binary(content) do

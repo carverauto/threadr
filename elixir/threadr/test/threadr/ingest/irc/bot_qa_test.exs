@@ -201,6 +201,69 @@ defmodule Threadr.Ingest.IRC.BotQATest do
     refute raw_cmd =~ "Context:"
   end
 
+  test "splits long IRC replies across multiple PRIVMSG lines" do
+    tenant = create_tenant!("IRC Bot QA Split Reply")
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#!chases"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      generation_provider: Threadr.TestLongGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "leku",
+        user: "leku",
+        host: "workstation.example.org",
+        args: ["#!chases", "threadr: hello"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    raw_cmd_1 = assert_receive_irc_cmd()
+    raw_cmd_2 = assert_receive_irc_cmd()
+    raw_cmd_3 = maybe_receive_irc_cmd()
+
+    refute raw_cmd_1 =~ "..."
+    refute raw_cmd_2 =~ "..."
+    assert raw_cmd_1 =~ "PRIVMSG #!chases :leku:"
+    assert raw_cmd_2 =~ "PRIVMSG #!chases :leku:"
+    assert byte_size(raw_cmd_1) < 400
+    assert byte_size(raw_cmd_2) < 400
+
+    combined_reply =
+      [raw_cmd_1, raw_cmd_2, raw_cmd_3]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(fn raw_cmd ->
+        raw_cmd
+        |> String.split("PRIVMSG #!chases :leku: ", parts: 2)
+        |> List.last()
+      end)
+      |> Enum.join(" ")
+
+    assert combined_reply =~ "terrace planters"
+    assert combined_reply =~ "cigarette butts"
+    assert combined_reply =~ "soil depth"
+  end
+
   test "answers actor topical questions constrained to today in IRC" do
     tenant = create_tenant!("IRC Bot QA Today")
     actor = create_actor!(tenant.schema_name, "farmr")
@@ -396,5 +459,18 @@ defmodule Threadr.Ingest.IRC.BotQATest do
       tenant: tenant_schema
     )
     |> Ash.create!()
+  end
+
+  defp assert_receive_irc_cmd do
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    raw_cmd
+  end
+
+  defp maybe_receive_irc_cmd do
+    receive do
+      {:irc_client_cmd, raw_cmd} -> raw_cmd
+    after
+      200 -> nil
+    end
   end
 end

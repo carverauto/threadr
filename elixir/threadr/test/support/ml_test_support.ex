@@ -83,6 +83,36 @@ defmodule Threadr.TestGenerationProvider do
   end
 end
 
+defmodule Threadr.TestLongGenerationProvider do
+  @behaviour Threadr.ML.Generation.Provider
+
+  alias Threadr.ML.Generation.Result
+
+  @impl true
+  def complete(_request, opts) do
+    content =
+      [
+        "farmr talked about terrace planters, tomatoes, peppers, basil, cucumbers, trellises, and watering.",
+        "He also talked about protecting the terrace from cigarette butts and wind.",
+        "Later he mentioned soil depth, drainage, and which produce would survive the heat.",
+        "He compared container sizes, discussed herbs for shallow beds, and talked about runoff after storms.",
+        "He ended by planning a small fence, better mulch, and shade cloth for the hottest afternoons."
+      ]
+      |> Enum.join(" ")
+
+    {:ok,
+     %Result{
+       content: content,
+       model: Keyword.get(opts, :model, "test-llm"),
+       provider: "test-long",
+       metadata: %{
+         "system_prompt" => Keyword.get(opts, :system_prompt),
+         "mode" => "chat"
+       }
+     }}
+  end
+end
+
 defmodule Threadr.TestConstraintGenerationProvider do
   @behaviour Threadr.ML.Generation.Provider
 
