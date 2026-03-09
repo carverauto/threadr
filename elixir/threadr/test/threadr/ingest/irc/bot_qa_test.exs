@@ -288,6 +288,66 @@ defmodule Threadr.Ingest.IRC.BotQATest do
     refute raw_cmd =~ "insufficient"
   end
 
+  test "routes actor-specific questions into tenant qa when the actor is known" do
+    tenant = create_tenant!("IRC Bot Known Actor QA")
+    leku = create_actor!(tenant.schema_name, "leku")
+    sig = create_actor!(tenant.schema_name, "sig")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    create_message!(
+      tenant.schema_name,
+      sig.id,
+      channel.id,
+      "leku got muted for posting too many links at once."
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "i am free again and the mute is gone now."
+    )
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#!chases"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      generation_provider: Threadr.TestConstraintGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "scaleb",
+        user: "scaleb",
+        host: "workstation.example.org",
+        args: ["#!chases", "threadr: what happened to leku?"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    assert raw_cmd =~ "PRIVMSG #!chases :scaleb:"
+    assert raw_cmd =~ "what happened to leku?"
+    refute raw_cmd =~ "insufficient context"
+  end
+
   test "splits long IRC replies across multiple PRIVMSG lines" do
     tenant = create_tenant!("IRC Bot QA Split Reply")
 
