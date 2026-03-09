@@ -20,6 +20,42 @@ defmodule Threadr.ML.ConstrainedQA do
 
   @default_limit 8
   @pair_message_window_seconds 300
+  @pair_cluster_gap_seconds 600
+  @pair_cluster_scan_limit 96
+  @stopwords MapSet.new([
+               "about",
+               "after",
+               "again",
+               "been",
+               "being",
+               "between",
+               "both",
+               "could",
+               "from",
+               "have",
+               "just",
+               "like",
+               "more",
+               "much",
+               "really",
+               "said",
+               "some",
+               "that",
+               "than",
+               "their",
+               "them",
+               "then",
+               "they",
+               "this",
+               "today",
+               "were",
+               "what",
+               "when",
+               "with",
+               "would",
+               "yeah",
+               "your"
+             ])
   @default_system_prompt """
   Extract retrieval constraints from the user's tenant QA question.
   Return strict JSON only with this shape:
@@ -157,11 +193,8 @@ defmodule Threadr.ML.ConstrainedQA do
          opts
        )
        when actors != [] and counterparts != [] do
-    matches =
-      fetch_pair_matches(tenant_schema, actors, counterparts, constraints, opts)
-
-    case matches do
-      [] ->
+    case fetch_pair_matches(tenant_schema, actors, counterparts, constraints, opts) do
+      nil ->
         if Map.get(constraints, :pair_required, false) do
           {:error, :no_constrained_matches}
         else
@@ -175,8 +208,8 @@ defmodule Threadr.ML.ConstrainedQA do
           end
         end
 
-      _ ->
-        {:ok, matches, query_metadata(constraints, "paired_actor_messages")}
+      {retrieval, matches} ->
+        {:ok, matches, query_metadata(constraints, retrieval)}
     end
   end
 
@@ -207,8 +240,14 @@ defmodule Threadr.ML.ConstrainedQA do
       fetch_shared_conversation_matches(tenant_schema, actors, counterparts, constraints, opts)
 
     case ensure_pair_presence(shared_matches, actors, counterparts) do
-      [] -> fetch_mutual_direct_matches(tenant_schema, actors, counterparts, constraints, opts)
-      matches -> matches
+      [] ->
+        case fetch_mutual_direct_matches(tenant_schema, actors, counterparts, constraints, opts) do
+          [] -> fetch_topical_pair_matches(tenant_schema, actors, counterparts, constraints, opts)
+          matches -> {"paired_actor_messages", matches}
+        end
+
+      matches ->
+        {"shared_conversation_messages", matches}
     end
   end
 
@@ -389,6 +428,234 @@ defmodule Threadr.ML.ConstrainedQA do
     |> ReconstructionQuery.all(tenant_schema)
     |> Enum.map(&normalize_match/1)
     |> Enum.uniq_by(& &1.message_id)
+  end
+
+  defp fetch_topical_pair_matches(tenant_schema, actors, counterparts, constraints, opts) do
+    limit = Keyword.get(opts, :limit, @default_limit)
+    scan_limit = max(limit * 12, @pair_cluster_scan_limit)
+    pair_actor_ids = Enum.map(actors ++ counterparts, &dump_uuid!(&1.id))
+
+    matches =
+      from(m in "messages",
+        join: a in "actors",
+        on: a.id == m.actor_id,
+        join: c in "channels",
+        on: c.id == m.channel_id,
+        where: ^channel_filter(constraints.requester_channel_name),
+        where: m.actor_id in ^pair_actor_ids,
+        order_by: [desc: m.observed_at, desc: m.id],
+        limit: ^scan_limit,
+        select: %{
+          message_id: m.id,
+          external_id: m.external_id,
+          body: m.body,
+          observed_at: m.observed_at,
+          actor_handle: a.handle,
+          actor_display_name: a.display_name,
+          channel_name: c.name
+        }
+      )
+      |> apply_time_scope(constraints.time_scope)
+      |> Repo.all(prefix: tenant_schema)
+      |> Enum.map(&normalize_match/1)
+      |> Enum.sort_by(&{&1.channel_name, &1.observed_at, &1.message_id}, :asc)
+
+    actor_handles = actor_identifiers(actors)
+    counterpart_handles = actor_identifiers(counterparts)
+
+    matches
+    |> topical_pair_clusters(actor_handles, counterpart_handles)
+    |> Enum.max_by(& &1.score, fn -> nil end)
+    |> case do
+      nil ->
+        nil
+
+      cluster ->
+        {"topical_pair_messages", Enum.take(cluster.matches, limit * 2)}
+    end
+  end
+
+  defp topical_pair_clusters(matches, actor_handles, counterpart_handles) do
+    matches
+    |> Enum.chunk_while(
+      nil,
+      fn match, cluster ->
+        current_cluster = cluster || new_pair_cluster(match)
+
+        if cluster == nil do
+          {:cont, current_cluster}
+        else
+          if pair_cluster_continuation?(current_cluster, match) do
+            {:cont, append_pair_cluster(current_cluster, match)}
+          else
+            {:cont, finalize_pair_cluster(current_cluster, actor_handles, counterpart_handles),
+             new_pair_cluster(match)}
+          end
+        end
+      end,
+      fn
+        nil ->
+          {:cont, []}
+
+        cluster ->
+          {:cont, finalize_pair_cluster(cluster, actor_handles, counterpart_handles), []}
+      end
+    )
+    |> List.flatten()
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp new_pair_cluster(match) do
+    %{
+      channel_name: match.channel_name,
+      last_observed_at: match.observed_at,
+      matches: [match]
+    }
+  end
+
+  defp append_pair_cluster(cluster, match) do
+    %{
+      cluster
+      | last_observed_at: match.observed_at,
+        matches: cluster.matches ++ [match]
+    }
+  end
+
+  defp pair_cluster_continuation?(cluster, match) do
+    cluster.channel_name == match.channel_name and
+      NaiveDateTime.diff(match.observed_at, cluster.last_observed_at, :second) <=
+        @pair_cluster_gap_seconds
+  end
+
+  defp finalize_pair_cluster(cluster, actor_handles, counterpart_handles) do
+    matches = cluster.matches
+
+    with true <- pair_cluster_has_both_sides?(matches, actor_handles, counterpart_handles),
+         {score, overlap_count, alternations, cross_mentions} when score > 0 <-
+           score_pair_cluster(matches, actor_handles, counterpart_handles) do
+      [
+        %{
+          matches: matches,
+          score: score,
+          overlap_count: overlap_count,
+          alternations: alternations,
+          cross_mentions: cross_mentions
+        }
+      ]
+    else
+      _ -> []
+    end
+  end
+
+  defp pair_cluster_has_both_sides?(matches, actor_handles, counterpart_handles) do
+    sides =
+      matches
+      |> Enum.map(&match_side(&1, actor_handles, counterpart_handles))
+      |> MapSet.new()
+
+    MapSet.member?(sides, :actor) and MapSet.member?(sides, :counterpart)
+  end
+
+  defp score_pair_cluster(matches, actor_handles, counterpart_handles) do
+    actor_messages =
+      Enum.filter(matches, &(match_side(&1, actor_handles, counterpart_handles) == :actor))
+
+    counterpart_messages =
+      Enum.filter(matches, &(match_side(&1, actor_handles, counterpart_handles) == :counterpart))
+
+    actor_tokens =
+      actor_messages
+      |> Enum.flat_map(&message_tokens(&1.body))
+      |> MapSet.new()
+
+    counterpart_tokens =
+      counterpart_messages
+      |> Enum.flat_map(&message_tokens(&1.body))
+      |> MapSet.new()
+
+    overlap_count = MapSet.intersection(actor_tokens, counterpart_tokens) |> MapSet.size()
+    alternations = pair_alternations(matches, actor_handles, counterpart_handles)
+
+    cross_mentions =
+      Enum.count(actor_messages, &mentions_any?(&1.body, counterpart_handles)) +
+        Enum.count(counterpart_messages, &mentions_any?(&1.body, actor_handles))
+
+    message_count = length(matches)
+
+    score =
+      cond do
+        overlap_count > 0 ->
+          overlap_count * 4 + alternations * 2 + min(message_count, 6) + cross_mentions
+
+        alternations >= 3 and cross_mentions > 0 ->
+          alternations * 2 + min(message_count, 4) + cross_mentions
+
+        true ->
+          0
+      end
+
+    {score, overlap_count, alternations, cross_mentions}
+  end
+
+  defp pair_alternations(matches, actor_handles, counterpart_handles) do
+    matches
+    |> Enum.map(&match_side(&1, actor_handles, counterpart_handles))
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.count(fn [left, right] ->
+      left != :unknown and right != :unknown and left != right
+    end)
+  end
+
+  defp match_side(match, actor_handles, counterpart_handles) do
+    actor_handle = normalize_identifier_token(match.actor_handle)
+    display_name = normalize_identifier_token(match.actor_display_name)
+
+    cond do
+      MapSet.member?(actor_handles, actor_handle) or MapSet.member?(actor_handles, display_name) ->
+        :actor
+
+      MapSet.member?(counterpart_handles, actor_handle) or
+          MapSet.member?(counterpart_handles, display_name) ->
+        :counterpart
+
+      true ->
+        :unknown
+    end
+  end
+
+  defp actor_identifiers(actors) do
+    actors
+    |> Enum.flat_map(fn actor -> [actor.handle, actor.display_name] end)
+    |> Enum.map(&normalize_identifier_token/1)
+    |> Enum.reject(&(&1 == ""))
+    |> MapSet.new()
+  end
+
+  defp mentions_any?(body, identifiers) when is_binary(body) do
+    downcased = String.downcase(body)
+    Enum.any?(identifiers, &(&1 != "" and String.contains?(downcased, &1)))
+  end
+
+  defp message_tokens(body) when is_binary(body) do
+    body
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, " ")
+    |> String.split()
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == "" or String.length(&1) < 3))
+    |> Enum.reject(&MapSet.member?(@stopwords, &1))
+    |> Enum.uniq()
+  end
+
+  defp message_tokens(_body), do: []
+
+  defp normalize_identifier_token(nil), do: ""
+
+  defp normalize_identifier_token(value) do
+    value
+    |> to_string()
+    |> String.trim()
+    |> String.downcase()
   end
 
   defp ensure_pair_presence(matches, actors, counterparts) do

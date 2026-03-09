@@ -3,6 +3,13 @@ defmodule Threadr.ML.BotIntent do
   Narrow intent router for direct-addressed bot turns.
   """
 
+  alias Threadr.ML.{
+    ConversationQAIntent,
+    ConversationSummaryQAIntent,
+    InteractionQAIntent,
+    QAIntent
+  }
+
   @chat_phrases [
     "hello",
     "hi",
@@ -19,33 +26,67 @@ defmodule Threadr.ML.BotIntent do
     "thanks",
     "thank you"
   ]
+  @tenant_context_markers [
+    "today",
+    "yesterday",
+    "last week",
+    "last month",
+    "this channel",
+    "in the channel",
+    "mentioned",
+    "mentions",
+    "talk about",
+    "talked about",
+    "been talking about",
+    "talk with",
+    "talk to",
+    "talks with",
+    "talks to",
+    "mostly talk",
+    "who does ",
+    "who do i ",
+    "who all",
+    "what did ",
+    "what have ",
+    "what has ",
+    "what were ",
+    "what was said",
+    "conversation",
+    "know about",
+    "said about"
+  ]
 
   @spec classify(String.t()) :: :chat | :qa
   def classify(text) when is_binary(text) do
     normalized = normalize(text)
 
     cond do
-      normalized == "" -> :qa
-      normalized in @chat_phrases -> :chat
-      String.ends_with?(normalized, "?") -> :qa
-      starts_with_question_word?(normalized) -> :qa
-      short_chat_like?(normalized) -> :chat
-      true -> :qa
+      normalized == "" ->
+        :qa
+
+      normalized in @chat_phrases ->
+        :chat
+
+      qa_intent?(normalized) ->
+        :qa
+
+      tenant_context_question?(normalized) ->
+        :qa
+
+      true ->
+        :chat
     end
   end
 
-  defp starts_with_question_word?(text) do
-    Enum.any?(
-      ["who", "what", "when", "where", "why", "how", "which", "tell me", "summarize"],
-      &String.starts_with?(text, &1 <> " ")
-    )
+  defp qa_intent?(text) do
+    match?({:ok, _}, InteractionQAIntent.classify(text)) or
+      match?({:ok, _}, ConversationQAIntent.classify(text)) or
+      match?({:ok, _}, QAIntent.classify(text)) or
+      match?({:ok, _}, ConversationSummaryQAIntent.classify(text))
   end
 
-  defp short_chat_like?(text) do
-    text
-    |> String.split(~r/\s+/u, trim: true)
-    |> length()
-    |> Kernel.<=(4)
+  defp tenant_context_question?(text) do
+    Enum.any?(@tenant_context_markers, &String.contains?(text, &1))
   end
 
   defp normalize(text) do
