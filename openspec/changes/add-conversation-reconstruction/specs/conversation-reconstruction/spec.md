@@ -1,4 +1,45 @@
 ## ADDED Requirements
+### Requirement: Threadr defines a canonical public-channel event contract for reconstruction
+Threadr SHALL define a canonical tenant-scoped public-channel event contract that preserves immutable message events, append-only context events, and normalized reconstruction metadata across supported chat platforms.
+
+#### Scenario: A message edit arrives after the original message was stored
+- **WHEN** Threadr receives a later edit or delete for an existing public message
+- **THEN** Threadr keeps the original message event immutable
+- **AND** records an append-only context event that references the affected message
+- **AND** exposes normalized metadata such as reply ids, thread ids, quoted references, and edit or delete timestamps to reconstruction logic
+
+#### Scenario: IRC and Discord produce different raw payload shapes
+- **WHEN** supported platforms provide different native fields for replies, threads, reactions, or presence changes
+- **THEN** Threadr maps the fields into a shared normalized metadata contract for reconstruction
+- **AND** retains the raw platform payload for replay and debugging without forcing reconstruction to depend on platform-specific keys
+
+### Requirement: Threadr models aliases separately from canonical actors
+Threadr SHALL model canonical actors, aliases, and alias observations as separate records and use conservative rules before changing canonical actor ownership.
+
+#### Scenario: An IRC nick changes in the middle of an active channel discussion
+- **WHEN** a user changes nick after previously posting in the same tenant
+- **THEN** Threadr records a new alias observation and any explicit nick-change context event
+- **AND** may associate the alias with an existing actor only when continuity evidence supports it
+- **AND** does not silently rewrite historical message authorship from weak similarity alone
+
+#### Scenario: A platform provides a stable account id and a mutable display name
+- **WHEN** Discord or another platform emits the same account id with a changed display name or handle
+- **THEN** Threadr can attach the new alias observation to the existing canonical actor
+- **AND** preserves the alias history as separate observed values instead of collapsing it into one mutable string
+
+### Requirement: Threadr stores reconstruction links and conversation state as evidence-bearing records
+Threadr SHALL persist message links, conversation objects, conversation memberships, and pending items as scored records with explicit evidence and versioned inference metadata.
+
+#### Scenario: A reply candidate wins by only a narrow evidence margin
+- **WHEN** Threadr links a message to a candidate parent or conversation with limited separation from competing candidates
+- **THEN** the stored record includes the winning score, candidate margin, evidence details, and inference version
+- **AND** later batch jobs can re-evaluate or detach the link without losing provenance
+
+#### Scenario: A message does not confidently belong to any conversation
+- **WHEN** no candidate conversation or parent message exceeds the configured attachment threshold
+- **THEN** Threadr may leave the message unattached or weakly linked
+- **AND** the contract does not require every message to belong to exactly one conversation
+
 ### Requirement: Threadr stores complete public-channel event history for reconstruction
 Threadr SHALL persist every observed public-channel message and relevant context event needed to reconstruct conversations, identity continuity, and downstream graph evidence.
 

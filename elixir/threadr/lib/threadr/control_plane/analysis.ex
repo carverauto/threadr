@@ -45,6 +45,20 @@ defmodule Threadr.ControlPlane.Analysis do
     end
   end
 
+  def qa_embedding_status_for_user(%{id: _user_id} = user, subject_name, opts \\ [])
+      when is_binary(subject_name) and is_list(opts) do
+    with {:ok, tenant, _membership} <-
+           Service.get_user_tenant_by_subject_name(
+             user,
+             subject_name,
+             semantic_ash_opts(opts)
+           ) do
+      {:ok, qa_embedding_status(tenant, opts)}
+    else
+      {:error, reason} -> {:error, normalize_tenant_access_error(reason, subject_name)}
+    end
+  end
+
   def answer_tenant_question_for_user(
         %{id: _user_id} = user,
         subject_name,
@@ -334,14 +348,7 @@ defmodule Threadr.ControlPlane.Analysis do
   end
 
   defp ensure_recent_message_embeddings(tenant, runtime_opts) when is_list(runtime_opts) do
-    model =
-      Keyword.get(
-        runtime_opts,
-        :embedding_model,
-        Application.get_env(:threadr, Threadr.ML, [])
-        |> Keyword.fetch!(:embeddings)
-        |> Keyword.fetch!(:model)
-      )
+    model = embedding_model(runtime_opts)
 
     provider =
       Keyword.get(
@@ -379,6 +386,51 @@ defmodule Threadr.ControlPlane.Analysis do
     end)
 
     :ok
+  end
+
+  defp qa_embedding_status(tenant, runtime_opts) do
+    model = embedding_model(runtime_opts)
+
+    total_messages =
+      from(m in "messages",
+        where: not is_nil(m.body) and m.body != "",
+        select: count(m.id)
+      )
+      |> Repo.one(prefix: tenant.schema_name)
+
+    embedded_messages =
+      from(m in "messages",
+        join: me in "message_embeddings",
+        on: me.message_id == m.id and me.model == ^model,
+        where: not is_nil(m.body) and m.body != "",
+        select: count(m.id, :distinct)
+      )
+      |> Repo.one(prefix: tenant.schema_name)
+
+    latest_unembedded_observed_at =
+      from(m in "messages",
+        left_join: me in "message_embeddings",
+        on: me.message_id == m.id and me.model == ^model,
+        where: not is_nil(m.body) and m.body != "" and is_nil(me.id),
+        order_by: [desc: m.observed_at],
+        limit: 1,
+        select: m.observed_at
+      )
+      |> Repo.one(prefix: tenant.schema_name)
+
+    missing_messages = max(total_messages - embedded_messages, 0)
+
+    %{
+      tenant_subject_name: tenant.subject_name,
+      tenant_schema: tenant.schema_name,
+      embedding_model: model,
+      total_messages: total_messages,
+      embedded_messages: embedded_messages,
+      missing_messages: missing_messages,
+      coverage_percent: coverage_percent(embedded_messages, total_messages),
+      latest_unembedded_observed_at: latest_unembedded_observed_at,
+      status: qa_embedding_status_label(total_messages, missing_messages)
+    }
   end
 
   defp persist_message_embedding(tenant_schema, message_id, model, embedding_result) do
@@ -429,6 +481,29 @@ defmodule Threadr.ControlPlane.Analysis do
         error
     end
   end
+
+  defp embedding_model(runtime_opts) do
+    Keyword.get(
+      runtime_opts,
+      :embedding_model,
+      Application.get_env(:threadr, Threadr.ML, [])
+      |> Keyword.fetch!(:embeddings)
+      |> Keyword.fetch!(:model)
+    )
+  end
+
+  defp coverage_percent(_embedded_messages, 0), do: 100
+
+  defp coverage_percent(embedded_messages, total_messages) do
+    embedded_messages
+    |> Kernel./(total_messages)
+    |> Kernel.*(100)
+    |> Float.round(1)
+  end
+
+  defp qa_embedding_status_label(0, _missing_messages), do: :empty
+  defp qa_embedding_status_label(_total_messages, 0), do: :ready
+  defp qa_embedding_status_label(_total_messages, _missing_messages), do: :catching_up
 
   defp fetch_system_llm_config(opts) do
     case Threadr.ControlPlane.get_system_llm_config("default", opts) do

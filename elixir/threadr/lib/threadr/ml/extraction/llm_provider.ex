@@ -12,6 +12,11 @@ defmodule Threadr.ML.Extraction.LlmProvider do
   Extract structured intelligence from the provided chat message.
   Return strict JSON with this shape:
   {
+    "dialogue_act": {
+      "label": "question|answer|request|status_update|greeting|acknowledgement|coordination|other",
+      "confidence": 0.0,
+      "metadata": {}
+    },
     "entities": [
       {
         "entity_type": "person|channel|topic|system|organization|artifact|time_reference|other",
@@ -47,6 +52,7 @@ defmodule Threadr.ML.Extraction.LlmProvider do
          {:ok, payload} <- parse_payload(generation_result.content) do
       {:ok,
        %Result{
+         dialogue_act: normalize_dialogue_act(Map.get(payload, "dialogue_act")),
          entities: normalize_entities(Map.get(payload, "entities", [])),
          facts: normalize_facts(Map.get(payload, "facts", [])),
          model: generation_result.model,
@@ -101,6 +107,24 @@ defmodule Threadr.ML.Extraction.LlmProvider do
       {:error, reason} -> {:error, {:invalid_extraction_json, reason, content}}
     end
   end
+
+  defp normalize_dialogue_act(dialogue_act) when is_map(dialogue_act) do
+    label = fetch(dialogue_act, "label")
+
+    if is_binary(label) and String.trim(label) != "" do
+      %{
+        label: label,
+        confidence: normalize_confidence(fetch(dialogue_act, "confidence")),
+        metadata: normalize_map(fetch(dialogue_act, "metadata"))
+      }
+    end
+  end
+
+  defp normalize_dialogue_act(label) when is_binary(label) and label != "" do
+    %{label: label, confidence: 0.5, metadata: %{}}
+  end
+
+  defp normalize_dialogue_act(_dialogue_act), do: nil
 
   defp strip_code_fences(content) do
     content

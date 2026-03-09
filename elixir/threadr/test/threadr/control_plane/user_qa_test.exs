@@ -42,6 +42,51 @@ defmodule Threadr.ControlPlane.UserQATest do
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
   end
 
+  test "reports qa embedding coverage for retained tenant messages" do
+    owner = create_user!("coverage")
+    tenant = create_tenant!("User QA Coverage", owner)
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    embedded_message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice documented the deploy checklist."
+      )
+
+    _missing_message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice still needs to verify the rollout state."
+      )
+
+    create_embedding!(
+      tenant.schema_name,
+      embedded_message.id,
+      [0.4, 0.5, 0.6],
+      "test-embedding-model"
+    )
+
+    assert {:ok, status} =
+             Analysis.qa_embedding_status_for_user(
+               owner,
+               tenant.subject_name,
+               embedding_model: "test-embedding-model"
+             )
+
+    assert status.status == :catching_up
+    assert status.embedding_model == "test-embedding-model"
+    assert status.total_messages == 2
+    assert status.embedded_messages == 1
+    assert status.missing_messages == 1
+    assert status.coverage_percent == 50.0
+    assert status.latest_unembedded_observed_at
+  end
+
   defp create_user!(prefix) do
     suffix = System.unique_integer([:positive])
 

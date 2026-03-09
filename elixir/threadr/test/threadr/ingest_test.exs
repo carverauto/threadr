@@ -56,4 +56,43 @@ defmodule Threadr.IngestTest do
     assert Ingest.extract_mentions("hi @Alice and @bob.test and @bob.test") ==
              ["Alice", "bob.test"]
   end
+
+  test "publish_context_event emits a normalized tenant-scoped envelope" do
+    observed_at = ~U[2026-03-05 23:05:00Z]
+
+    config = [
+      tenant_subject_name: "acme-threat-intel",
+      tenant_id: "tenant-123",
+      bot_id: "bot-123",
+      publisher: {Threadr.TestPublisher, self()}
+    ]
+
+    :ok =
+      Ingest.publish_context_event(config, %{
+        platform: "discord",
+        event_type: "message_edit",
+        actor: "alice",
+        channel: "12345",
+        platform_message_id: "msg-1",
+        platform_channel_id: "12345",
+        observed_at: observed_at,
+        metadata: %{"source_message_external_id" => "msg-1"},
+        raw: %{"content" => "edited body"},
+        external_id: "discord-1:edit"
+      })
+
+    assert_receive {:published_envelope, envelope}
+
+    assert envelope.id == "discord-1:edit"
+    assert envelope.type == "chat.context"
+    assert envelope.source == "threadr.ingest.discord"
+    assert envelope.subject == "threadr.tenants.acme-threat-intel.chat.message"
+    assert envelope.data.platform == "discord"
+    assert envelope.data.event_type == "message_edit"
+    assert envelope.data.actor == "alice"
+    assert envelope.data.channel == "12345"
+    assert envelope.data.observed_at == observed_at
+    assert envelope.data.metadata["source_message_external_id"] == "msg-1"
+    assert envelope.data.raw == %{"content" => "edited body"}
+  end
 end

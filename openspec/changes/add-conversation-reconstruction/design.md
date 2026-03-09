@@ -56,6 +56,193 @@ The change introduces a middle layer:
 - `MessageLink`: scored edges such as `RESPONDS_TO`, `REFERENCES`, or `SAME_TOPIC_AS`
 - `ConversationMembership`: scored message-to-conversation and actor-to-conversation participation
 
+## Contract Definitions
+
+### Canonical public-channel event contract
+The first implementation should extend the current tenant-scoped `Message`, `Actor`, and `Channel` model rather than introduce a separate opaque event store first. The reconstruction contract is defined by immutable message rows plus append-only context records and richer normalized metadata.
+
+#### Message event contract
+Every persisted public-channel message event should expose:
+- tenant scope, platform, channel, and observed timestamp
+- stable platform event identifiers:
+  `external_id`, platform message id, platform reply id, platform thread id, and platform conversation id when available
+- actor-at-observation-time fields:
+  canonical actor id, observed handle, observed display name, and platform account id if available
+- immutable content fields:
+  raw body, normalized body, attachments, embeds, links, quoted text, mentions, and raw provider payload
+- event-shape metadata:
+  source subject, ingest correlation id, edit tombstone pointer, delete tombstone pointer, and reaction summary
+- enrichment references:
+  extraction id, embedding model ids, dialogue-act label, and reconstruction version
+
+The `Message` row remains immutable for original authorship and observed body. Later edits or deletes are represented by append-only context records that reference the original message event.
+
+#### Context event contract
+Threadr should store non-message context events as first-class records with:
+- `event_type`
+- tenant scope
+- platform
+- channel or room identifier when applicable
+- actor id or alias observation id when applicable
+- observed timestamp
+- external platform event id
+- raw payload
+- normalized metadata map
+
+The initial supported `event_type` set should include:
+- `nick_change`
+- `join`
+- `part`
+- `quit`
+- `topic_change`
+- `message_edit`
+- `message_delete`
+- `reaction_add`
+- `reaction_remove`
+- `thread_state`
+- `presence_snapshot`
+
+Each context event must reference the affected message, alias, actor, or channel when that relation exists, but it must not rewrite prior message rows in place.
+
+#### Normalized metadata contract
+Normalized metadata should be stable across IRC and Discord even when the raw payloads differ. The first-pass normalized keys should include:
+- `reply_to_external_id`
+- `thread_external_id`
+- `conversation_external_id`
+- `quoted_external_ids`
+- `attachment_refs`
+- `link_refs`
+- `reaction_summary`
+- `mentioned_handles`
+- `mentioned_actor_ids`
+- `observed_handle`
+- `observed_display_name`
+- `platform_account_id`
+- `edited_at`
+- `deleted_at`
+- `presence_state`
+
+Platform-specific extras can remain in the raw payload, but reconstruction logic should depend on normalized keys where possible.
+
+### Actor, alias, and alias-observation contract
+The current `Actor` resource should remain the canonical tenant-scoped identity record. Conversation reconstruction adds two new concepts around it.
+
+#### Alias contract
+`Alias` represents a platform-scoped handle or display identity string, not a durable person assertion. An alias record should include:
+- tenant scope
+- platform
+- alias value
+- normalized alias value
+- alias kind:
+  `handle`, `display_name`, `thread_display_name`, `system_name`
+- first observed timestamp
+- last observed timestamp
+- status:
+  `active`, `historical`, `suppressed`
+
+Alias rows may optionally point at a canonical actor, but the alias itself is not proof that the actor identity is correct forever.
+
+#### Alias observation contract
+`AliasObservation` is the immutable evidence that a specific alias was seen in a specific place and time. Each observation should include:
+- alias id
+- actor id if the ingest event could safely resolve one at observation time
+- platform account id if available
+- channel id when applicable
+- source event type:
+  `message`, `nick_change`, `join`, `part`, `presence`, `thread_event`
+- source event id
+- observed timestamp
+- confidence
+- raw metadata describing the evidence
+
+Alias observations are the audit trail that later merge or split logic relies on. The system should prefer creating a new alias observation over mutating historical actor identity.
+
+#### Conservative merge rules
+The first pass should apply the following merge rules:
+- exact platform account ids can attach new alias observations to an existing actor
+- explicit platform-native identity continuity such as a Discord author id can reuse the same actor
+- IRC nick changes create alias observations and may link aliases, but they do not automatically rewrite historical messages to a different actor without supporting continuity evidence
+- repeated co-presence, topic overlap, or writing style similarity alone are not enough to auto-merge actors
+- low-confidence continuity evidence must remain reviewable metadata rather than silently changing canonical actor ownership
+
+### Message-link, conversation, membership, and pending-item evidence contract
+Reconstruction records should be evidence-bearing hypotheses, not hidden classifier outputs.
+
+#### Message link contract
+`MessageLink` should represent a scored relation between two messages with:
+- source message id
+- target message id
+- link type:
+  `replies_to`, `continues`, `references`, `same_topic_as`, `clarifies`, `answers`
+- score
+- confidence band:
+  `high`, `medium`, `low`
+- winning decision version
+- competing candidate margin
+- evidence array
+- inferred_at
+- inferred_by:
+  model or ruleset version
+
+Each evidence item should capture:
+- `kind`
+- `weight`
+- `value`
+- `explanation`
+- optional referenced entity, alias, or message ids
+
+#### Conversation contract
+`Conversation` should represent a tenant-scoped reconstructed discussion with:
+- stable conversation id
+- platform and channel scope
+- lifecycle state:
+  `active`, `dormant`, `revived`, `closed`
+- opened_at
+- last_message_at
+- dormant_at
+- closed_at
+- starter message id
+- most recent message id
+- participant summary
+- entity summary
+- open pending-item count
+- topic summary
+- confidence summary
+- reconstruction version
+
+#### Conversation membership contract
+`ConversationMembership` should support both message membership and actor participation with:
+- conversation id
+- member kind:
+  `message`, `actor`, `entity`, `pending_item`
+- member id
+- role:
+  `starter`, `participant`, `mentioned`, `resolver`, `observer`
+- score
+- join reason
+- supporting evidence array
+- attached_at
+- detached_at when later reassigned
+
+#### Pending item contract
+`PendingItem` should represent unresolved conversational state with:
+- conversation id
+- opener message id
+- resolver message id when closed
+- item kind:
+  `question`, `request`, `task`, `issue`, `decision`
+- status:
+  `open`, `answered`, `completed`, `expired`, `abandoned`
+- owner actor ids when inferred
+- referenced entity ids
+- opened_at
+- resolved_at
+- summary text
+- confidence
+- supporting evidence array
+
+Messages may remain unattached to any conversation or pending item when no candidate exceeds the configured threshold. That behavior is intentional and should be preserved in the contract.
+
 ### Key stored message attributes
 - platform, workspace or guild, and channel
 - external message identifiers and platform thread or reply identifiers when available

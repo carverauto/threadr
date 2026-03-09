@@ -62,6 +62,15 @@ defmodule Threadr.TenantData.ExtractionTest do
              |> Ash.read_one(tenant: tenant.schema_name)
 
     assert fact.predicate == "reported"
+
+    assert {:ok, persisted_message} =
+             Threadr.TenantData.Message
+             |> Ash.Query.filter(expr(id == ^message.id))
+             |> Ash.read_one(tenant: tenant.schema_name)
+
+    assert persisted_message.metadata["reconstruction_version"] == "v1"
+    assert persisted_message.metadata["dialogue_act"]["label"] == "status_update"
+    assert persisted_message.metadata["dialogue_act"]["confidence"] == 0.96
   end
 
   test "ingest downgrades extraction timeouts to info logging" do

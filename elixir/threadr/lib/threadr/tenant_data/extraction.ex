@@ -30,7 +30,8 @@ defmodule Threadr.TenantData.Extraction do
   end
 
   def persist_result(message_id, result, tenant_schema) do
-    with {:ok, entities} <- upsert_entities(message_id, result.entities, tenant_schema),
+    with {:ok, _message} <- persist_message_enrichment(message_id, result, tenant_schema),
+         {:ok, entities} <- upsert_entities(message_id, result.entities, tenant_schema),
          {:ok, facts} <- upsert_facts(message_id, result.facts, tenant_schema) do
       {:ok, %{entities: entities, facts: facts}}
     end
@@ -75,6 +76,19 @@ defmodule Threadr.TenantData.Extraction do
     case Ash.read_one(query, tenant: tenant_schema) do
       {:ok, nil} -> {:error, {:message_not_found, message_id}}
       result -> result
+    end
+  end
+
+  defp persist_message_enrichment(message_id, result, tenant_schema) do
+    with {:ok, message} <- fetch_message(message_id, tenant_schema) do
+      metadata =
+        message.metadata
+        |> Map.put("reconstruction_version", "v1")
+        |> maybe_put_dialogue_act(result.dialogue_act)
+
+      message
+      |> Ash.Changeset.for_update(:update, %{metadata: metadata}, tenant: tenant_schema)
+      |> Ash.update()
     end
   end
 
@@ -203,4 +217,20 @@ defmodule Threadr.TenantData.Extraction do
   defp parse_valid_at(%DateTime{} = value), do: value
   defp parse_valid_at(%NaiveDateTime{} = value), do: value
   defp parse_valid_at(_value), do: nil
+
+  defp maybe_put_dialogue_act(metadata, nil), do: metadata
+
+  defp maybe_put_dialogue_act(metadata, dialogue_act) when is_map(dialogue_act) do
+    Map.put(
+      metadata,
+      "dialogue_act",
+      %{
+        "label" => dialogue_act[:label] || dialogue_act["label"],
+        "confidence" => dialogue_act[:confidence] || dialogue_act["confidence"],
+        "metadata" => dialogue_act[:metadata] || dialogue_act["metadata"] || %{}
+      }
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Map.new()
+    )
+  end
 end

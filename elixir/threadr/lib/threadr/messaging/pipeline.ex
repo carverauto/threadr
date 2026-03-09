@@ -114,6 +114,7 @@ defmodule Threadr.Messaging.Pipeline do
   end
 
   defp batcher_for("chat.message"), do: :graph
+  defp batcher_for("chat.context"), do: :graph
   defp batcher_for("ingest.command"), do: :commands
   defp batcher_for("processing.result"), do: :embeddings
   defp batcher_for(_type), do: :default

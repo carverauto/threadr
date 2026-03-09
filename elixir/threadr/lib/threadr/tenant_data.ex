@@ -6,14 +6,21 @@ defmodule Threadr.TenantData do
   use Ash.Domain
 
   resources do
+    resource Threadr.TenantData.Alias
+    resource Threadr.TenantData.AliasObservation
     resource Threadr.TenantData.Actor
     resource Threadr.TenantData.Channel
     resource Threadr.TenantData.CommandExecution
+    resource Threadr.TenantData.Conversation
+    resource Threadr.TenantData.ConversationMembership
+    resource Threadr.TenantData.ContextEvent
     resource Threadr.TenantData.ExtractedEntity
     resource Threadr.TenantData.ExtractedFact
     resource Threadr.TenantData.Message
+    resource Threadr.TenantData.MessageLink
     resource Threadr.TenantData.MessageEmbedding
     resource Threadr.TenantData.MessageMention
+    resource Threadr.TenantData.PendingItem
     resource Threadr.TenantData.Relationship
     resource Threadr.TenantData.RelationshipObservation
   end

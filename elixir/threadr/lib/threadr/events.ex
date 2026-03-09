@@ -3,9 +3,10 @@ defmodule Threadr.Events do
   Canonical event encoding and decoding for Threadr's JetStream subjects.
   """
 
-  alias Threadr.Events.{ChatMessage, Envelope, IngestCommand, ProcessingResult}
+  alias Threadr.Events.{ChatContextEvent, ChatMessage, Envelope, IngestCommand, ProcessingResult}
 
   @type_map %{
+    "chat.context" => ChatContextEvent,
     "chat.message" => ChatMessage,
     "ingest.command" => IngestCommand,
     "processing.result" => ProcessingResult
@@ -39,6 +40,15 @@ defmodule Threadr.Events do
     |> ChatMessage.from_map()
     |> Envelope.new(
       "chat.message",
+      Threadr.Messaging.Topology.subject_for(:chat_messages, tenant_subject_name)
+    )
+  end
+
+  def build_chat_context_event(attrs, tenant_subject_name \\ "dev") do
+    attrs
+    |> ChatContextEvent.from_map()
+    |> Envelope.new(
+      "chat.context",
       Threadr.Messaging.Topology.subject_for(:chat_messages, tenant_subject_name)
     )
   end

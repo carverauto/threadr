@@ -62,3 +62,6 @@ config :threadr, Threadr.Messaging.Topology, messaging_enabled: integration_enab
 
 config :threadr, Threadr.ControlPlane.BotOperationDispatcher, enabled: false
 config :threadr, Threadr.ControlPlane.BotStatusObserver, enabled: false
+config :threadr, Threadr.TenantData.ConversationClusterReviewDispatcher, enabled: false
+config :threadr, Threadr.TenantData.ConversationRelationshipDispatcher, enabled: false
+config :threadr, Threadr.TenantData.ConversationSummaryDispatcher, enabled: false

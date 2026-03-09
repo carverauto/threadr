@@ -4,7 +4,7 @@ defmodule Threadr.Ingest do
   events into JetStream.
   """
 
-  alias Threadr.Events.{ChatMessage, Envelope}
+  alias Threadr.Events.{ChatContextEvent, ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
 
   @mention_regex ~r/(?:^|\s)@([a-zA-Z0-9_.-]+)/
@@ -65,6 +65,7 @@ defmodule Threadr.Ingest do
         body: body,
         observed_at: fetch(attrs, :observed_at, DateTime.utc_now() |> DateTime.truncate(:second)),
         mentions: mentions,
+        metadata: fetch(attrs, :metadata, %{}),
         raw: fetch(attrs, :raw, %{})
       })
 
@@ -72,6 +73,36 @@ defmodule Threadr.Ingest do
       Envelope.new(
         chat_message,
         "chat.message",
+        Topology.subject_for(:chat_messages, tenant_subject_name),
+        %{
+          id: fetch(attrs, :external_id, Ecto.UUID.generate()),
+          source: "threadr.ingest.#{platform}",
+          metadata: message_metadata(config, attrs)
+        }
+      )
+
+    publish_with(config, envelope)
+  end
+
+  def publish_context_event(config, attrs) do
+    platform = fetch!(attrs, :platform)
+    tenant_subject_name = Keyword.fetch!(config, :tenant_subject_name)
+
+    context_event =
+      ChatContextEvent.from_map(%{
+        platform: platform,
+        event_type: fetch!(attrs, :event_type),
+        channel: fetch(attrs, :channel),
+        actor: fetch(attrs, :actor),
+        observed_at: fetch(attrs, :observed_at, DateTime.utc_now() |> DateTime.truncate(:second)),
+        metadata: fetch(attrs, :metadata, %{}),
+        raw: fetch(attrs, :raw, %{})
+      })
+
+    envelope =
+      Envelope.new(
+        context_event,
+        "chat.context",
         Topology.subject_for(:chat_messages, tenant_subject_name),
         %{
           id: fetch(attrs, :external_id, Ecto.UUID.generate()),
