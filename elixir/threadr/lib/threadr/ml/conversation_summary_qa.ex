@@ -16,16 +16,19 @@ defmodule Threadr.ML.ConversationSummaryQA do
     ReconstructionQuery
   }
 
-  @default_limit 5
+  @default_limit 20
+  @max_limit 50
 
   def answer_question(tenant_subject_name, question, opts \\ [])
       when is_binary(tenant_subject_name) and is_binary(question) do
-    with :ok <- require_time_bounds(opts),
-         {:ok, tenant} <-
+    with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
          {:ok, intent} <- ConversationSummaryQAIntent.classify(question),
-         conversations when conversations != [] <- fetch_conversations(tenant.schema_name, opts) do
-      build_answer(tenant, question, intent, conversations, opts)
+         resolved_opts <- resolve_summary_opts(intent, opts),
+         :ok <- require_time_bounds(resolved_opts),
+         conversations when conversations != [] <-
+           fetch_conversations(tenant.schema_name, resolved_opts) do
+      build_answer(tenant, question, intent, conversations, resolved_opts)
     else
       [] -> {:error, :not_conversation_summary_question}
       {:error, :missing_time_bounds} -> {:error, :not_conversation_summary_question}
@@ -50,6 +53,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
            retrieval: "reconstructed_conversations",
            conversation_count: length(conversations),
            evidence_count: length(citations),
+           channel_name: Keyword.get(opts, :requester_channel_name),
            since: format_timestamp(Keyword.get(opts, :since)),
            until: format_timestamp(Keyword.get(opts, :until))
          },
@@ -69,6 +73,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
     from(c in "conversations",
       join: ch in "channels",
       on: ch.id == c.channel_id,
+      where: ^channel_filter(Keyword.get(opts, :requester_channel_name)),
       order_by: [desc: c.last_message_at, desc: c.opened_at],
       limit: ^limit,
       select: %{
@@ -192,6 +197,61 @@ defmodule Threadr.ML.ConversationSummaryQA do
     |> maybe_filter_conversation_until(Keyword.get(opts, :until))
   end
 
+  defp resolve_summary_opts(intent, opts) do
+    opts
+    |> maybe_put_inferred_bounds(intent.time_scope)
+    |> maybe_scope_current_channel(intent.scope_current_channel)
+  end
+
+  defp maybe_put_inferred_bounds(opts, :none), do: opts
+
+  defp maybe_put_inferred_bounds(opts, time_scope) do
+    if Keyword.get(opts, :since) || Keyword.get(opts, :until) do
+      opts
+    else
+      {since, until} = inferred_bounds(time_scope)
+      opts |> Keyword.put(:since, since) |> Keyword.put(:until, until)
+    end
+  end
+
+  defp maybe_scope_current_channel(opts, false) do
+    Keyword.delete(opts, :requester_channel_name)
+  end
+
+  defp maybe_scope_current_channel(opts, true), do: opts
+
+  defp channel_filter(nil), do: dynamic(true)
+
+  defp channel_filter(channel_name) do
+    normalized = String.downcase(String.trim(channel_name))
+    dynamic([_c, ch], fragment("lower(?) = ?", ch.name, ^normalized))
+  end
+
+  defp inferred_bounds(:today), do: day_bounds(Date.utc_today())
+  defp inferred_bounds(:yesterday), do: day_bounds(Date.add(Date.utc_today(), -1))
+
+  defp inferred_bounds(:last_week) do
+    today = Date.utc_today()
+    start_date = Date.add(today, -7)
+    since = DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC")
+    until = DateTime.new!(today, ~T[23:59:59], "Etc/UTC")
+    {since, until}
+  end
+
+  defp inferred_bounds(:last_month) do
+    today = Date.utc_today()
+    start_date = Date.add(today, -30)
+    since = DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC")
+    until = DateTime.new!(today, ~T[23:59:59], "Etc/UTC")
+    {since, until}
+  end
+
+  defp day_bounds(date) do
+    since = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+    until = DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
+    {since, until}
+  end
+
   defp maybe_filter_conversation_since(query, nil), do: query
 
   defp maybe_filter_conversation_since(query, %NaiveDateTime{} = since) do
@@ -261,6 +321,6 @@ defmodule Threadr.ML.ConversationSummaryQA do
     opts
     |> Keyword.get(:limit, @default_limit)
     |> max(1)
-    |> min(@default_limit)
+    |> min(@max_limit)
   end
 end
