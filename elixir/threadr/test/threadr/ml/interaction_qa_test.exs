@@ -99,6 +99,68 @@ defmodule Threadr.ML.InteractionQATest do
              )
   end
 
+  test "falls back to reconstructed conversation memberships when relationships are absent" do
+    tenant = create_tenant!("Interaction QA Conversation Fallback")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    bysin = create_actor!(tenant.schema_name, "bysin")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    request_message =
+      create_message!(
+        tenant.schema_name,
+        thanew.id,
+        channel.id,
+        "bysin did you look at the spark plugs yet?",
+        "msg-thanew-1",
+        ~U[2026-03-08 12:00:00Z],
+        %{
+          "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    response_message =
+      create_message!(
+        tenant.schema_name,
+        bysin.id,
+        channel.id,
+        "yeah they looked rough, the gap was off and the insulator was toast",
+        "msg-bysin-2",
+        ~U[2026-03-08 12:02:00Z],
+        %{
+          "dialogue_act" => %{"label" => "answer", "confidence" => 0.88},
+          "reply_to_external_id" => request_message.external_id,
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(request_message.id, tenant.schema_name)
+
+    {:ok, inference} =
+      MessageLinkInference.infer_and_persist(response_message.id, tenant.schema_name)
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(
+        response_message.id,
+        tenant.schema_name,
+        inference: inference
+      )
+
+    assert {:ok, result} =
+             InteractionQA.answer_question(
+               tenant.subject_name,
+               "who does THANEW mostly talk with?",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.mode == "interaction_qa"
+    assert result.query.actor_handle == "THANEW"
+    assert hd(result.partners).partner_handle == "bysin"
+    assert result.context =~ "bysin"
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 
