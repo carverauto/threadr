@@ -10,7 +10,7 @@ spec:
           $patch: delete
       containers:
         - name: threadr-control-plane
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:1b46299e9fcd5fa2fcb2faea8af6d25a592bbf40bf0107cd3264cb41aff8f83f
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:7a45c59df3dbc7dd85cecdce452a916b7ba3d2f82e3b127f609910d6ce8ce6ac
 ---
 apiVersion: batch/v1
 kind: Job
@@ -21,7 +21,7 @@ spec:
     spec:
       initContainers:
         - name: migrate
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:1b46299e9fcd5fa2fcb2faea8af6d25a592bbf40bf0107cd3264cb41aff8f83f
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:7a45c59df3dbc7dd85cecdce452a916b7ba3d2f82e3b127f609910d6ce8ce6ac
       containers:
         - name: bootstrap-operator-admin
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:1b46299e9fcd5fa2fcb2faea8af6d25a592bbf40bf0107cd3264cb41aff8f83f
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:7a45c59df3dbc7dd85cecdce452a916b7ba3d2f82e3b127f609910d6ce8ce6ac
