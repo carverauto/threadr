@@ -26,6 +26,11 @@ config :threadr, Threadr.ControlPlane.BotOperationDispatcher,
   max_attempts: 3,
   retry_backoff_ms: 5_000
 
+config :threadr, Threadr.ControlPlane.TenantMigrationDispatcher,
+  enabled: true,
+  poll_interval_ms: 30_000,
+  batch_size: 10
+
 config :threadr, Threadr.ControlPlane.BotStatusObserver,
   enabled: false,
   poll_interval_ms: 15_000,

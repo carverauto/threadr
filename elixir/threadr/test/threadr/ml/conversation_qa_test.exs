@@ -86,6 +86,101 @@ defmodule Threadr.ML.ConversationQATest do
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
   end
 
+  test "filters third-party conversation content out of actor-pair evidence" do
+    tenant = create_tenant!("Conversation QA Pair Filter")
+    sig = create_actor!(tenant.schema_name, "sig")
+    eefer = create_actor!(tenant.schema_name, "eefer--")
+    dio = create_actor!(tenant.schema_name, "dio")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    first_message =
+      create_message!(
+        tenant.schema_name,
+        sig.id,
+        channel.id,
+        "Havana Syndrome sounds like brain fog, dizziness, and headaches.",
+        "msg-sig",
+        ~U[2026-03-09 16:00:00Z],
+        %{"dialogue_act" => %{"label" => "statement", "confidence" => 0.91}}
+      )
+
+    second_message =
+      create_message!(
+        tenant.schema_name,
+        eefer.id,
+        channel.id,
+        "Long COVID has some of the same fatigue and brain fog symptoms.",
+        "msg-eefer",
+        ~U[2026-03-09 16:01:00Z],
+        %{
+          "dialogue_act" => %{"label" => "statement", "confidence" => 0.88},
+          "reply_to_external_id" => first_message.external_id
+        }
+      )
+
+    third_message =
+      create_message!(
+        tenant.schema_name,
+        dio.id,
+        channel.id,
+        "You are getting mogged.",
+        "msg-dio",
+        ~U[2026-03-09 16:02:00Z],
+        %{
+          "dialogue_act" => %{"label" => "statement", "confidence" => 0.82},
+          "reply_to_external_id" => second_message.external_id
+        }
+      )
+
+    {:ok, conversation} =
+      ConversationAttachment.attach_message(first_message.id, tenant.schema_name)
+
+    {:ok, second_inference} =
+      MessageLinkInference.infer_and_persist(second_message.id, tenant.schema_name)
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(
+        second_message.id,
+        tenant.schema_name,
+        inference: second_inference
+      )
+
+    {:ok, third_inference} =
+      MessageLinkInference.infer_and_persist(third_message.id, tenant.schema_name)
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(
+        third_message.id,
+        tenant.schema_name,
+        inference: third_inference
+      )
+
+    conversation
+    |> Ash.Changeset.for_update(
+      :update,
+      %{
+        topic_summary: "mogged discourse",
+        metadata: %{"conversation_summary" => %{"text" => "Dio said sig was mogged."}}
+      },
+      tenant: tenant.schema_name
+    )
+    |> Ash.update!()
+
+    assert {:ok, result} =
+             ConversationQA.answer_question(
+               tenant.subject_name,
+               "what did sig and eefer-- talk about today?",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert Enum.all?(result.citations, &(&1.actor_handle in ["sig", "eefer--"]))
+    assert result.context =~ "Havana Syndrome"
+    assert result.context =~ "Long COVID"
+    refute result.context =~ "mogged"
+    refute result.context =~ "dio"
+  end
+
   test "returns not_conversation_question when reconstruction tables are unavailable" do
     tenant = create_tenant!("Conversation QA Missing Tables")
     _alice = create_actor!(tenant.schema_name, "alice")
