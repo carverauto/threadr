@@ -117,7 +117,7 @@ defmodule Threadr.ML.InteractionQA do
   end
 
   defp fallback_partners_from_conversations(tenant_schema, actor, opts) do
-    dumped_actor_id = dump_uuid!(actor.id)
+    actor_id = actor.id
 
     from(c in "conversations",
       join: cm_self in "conversation_memberships",
@@ -125,8 +125,8 @@ defmodule Threadr.ML.InteractionQA do
       join: cm_other in "conversation_memberships",
       on: cm_other.conversation_id == c.id and cm_other.member_kind == "actor",
       join: other in "actors",
-      on: other.id == cm_other.member_id,
-      where: cm_self.member_id == ^dumped_actor_id and cm_other.member_id != ^dumped_actor_id,
+      on: other.id == type(cm_other.member_id, :binary_id),
+      where: cm_self.member_id == ^actor_id and cm_other.member_id != ^actor_id,
       select: %{
         conversation_id: c.id,
         last_message_at: c.last_message_at,
