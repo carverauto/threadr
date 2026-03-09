@@ -8,6 +8,7 @@ defmodule Threadr.ControlPlane.BotQATest do
     Actor,
     Channel,
     ConversationAttachment,
+    ConversationRelationshipRecompute,
     ExtractedEntity,
     Message,
     MessageEmbedding,
@@ -330,6 +331,150 @@ defmodule Threadr.ControlPlane.BotQATest do
 
     assert result.mode in [:graph_rag, :semantic_qa]
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
+  end
+
+  test "answers interaction partner questions from reconstructed relationship evidence" do
+    tenant = create_tenant!("Bot QA Interaction")
+    sig = create_actor!(tenant.schema_name, "sig")
+    bysin = create_actor!(tenant.schema_name, "bysin")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    request_message =
+      create_message!(
+        tenant.schema_name,
+        sig.id,
+        channel.id,
+        "bysin can you check the bridge bot?",
+        "msg-sig-int-1",
+        ~U[2026-03-08 09:00:00Z],
+        %{
+          "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    response_message =
+      create_message!(
+        tenant.schema_name,
+        bysin.id,
+        channel.id,
+        "yeah, bridge bot looks fine now",
+        "msg-sig-int-2",
+        ~U[2026-03-08 09:02:00Z],
+        %{
+          "dialogue_act" => %{"label" => "status_update", "confidence" => 0.84},
+          "reply_to_external_id" => request_message.external_id,
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    {:ok, conversation} =
+      ConversationAttachment.attach_message(request_message.id, tenant.schema_name)
+
+    {:ok, inference} =
+      MessageLinkInference.infer_and_persist(response_message.id, tenant.schema_name)
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(
+        response_message.id,
+        tenant.schema_name,
+        inference: inference
+      )
+
+    assert {:ok, _} =
+             ConversationRelationshipRecompute.recompute_conversation_relationships(
+               conversation.id,
+               tenant.schema_name
+             )
+
+    request =
+      QARequest.new("who does sig talk with the most?", :bot,
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat"
+      )
+
+    assert {:ok, result} =
+             Analysis.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               request
+             )
+
+    assert result.mode == :interaction_qa
+    assert result.query.actor_handle == "sig"
+    assert hd(result.partners).partner_handle == "bysin"
+    refute result.context =~ "##!chases"
+  end
+
+  test "resolves requester self reference for interaction partner questions" do
+    tenant = create_tenant!("Bot QA Interaction Self")
+    leku = create_actor!(tenant.schema_name, "leku")
+    sig = create_actor!(tenant.schema_name, "sig")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    request_message =
+      create_message!(
+        tenant.schema_name,
+        leku.id,
+        channel.id,
+        "sig can you review the replay?",
+        "msg-self-1",
+        ~U[2026-03-08 09:10:00Z],
+        %{
+          "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    response_message =
+      create_message!(
+        tenant.schema_name,
+        sig.id,
+        channel.id,
+        "yeah, replay looks good",
+        "msg-self-2",
+        ~U[2026-03-08 09:11:00Z],
+        %{
+          "dialogue_act" => %{"label" => "status_update", "confidence" => 0.84},
+          "reply_to_external_id" => request_message.external_id,
+          "conversation_external_id" => "#!chases"
+        }
+      )
+
+    {:ok, conversation} =
+      ConversationAttachment.attach_message(request_message.id, tenant.schema_name)
+
+    {:ok, inference} =
+      MessageLinkInference.infer_and_persist(response_message.id, tenant.schema_name)
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(
+        response_message.id,
+        tenant.schema_name,
+        inference: inference
+      )
+
+    assert {:ok, _} =
+             ConversationRelationshipRecompute.recompute_conversation_relationships(
+               conversation.id,
+               tenant.schema_name
+             )
+
+    request =
+      QARequest.new("who do I mostly talk with?", :bot,
+        requester_actor_handle: "leku",
+        generation_provider: Threadr.TestGenerationProvider,
+        generation_model: "test-chat"
+      )
+
+    assert {:ok, result} =
+             Analysis.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               request
+             )
+
+    assert result.mode == :interaction_qa
+    assert result.query.actor_handle == "leku"
+    assert hd(result.partners).partner_handle == "sig"
   end
 
   test "returns insufficient context when no embeddings exist" do

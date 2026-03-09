@@ -873,6 +873,7 @@ defmodule Threadr.TenantData.Ingest do
   end
 
   defp alias_source_event_type("presence_snapshot"), do: "presence"
+  defp alias_source_event_type("roster_presence"), do: "presence"
 
   defp alias_source_event_type(event_type)
        when event_type in ["thread_create", "thread_update", "thread_delete"] do

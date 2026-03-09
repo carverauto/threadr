@@ -8,6 +8,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
   alias Threadr.ControlPlane
 
   alias Threadr.ML.{
+    ChannelLabel,
     ConversationQA,
     ConversationSummaryQAIntent,
     Generation,
@@ -117,7 +118,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
           |> Enum.join(", ")
 
         [
-          "[Conversation #{index}] #{time_window_label(conversation)} in ##{conversation.channel_name}",
+          "[Conversation #{index}] #{time_window_label(conversation)} in #{ChannelLabel.format(conversation.channel_name)}",
           "Participants: #{participant_text(conversation)}",
           "Topic: #{conversation.topic_summary || fallback_topic(conversation)}",
           "Summary: #{conversation.summary_text || fallback_summary(conversation)}",

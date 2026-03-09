@@ -34,6 +34,14 @@ defmodule Threadr.TestIRCClient do
     GenServer.call(client, {:join, channel, key})
   end
 
+  def channel_names(client, channel) do
+    GenServer.call(client, {:channel_names, channel})
+  end
+
+  def names(client, channel) do
+    GenServer.call(client, {:names, channel})
+  end
+
   def cmd(client, raw_cmd) do
     GenServer.call(client, {:cmd, raw_cmd})
   end
@@ -77,6 +85,16 @@ defmodule Threadr.TestIRCClient do
 
   def handle_call({:join, channel, key}, _from, state) do
     send(state.test_pid, {:irc_client_join, channel, key})
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:channel_names, channel}, _from, state) do
+    send(state.test_pid, {:irc_client_channel_names, channel})
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:names, channel}, _from, state) do
+    send(state.test_pid, {:irc_client_names, channel})
     {:reply, :ok, state}
   end
 

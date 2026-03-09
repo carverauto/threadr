@@ -7,7 +7,7 @@ defmodule Threadr.ML.ActorQA do
   import Ecto.Query
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{Generation, QAIntent, SemanticQA}
+  alias Threadr.ML.{ActorReference, Generation, QAIntent, SemanticQA}
   alias Threadr.ML.{GenerationProviderOpts, Generation.Result}
   alias Threadr.Repo
 
@@ -145,82 +145,7 @@ defmodule Threadr.ML.ActorQA do
   end
 
   defp resolve_actor_reference(tenant_schema, raw_ref, opts) do
-    refs = actor_reference_candidates(raw_ref, opts)
-
-    Enum.reduce_while(refs, {:error, {:actor_not_found, normalize_actor_ref(raw_ref)}}, fn ref,
-                                                                                           _acc ->
-      case lookup_actor_reference(tenant_schema, ref) do
-        {:ok, _actor} = result -> {:halt, result}
-        {:error, {:ambiguous_actor, _, _}} = result -> {:halt, result}
-        {:error, {:actor_not_found, _}} -> {:cont, {:error, {:actor_not_found, ref}}}
-      end
-    end)
-  end
-
-  defp lookup_actor_reference(tenant_schema, ref) do
-    handle_matches =
-      from(a in "actors",
-        where: fragment("lower(?) = lower(?)", a.handle, ^ref),
-        select: %{
-          id: a.id,
-          handle: a.handle,
-          display_name: a.display_name,
-          external_id: a.external_id,
-          platform: a.platform
-        }
-      )
-      |> Repo.all(prefix: tenant_schema)
-
-    case uniq_actor_matches(handle_matches) do
-      [actor] ->
-        {:ok, actor}
-
-      [_ | _] = matches ->
-        {:error, {:ambiguous_actor, ref, matches}}
-
-      [] ->
-        external_matches =
-          from(a in "actors",
-            where: a.external_id == ^discord_or_plain_external_id(ref),
-            select: %{
-              id: a.id,
-              handle: a.handle,
-              display_name: a.display_name,
-              external_id: a.external_id,
-              platform: a.platform
-            }
-          )
-          |> Repo.all(prefix: tenant_schema)
-
-        case uniq_actor_matches(external_matches) do
-          [actor] ->
-            {:ok, actor}
-
-          [_ | _] = matches ->
-            {:error, {:ambiguous_actor, ref, matches}}
-
-          [] ->
-            display_matches =
-              from(a in "actors",
-                where: not is_nil(a.display_name),
-                where: fragment("lower(?) = lower(?)", a.display_name, ^ref),
-                select: %{
-                  id: a.id,
-                  handle: a.handle,
-                  display_name: a.display_name,
-                  external_id: a.external_id,
-                  platform: a.platform
-                }
-              )
-              |> Repo.all(prefix: tenant_schema)
-
-            case uniq_actor_matches(display_matches) do
-              [actor] -> {:ok, actor}
-              [_ | _] = matches -> {:error, {:ambiguous_actor, ref, matches}}
-              [] -> {:error, {:actor_not_found, ref}}
-            end
-        end
-    end
+    ActorReference.resolve(tenant_schema, raw_ref, opts)
   end
 
   defp actor_message_stats(tenant_schema, actor) do
@@ -734,77 +659,6 @@ defmodule Threadr.ML.ActorQA do
     |> Enum.reject(&(&1 == "" or String.length(&1) < 3))
     |> Enum.uniq()
     |> Enum.map(&"%#{&1}%")
-  end
-
-  defp actor_reference_candidates(raw_ref, opts) do
-    normalized = normalize_actor_ref(raw_ref)
-
-    refs =
-      if self_actor_reference?(normalized) do
-        requester_reference_candidates(opts) ++ [normalized]
-      else
-        [normalized, mention_external_id(normalized), last_token_candidate(normalized)]
-      end
-
-    refs
-    |> Enum.filter(&is_binary/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.uniq()
-  end
-
-  defp normalize_actor_ref(raw_ref) do
-    raw_ref
-    |> to_string()
-    |> String.trim()
-    |> String.trim_trailing("?")
-    |> String.trim_trailing("!")
-    |> String.trim_trailing(".")
-    |> trim_matching_quotes()
-    |> String.trim_leading("@")
-    |> String.trim()
-  end
-
-  defp trim_matching_quotes("\"" <> rest), do: rest |> String.trim_trailing("\"") |> String.trim()
-  defp trim_matching_quotes("'" <> rest), do: rest |> String.trim_trailing("'") |> String.trim()
-  defp trim_matching_quotes(value), do: value
-
-  defp mention_external_id("<@" <> rest) do
-    rest |> String.trim_trailing(">") |> String.trim_leading("!")
-  end
-
-  defp mention_external_id(_value), do: nil
-
-  defp discord_or_plain_external_id(value), do: mention_external_id(value) || value
-
-  defp requester_reference_candidates(opts) do
-    [
-      Keyword.get(opts, :requester_actor_handle),
-      Keyword.get(opts, :requester_actor_display_name),
-      Keyword.get(opts, :requester_external_id)
-    ]
-    |> Enum.filter(&is_binary/1)
-    |> Enum.map(&normalize_actor_ref/1)
-    |> Enum.reject(&(&1 == ""))
-  end
-
-  defp self_actor_reference?(value) do
-    String.downcase(value) in ["i", "me", "myself"]
-  end
-
-  defp last_token_candidate(value) do
-    value
-    |> String.split(~r/\s+/u, trim: true)
-    |> List.last()
-    |> case do
-      ^value -> nil
-      token -> token
-    end
-  end
-
-  defp uniq_actor_matches(matches) do
-    matches
-    |> Enum.uniq_by(& &1.id)
   end
 
   defp normalize_match(match) do
