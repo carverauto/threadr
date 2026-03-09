@@ -8,6 +8,7 @@ defmodule Threadr.ML.QAOrchestrator do
     ConversationQA,
     ConversationSummaryQA,
     GraphRAG,
+    InteractionQA,
     QARequest,
     SemanticQA
   }
@@ -20,26 +21,32 @@ defmodule Threadr.ML.QAOrchestrator do
     ensure_embeddings = Keyword.fetch!(opts, :ensure_embeddings)
     runtime_opts = QARequest.to_runtime_opts(request)
 
-    case ConversationQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
+    case InteractionQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
       {:ok, result} ->
-        {:ok, Map.put(result, :mode, :conversation_qa)}
+        {:ok, Map.put(result, :mode, :interaction_qa)}
 
-      {:error, :not_conversation_question} ->
-        case ActorQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
+      {:error, :not_interaction_question} ->
+        case ConversationQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
           {:ok, result} ->
-            {:ok, Map.put(result, :mode, :actor_qa)}
+            {:ok, Map.put(result, :mode, :conversation_qa)}
 
-          {:error, :not_actor_question} ->
-            case ConversationSummaryQA.answer_question(
-                   tenant.subject_name,
-                   request.question,
-                   runtime_opts
-                 ) do
+          {:error, :not_conversation_question} ->
+            case ActorQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
               {:ok, result} ->
-                {:ok, Map.put(result, :mode, :conversation_summary_qa)}
+                {:ok, Map.put(result, :mode, :actor_qa)}
 
-              {:error, :not_conversation_summary_question} ->
-                fallback_answer(tenant, request, ensure_embeddings)
+              {:error, :not_actor_question} ->
+                case ConversationSummaryQA.answer_question(
+                       tenant.subject_name,
+                       request.question,
+                       runtime_opts
+                     ) do
+                  {:ok, result} ->
+                    {:ok, Map.put(result, :mode, :conversation_summary_qa)}
+
+                  {:error, :not_conversation_summary_question} ->
+                    fallback_answer(tenant, request, ensure_embeddings)
+                end
             end
         end
     end

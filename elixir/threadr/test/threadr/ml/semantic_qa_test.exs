@@ -160,6 +160,24 @@ defmodule Threadr.ML.SemanticQATest do
     assert result.query.metadata["query_prefix"] == "query:"
   end
 
+  test "preserves a single leading hash when rendering IRC channel citations" do
+    context =
+      SemanticQA.build_context([
+        %{
+          label: "C1",
+          observed_at: ~U[2026-03-09 05:36:00Z],
+          channel_name: "#!chases",
+          actor_handle: "leku",
+          body: "threadr: hello",
+          extracted_entities: [],
+          extracted_facts: []
+        }
+      ])
+
+    assert context =~ "#!chases leku: threadr: hello"
+    refute context =~ "##!chases"
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 

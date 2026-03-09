@@ -158,6 +158,49 @@ defmodule Threadr.Ingest.IRC.BotQATest do
     assert raw_cmd =~ "PRIVMSG #intel :alice:"
   end
 
+  test "routes direct greetings through chat mode instead of retrieval QA" do
+    tenant = create_tenant!("IRC Bot Chat")
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      generation_provider: Threadr.TestGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "alice",
+        user: "alice",
+        host: "workstation.example.org",
+        args: ["#intel", "threadr: hello"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    assert raw_cmd =~ "PRIVMSG #intel :alice:"
+    assert raw_cmd =~ "hello"
+    refute raw_cmd =~ "Context:"
+  end
+
   test "resolves self references for addressed IRC questions" do
     tenant = create_tenant!("IRC Bot QA Self Reference")
     actor = create_actor!(tenant.schema_name, "leku")

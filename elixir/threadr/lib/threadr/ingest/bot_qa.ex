@@ -6,7 +6,7 @@ defmodule Threadr.Ingest.BotQA do
   require Logger
 
   alias Threadr.ControlPlane.Analysis
-  alias Threadr.ML.QARequest
+  alias Threadr.ML.{BotIntent, Generation, GenerationProviderOpts, QARequest}
   alias ExIRC.Commands
 
   @irc_reply_limit 350
@@ -155,6 +155,45 @@ defmodule Threadr.Ingest.BotQA do
   defp build_discord_request(_attrs, _config), do: :ignore
 
   defp answer_request(config, request) do
+    case BotIntent.classify(request.question) do
+      :chat -> answer_chat_request(config, request)
+      :qa -> answer_qa_request(config, request)
+    end
+  end
+
+  defp answer_chat_request(config, request) do
+    prompt = chat_prompt(config, request)
+
+    case Generation.complete(prompt, chat_generation_opts(config, request)) do
+      {:ok, result} ->
+        %{
+          status: :answered,
+          content:
+            result.content
+            |> normalize_reply_content()
+            |> blank_to_default("Hello. What do you want to know?"),
+          mode: :chat
+        }
+
+      {:error, :generation_provider_not_configured} ->
+        %{
+          status: :failed,
+          content: "I can't answer yet because no LLM is configured for this tenant.",
+          mode: :chat
+        }
+
+      {:error, reason} ->
+        Logger.error("bot chat failed: #{inspect(reason)}")
+
+        %{
+          status: :failed,
+          content: "I couldn't answer that right now.",
+          mode: :chat
+        }
+    end
+  end
+
+  defp answer_qa_request(config, request) do
     subject_name = Keyword.fetch!(config, :tenant_subject_name)
 
     qa_request =
@@ -164,10 +203,7 @@ defmodule Threadr.Ingest.BotQA do
         Keyword.merge(qa_runtime_opts(config), requester_runtime_opts(request))
       )
 
-    case Analysis.answer_tenant_question_for_bot(
-           subject_name,
-           qa_request
-         ) do
+    case Analysis.answer_tenant_question_for_bot(subject_name, qa_request) do
       {:ok, result} ->
         %{
           status: :answered,
@@ -296,6 +332,32 @@ defmodule Threadr.Ingest.BotQA do
 
   defp qa_runtime_opts(config) do
     Keyword.take(config, @qa_option_keys)
+  end
+
+  defp chat_generation_opts(config, request) do
+    qa_runtime_opts(config)
+    |> Keyword.merge(requester_runtime_opts(request))
+    |> GenerationProviderOpts.from_prefixed(
+      mode: :chat,
+      system_prompt:
+        "You are Threadr, a concise assistant in a shared chat channel. Reply conversationally. Do not pretend tenant retrieval evidence was used unless the user explicitly asked for analysis."
+    )
+  end
+
+  defp chat_prompt(config, request) do
+    tenant = Keyword.fetch!(config, :tenant_subject_name)
+
+    """
+    Tenant: #{tenant}
+    Platform: #{request.platform}
+    Speaker: #{request.actor}
+    Channel: #{Map.get(request, :channel, Map.get(request, :channel_id, "unknown"))}
+
+    The user directly addressed Threadr with this conversational turn:
+    #{request.question}
+
+    Reply briefly and naturally as a chatbot.
+    """
   end
 
   defp requester_runtime_opts(request) do

@@ -13,6 +13,13 @@ defmodule Threadr.Ingest.IRC.Agent do
   alias Threadr.Ingest.BotQA
 
   @reconnect_backoff_ms 5_000
+  @membership_prefix_flags %{
+    "~" => "owner",
+    "&" => "admin",
+    "@" => "op",
+    "%" => "halfop",
+    "+" => "voice"
+  }
 
   def start_link(config) do
     GenServer.start_link(__MODULE__, config, name: __MODULE__)
@@ -149,6 +156,7 @@ defmodule Threadr.Ingest.IRC.Agent do
 
   def handle_info({:joined, channel}, state) do
     Logger.info("IRC ingest joined #{channel}")
+    request_channel_roster(state, channel)
     {:noreply, state}
   end
 
@@ -272,6 +280,23 @@ defmodule Threadr.Ingest.IRC.Agent do
     {:noreply, state}
   end
 
+  def handle_info(%Message{cmd: "353", args: args}, state) do
+    case extract_names_reply(args) do
+      {:ok, channel, names} ->
+        publish_roster_presence_events(state, channel, names)
+
+      :error ->
+        :ok
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_info(%Message{cmd: "366", args: [_nick, channel | _rest]}, state) do
+    Logger.debug("IRC ingest finished roster sync for #{channel}")
+    {:noreply, state}
+  end
+
   def handle_info(_message, state) do
     {:noreply, state}
   end
@@ -361,6 +386,131 @@ defmodule Threadr.Ingest.IRC.Agent do
       raw: raw
     })
   end
+
+  defp request_channel_roster(state, channel) do
+    if Ingest.channel_allowed?(state.config[:channels], channel) do
+      cond do
+        function_exported?(state.client_module, :channel_names, 2) ->
+          :ok = state.client_module.channel_names(state.client, channel)
+
+        function_exported?(state.client_module, :names, 2) ->
+          :ok = state.client_module.names(state.client, channel)
+
+        function_exported?(state.client_module, :cmd, 2) ->
+          :ok = state.client_module.cmd(state.client, "NAMES #{channel}")
+
+        true ->
+          :ok
+      end
+    else
+      :ok
+    end
+  end
+
+  defp extract_names_reply([_requester, _visibility, channel, names | _rest])
+       when is_binary(channel) and is_binary(names) do
+    {:ok, channel, names}
+  end
+
+  defp extract_names_reply(_args), do: :error
+
+  defp publish_roster_presence_events(state, channel, names) do
+    if Ingest.channel_allowed?(state.config[:channels], channel) do
+      observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+      roster_batch_id = roster_batch_id(channel, names)
+
+      names
+      |> parse_roster_names()
+      |> Enum.reject(&bot_handle?(&1.handle, state))
+      |> Enum.each(fn %{handle: handle, prefixes: prefixes, flags: flags} ->
+        Ingest.publish_context_event(state.config, %{
+          platform: "irc",
+          event_type: "roster_presence",
+          actor: handle,
+          channel: channel,
+          observed_at: observed_at,
+          external_id: "irc:#{channel}:#{roster_batch_id}:#{handle}:roster",
+          platform_channel_id: channel,
+          metadata: %{
+            "platform_channel_id" => channel,
+            "conversation_external_id" => channel,
+            "observed_handle" => handle,
+            "observed_display_name" => handle,
+            "irc_membership_prefixes" => prefixes,
+            "irc_membership_flags" => flags,
+            "presence_source" => "names_reply",
+            "roster_batch_id" => roster_batch_id
+          },
+          raw: %{
+            "channel" => channel,
+            "nick" => handle,
+            "prefixes" => prefixes,
+            "flags" => flags,
+            "names" => names
+          }
+        })
+      end)
+    end
+  end
+
+  defp parse_roster_names(names) when is_binary(names) do
+    names
+    |> String.trim_leading(":")
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map(&parse_roster_name/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(&String.downcase(&1.handle))
+  end
+
+  defp parse_roster_name(name) do
+    {prefixes, handle} = split_membership_prefixes(String.trim(name))
+
+    if blank?(handle) do
+      nil
+    else
+      %{
+        handle: handle,
+        prefixes: prefixes,
+        flags: Enum.map(prefixes, &Map.get(@membership_prefix_flags, &1))
+      }
+    end
+  end
+
+  defp split_membership_prefixes(name), do: split_membership_prefixes(name, [])
+
+  defp split_membership_prefixes(<<prefix::utf8, rest::binary>>, prefixes) do
+    prefix_string = <<prefix::utf8>>
+
+    if Map.has_key?(@membership_prefix_flags, prefix_string) do
+      split_membership_prefixes(rest, prefixes ++ [prefix_string])
+    else
+      {prefixes, <<prefix::utf8, rest::binary>>}
+    end
+  end
+
+  defp split_membership_prefixes(name, prefixes), do: {prefixes, name}
+
+  defp bot_handle?(handle, state) when is_binary(handle) do
+    configured_nick =
+      state.config
+      |> Keyword.get(:irc, %{})
+      |> Map.get(:nick)
+
+    same_handle?(handle, configured_nick)
+  end
+
+  defp roster_batch_id(channel, names) do
+    :sha256
+    |> :crypto.hash("#{channel}\n#{names}")
+    |> Base.url_encode64(padding: false)
+    |> binary_part(0, 12)
+  end
+
+  defp same_handle?(left, right) when is_binary(left) and is_binary(right) do
+    String.downcase(String.trim(left)) == String.downcase(String.trim(right))
+  end
+
+  defp same_handle?(_left, _right), do: false
 
   defp blank?(value) when is_binary(value), do: String.trim(value) == ""
   defp blank?(nil), do: true

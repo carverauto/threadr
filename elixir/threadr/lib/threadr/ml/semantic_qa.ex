@@ -8,7 +8,15 @@ defmodule Threadr.ML.SemanticQA do
 
   alias Threadr.CompareDelta
   alias Threadr.ControlPlane
-  alias Threadr.ML.{EmbeddingProviderOpts, Embeddings, Generation, GenerationProviderOpts}
+
+  alias Threadr.ML.{
+    ChannelLabel,
+    EmbeddingProviderOpts,
+    Embeddings,
+    Generation,
+    GenerationProviderOpts
+  }
+
   alias Threadr.Repo
 
   @default_limit 5
@@ -131,7 +139,7 @@ defmodule Threadr.ML.SemanticQA do
           value -> to_string(value)
         end
 
-      "[#{citation.label}] [#{timestamp}] ##{citation.channel_name} #{citation.actor_handle}: #{citation.body}"
+      "[#{citation.label}] [#{timestamp}] #{ChannelLabel.format(citation.channel_name)} #{citation.actor_handle}: #{citation.body}"
       |> append_entities(citation)
       |> append_facts(citation)
     end)

@@ -354,6 +354,55 @@ defmodule Threadr.TenantData.IngestTest do
     assert Enum.sort(Enum.map(aliases, & &1.alias_kind)) == ["display_name", "handle"]
   end
 
+  test "persists roster presence context events as presence evidence without authorship" do
+    tenant = create_tenant!("IRC Roster Presence")
+    observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    context_envelope =
+      Envelope.new(
+        ChatContextEvent.from_map(%{
+          platform: "irc",
+          event_type: "roster_presence",
+          channel: "#intel",
+          actor: "alice",
+          observed_at: observed_at,
+          metadata: %{
+            "platform_channel_id" => "#intel",
+            "conversation_external_id" => "#intel",
+            "observed_handle" => "alice",
+            "observed_display_name" => "alice",
+            "irc_membership_prefixes" => ["@"],
+            "irc_membership_flags" => ["op"],
+            "presence_source" => "names_reply",
+            "roster_batch_id" => "batch-1"
+          },
+          raw: %{
+            "channel" => "#intel",
+            "nick" => "alice",
+            "prefixes" => ["@"],
+            "flags" => ["op"]
+          }
+        }),
+        "chat.context",
+        Topology.subject_for(:chat_messages, tenant.subject_name),
+        %{id: "irc:#intel:batch-1:alice:roster"}
+      )
+
+    assert {:ok, context_event} = Ingest.persist_envelope(context_envelope)
+
+    alias_observations =
+      fetch_alias_observations_for_context_event(tenant.schema_name, context_event.id)
+
+    assert length(alias_observations) == 2
+    assert Enum.all?(alias_observations, &(&1.source_event_type == "presence"))
+    assert Enum.all?(alias_observations, &is_nil(&1.source_message_id))
+    assert Enum.all?(alias_observations, & &1.channel_id)
+
+    assert [%{handle: "alice"}] = fetch_actors(tenant.schema_name)
+    assert [%{event_type: "roster_presence"}] = fetch_context_events(tenant.schema_name)
+    assert [] = Relationship |> Ash.read!(tenant: tenant.schema_name)
+  end
+
   test "persists message links for explicit reply messages" do
     tenant = create_tenant!("Message Links")
     observed_at = DateTime.utc_now() |> DateTime.truncate(:second)

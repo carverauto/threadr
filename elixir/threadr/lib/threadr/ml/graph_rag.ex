@@ -5,7 +5,16 @@ defmodule Threadr.ML.GraphRAG do
   """
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{Generation, GenerationProviderOpts, QARequest, SemanticQA, SummaryRequest}
+
+  alias Threadr.ML.{
+    ChannelLabel,
+    Generation,
+    GenerationProviderOpts,
+    QARequest,
+    SemanticQA,
+    SummaryRequest
+  }
+
   alias Threadr.TenantData.Graph
 
   @default_graph_message_limit 5
@@ -192,7 +201,7 @@ defmodule Threadr.ML.GraphRAG do
             value -> to_string(value)
           end
 
-        "- [#{citation.label}] [#{timestamp}] ##{citation.channel_name} #{citation.actor_handle}: #{citation.body}"
+        "- [#{citation.label}] [#{timestamp}] #{ChannelLabel.format(citation.channel_name)} #{citation.actor_handle}: #{citation.body}"
       end)
 
     "Related Messages:\n" <> Enum.join(lines, "\n")

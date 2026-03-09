@@ -6,7 +6,16 @@ defmodule Threadr.ML.ConversationQA do
   import Ecto.Query
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{ConversationQAIntent, Generation, GenerationProviderOpts, SemanticQA}
+
+  alias Threadr.ML.{
+    ActorReference,
+    ChannelLabel,
+    ConversationQAIntent,
+    Generation,
+    GenerationProviderOpts,
+    SemanticQA
+  }
+
   alias Threadr.Repo
 
   @default_limit 5
@@ -162,7 +171,7 @@ defmodule Threadr.ML.ConversationQA do
           |> Enum.join(", ")
 
         [
-          "[Conversation #{index}] #{time_window_label(conversation)} in ##{conversation.channel_name}",
+          "[Conversation #{index}] #{time_window_label(conversation)} in #{ChannelLabel.format(conversation.channel_name)}",
           "Topic: #{conversation.topic_summary || fallback_topic(conversation)}",
           "Summary: #{conversation.summary_text || fallback_summary(conversation)}",
           "Open pending items: #{conversation.open_pending_item_count}",
@@ -347,133 +356,7 @@ defmodule Threadr.ML.ConversationQA do
   end
 
   defp resolve_actor_reference(tenant_schema, raw_ref, opts) do
-    refs = actor_reference_candidates(raw_ref, opts)
-
-    Enum.reduce_while(refs, {:error, {:actor_not_found, normalize_actor_ref(raw_ref)}}, fn ref,
-                                                                                           _acc ->
-      case lookup_actor_reference(tenant_schema, ref) do
-        {:ok, _actor} = result -> {:halt, result}
-        {:error, {:ambiguous_actor, _, _}} = result -> {:halt, result}
-        {:error, {:actor_not_found, _}} -> {:cont, {:error, {:actor_not_found, ref}}}
-      end
-    end)
-  end
-
-  defp lookup_actor_reference(tenant_schema, ref) do
-    handle_matches =
-      from(a in "actors",
-        where: fragment("lower(?) = lower(?)", a.handle, ^ref),
-        select: %{
-          id: a.id,
-          handle: a.handle,
-          display_name: a.display_name,
-          external_id: a.external_id,
-          platform: a.platform
-        }
-      )
-      |> Repo.all(prefix: tenant_schema)
-      |> Enum.map(&normalize_actor_match/1)
-
-    case uniq_actor_matches(handle_matches) do
-      [actor] ->
-        {:ok, actor}
-
-      [_ | _] = matches ->
-        {:error, {:ambiguous_actor, ref, matches}}
-
-      [] ->
-        display_matches =
-          from(a in "actors",
-            where: not is_nil(a.display_name),
-            where: fragment("lower(?) = lower(?)", a.display_name, ^ref),
-            select: %{
-              id: a.id,
-              handle: a.handle,
-              display_name: a.display_name,
-              external_id: a.external_id,
-              platform: a.platform
-            }
-          )
-          |> Repo.all(prefix: tenant_schema)
-          |> Enum.map(&normalize_actor_match/1)
-
-        case uniq_actor_matches(display_matches) do
-          [actor] -> {:ok, actor}
-          [_ | _] = matches -> {:error, {:ambiguous_actor, ref, matches}}
-          [] -> {:error, {:actor_not_found, ref}}
-        end
-    end
-  end
-
-  defp actor_reference_candidates(raw_ref, opts) do
-    normalized = normalize_actor_ref(raw_ref)
-
-    refs =
-      if self_actor_reference?(normalized) do
-        requester_reference_candidates(opts) ++ [normalized]
-      else
-        [normalized, first_token_candidate(normalized), last_token_candidate(normalized)]
-      end
-
-    refs
-    |> Enum.filter(&is_binary/1)
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.uniq()
-  end
-
-  defp requester_reference_candidates(opts) do
-    [
-      Keyword.get(opts, :requester_actor_handle),
-      Keyword.get(opts, :requester_actor_display_name),
-      Keyword.get(opts, :requester_external_id)
-    ]
-    |> Enum.filter(&is_binary/1)
-    |> Enum.map(&normalize_actor_ref/1)
-    |> Enum.reject(&(&1 == ""))
-  end
-
-  defp self_actor_reference?(value), do: String.downcase(value) in ["i", "me", "myself"]
-
-  defp normalize_actor_ref(raw_ref) do
-    raw_ref
-    |> to_string()
-    |> String.trim()
-    |> String.trim_trailing("?")
-    |> String.trim_trailing("!")
-    |> String.trim_trailing(".")
-    |> trim_matching_quotes()
-    |> String.trim_leading("@")
-    |> String.trim()
-  end
-
-  defp first_token_candidate(value) do
-    case String.split(value, ~r/\s+/u, trim: true) do
-      [token | _rest] when token != value -> token
-      _ -> nil
-    end
-  end
-
-  defp last_token_candidate(value) do
-    value
-    |> String.split(~r/\s+/u, trim: true)
-    |> List.last()
-    |> case do
-      ^value -> nil
-      token -> token
-    end
-  end
-
-  defp trim_matching_quotes("\"" <> rest), do: rest |> String.trim_trailing("\"") |> String.trim()
-  defp trim_matching_quotes("'" <> rest), do: rest |> String.trim_trailing("'") |> String.trim()
-  defp trim_matching_quotes(value), do: value
-
-  defp uniq_actor_matches(matches), do: Enum.uniq_by(matches, & &1.id)
-
-  defp normalize_actor_match(match) do
-    match
-    |> Map.update!(:id, &normalize_identifier/1)
-    |> Map.update(:external_id, nil, &normalize_identifier/1)
+    ActorReference.resolve(tenant_schema, raw_ref, opts)
   end
 
   defp generation_opts(opts), do: GenerationProviderOpts.from_prefixed(opts)

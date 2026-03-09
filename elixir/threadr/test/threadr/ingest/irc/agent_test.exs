@@ -214,4 +214,60 @@ defmodule Threadr.Ingest.IRC.AgentTest do
     assert envelope.data.metadata["topic"] == "incident bridge updates"
     assert envelope.data.raw["topic"] == "incident bridge updates"
   end
+
+  test "requests channel names on join and publishes roster presence context events" do
+    config = [
+      tenant_subject_name: "acme-threat-intel",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Threadr.Ingest.IRC.Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(pid, {:joined, "#intel"})
+
+    assert_receive {:irc_client_channel_names, "#intel"}
+
+    send(
+      pid,
+      %Message{
+        cmd: "353",
+        args: ["threadr", "=", "#intel", "@alice +bob carol @threadr"]
+      }
+    )
+
+    assert_receive {:published_envelope, alice_envelope}
+    assert_receive {:published_envelope, bob_envelope}
+    assert_receive {:published_envelope, carol_envelope}
+    refute_receive {:published_envelope, _envelope}, 100
+
+    envelopes =
+      [alice_envelope, bob_envelope, carol_envelope]
+      |> Enum.sort_by(& &1.data.actor)
+
+    assert Enum.map(envelopes, & &1.data.actor) == ["alice", "bob", "carol"]
+    assert Enum.all?(envelopes, &(&1.type == "chat.context"))
+    assert Enum.all?(envelopes, &(&1.data.event_type == "roster_presence"))
+    assert Enum.all?(envelopes, &(&1.data.channel == "#intel"))
+
+    [alice, bob, carol] = envelopes
+
+    assert alice.data.metadata["irc_membership_prefixes"] == ["@"]
+    assert alice.data.metadata["irc_membership_flags"] == ["op"]
+    assert bob.data.metadata["irc_membership_prefixes"] == ["+"]
+    assert bob.data.metadata["irc_membership_flags"] == ["voice"]
+    assert carol.data.metadata["irc_membership_prefixes"] == []
+    assert carol.data.metadata["irc_membership_flags"] == []
+    assert alice.data.raw["names"] == "@alice +bob carol @threadr"
+  end
 end
