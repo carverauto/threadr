@@ -27,7 +27,8 @@ defmodule Threadr.ML.RequestRuntimeOpts do
   @requester_option_keys [
     :requester_actor_handle,
     :requester_actor_display_name,
-    :requester_external_id
+    :requester_external_id,
+    :requester_channel_name
   ]
 
   @spec common_keys() :: [atom()]

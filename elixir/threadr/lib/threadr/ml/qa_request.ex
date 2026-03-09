@@ -37,7 +37,8 @@ defmodule Threadr.ML.QARequest do
           generation_timeout: integer() | nil,
           requester_actor_handle: String.t() | nil,
           requester_actor_display_name: String.t() | nil,
-          requester_external_id: String.t() | nil
+          requester_external_id: String.t() | nil,
+          requester_channel_name: String.t() | nil
         }
 
   @spec new(String.t(), strategy(), keyword()) :: t()
