@@ -1,81 +1,87 @@
 ![threadNexus](https://raw.githubusercontent.com/carverauto/threadnexus/main/assets/thread-banner.png)
 
-# Description
+# Threadr
 
-Create an opensource social graph tool identifying relationships between actors,
-particularly threat actors, creating graphs and clusters. Identify the strength 
-of relationships Actor-to-Actor or Actor-to-Cluster.
+Threadr is an Elixir-based conversation intelligence system for tenant-scoped
+chat ingestion, reconstruction, QA, and operator-managed bot runtimes.
 
-## Project Goals
+The current implementation is centered on:
 
-* Identify Actors by observing social media, chat rooms, etc.
-* Find and Store relationships between Actors
-* Assign weights to relationships
-* Identify clusters of Actors
-* Assign weights to clusters
-* Adopt IRC, Slack, Discord, etc.
-* Automatic Dossier Creation
-* Query LLM/RAG
+- Phoenix and LiveView for the control plane and analyst UI
+- Ash and AshPostgres for public-schema and tenant-schema resources
+- NATS JetStream and Broadway for normalized event delivery and ingest
+- tenant-scoped chat persistence, relationship inference, and reconstruction
+- ML boundaries for embeddings, extraction, semantic QA, graph QA, and
+  conversation-grounded QA
+
+This repository is no longer organized around the older Python or
+JupyterBook-style implementation ideas. The active product surface lives under
+[elixir/threadr](/Users/mfreeman/src/threadr/elixir/threadr).
+
+## What Threadr Does
+
+Threadr ingests public chat activity from platforms such as IRC and Discord,
+normalizes it into tenant-scoped events, and persists:
+
+- actors, aliases, and alias observations
+- channels, messages, mentions, and relationships
+- context events such as edits, deletes, reactions, presence, nick changes,
+  joins, parts, quits, and topic changes
+- message links, reconstructed conversations, memberships, and pending items
+- embeddings, extracted entities, extracted facts, and dialogue acts
+
+On top of that data, Threadr provides:
+
+- analyst-facing QA, history, dossier, and graph surfaces
+- actor-centric and conversation-grounded retrieval
+- periodic conversation summaries, cluster review, and relationship recompute
+- control-plane APIs and LiveViews for tenant and bot management
+
+## Repository Layout
+
+- [elixir/threadr](/Users/mfreeman/src/threadr/elixir/threadr): main Phoenix application, event pipeline, ML boundaries, tests, and operational docs
+- [k8s/threadr](/Users/mfreeman/src/threadr/k8s/threadr): control-plane and operator manifests
+- [openspec](/Users/mfreeman/src/threadr/openspec): active and archived spec changes
+- [cmd](/Users/mfreeman/src/threadr/cmd): supporting bot and operator binaries
+
+## Getting Started
+
+The main app README is here:
+
+- [elixir/threadr/README.md](/Users/mfreeman/src/threadr/elixir/threadr/README.md)
+
+Typical local development starts with:
+
+```bash
+cd elixir/threadr
+./tools/dev_server.sh
+```
+
+If you explicitly want the older local-only compose stack instead of the
+default Kubernetes-backed dev flow:
+
+```bash
+cd elixir/threadr
+./tools/dev_server.sh --use-compose
+```
+
+## Verification
+
+Useful entrypoints:
+
+```bash
+cd elixir/threadr
+mix precommit
+THREADR_RUN_INTEGRATION=true mix test test/threadr/messaging/smoke_test.exs
+mix threadr.smoke.ingest --tenant-name "Acme Threat Intel" --mentions bob,carol
+```
+
+The integration smoke test exercises the JetStream plus Broadway plus
+PostgreSQL path end to end. The main app README covers the broader operator,
+Discord, and deployment smoke flows.
 
 ## Community
 
-Join us on our https://discord.gg/YnzMAJvb
+Join us on Discord:
 
-## Embeddings
-
-Chat messages will be run through an embedder or sentence transformer to create vectorizations
-and will be saved in a vector index. 
-
-## Graph-RAG
-
-LLMs grounded by knowledge graphs (graph-rag) will be used to answer questions such as
-"Does Alice know Bob?"
-
-and "What does Alice know about Bob?"
-
-## Inferring Relationships
-
-### Inferring Relationship Strengths
-
-Like the jibble project, we will use IRC bots to monitor chat rooms and infer relationships between actors. 
-We will use the following methods to infer relationships:
-
-* Direct Addressing (e.g. "Hey @carverauto, what do you think?")
-* Temporal Proximity (e.g. "I agree with @carverauto's point")
-* Temporal Density - How often do two actors interact?
-
-### Semantic Inference using an LLM
-
-LLMs can significantly enhance the inference process by understanding the context, sentiment, and the subtleties of human conversation beyond the capabilities of traditional rule-based systems. 
-
-Scheduled Summarization: Periodically, the system can invoke an LLM to summarize recent conversations. This not only helps in understanding the general discourse but can also highlight recurring themes or subjects around which relationships may form.
-
-Trigger-based Collection: Implement triggers based on conversational cues, such as pauses in dialogue or shifts in topics, to capture and analyze snapshots of conversations. This method ensures that the analysis is contextually relevant and timely.
-
-Interval-based Analysis: Similar to windowing, this involves examining conversations within set intervals to infer relationships and summarize content. This approach can be dynamically adjusted based on the volume of conversation or specific events within the chat room.
-
-#### Leader Selection
-
-Analyze conversation to find conversation leaders or the perceived leader, for many different contexts (primary chat, or within a cluster)
-
-### Challenges
-
-* Nick Changes - How do we track a user who changes their nick? BBB style database?
-* Actor Disassociation 
- - How do we handle actors who are not in the same room?
- - How do we handle actors who are in the same room but never interact?
- - How do we handle actors who are in the same room but never interact in a way that we can infer a relationship?
-* Private Messages - Unable to infer relationships from private messages w/o access to the messages, could be a future feature.
-
-## Visualizing Relationships
-
-* Spring Embedder - A force directed graph layout algorithm
-* Modified Spring Embedder Force Model - A force directed graph layout algorithm with a modified spring embedder
-
-## Temporal Decay
-
-If we are able to infer the strength of relationships, we can use a temporal decay model to reduce the strength of relationships over time.
-
-## Spam Filtering
-
-TBD
+- https://discord.gg/YnzMAJvb
