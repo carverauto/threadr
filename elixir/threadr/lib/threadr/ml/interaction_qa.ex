@@ -12,7 +12,8 @@ defmodule Threadr.ML.InteractionQA do
     ConversationQA,
     Generation,
     GenerationProviderOpts,
-    InteractionQAIntent
+    InteractionQAIntent,
+    ReconstructionQuery
   }
 
   alias Threadr.Repo
@@ -136,7 +137,7 @@ defmodule Threadr.ML.InteractionQA do
       }
     )
     |> apply_conversation_time_bounds(opts)
-    |> Repo.all(prefix: tenant_schema)
+    |> ReconstructionQuery.all(tenant_schema)
     |> Enum.reduce(%{}, fn row, acc ->
       partner_id = normalize_identifier(row.partner_id)
 

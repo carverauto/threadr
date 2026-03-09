@@ -86,6 +86,22 @@ defmodule Threadr.ML.ConversationQATest do
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
   end
 
+  test "returns not_conversation_question when reconstruction tables are unavailable" do
+    tenant = create_tenant!("Conversation QA Missing Tables")
+    _alice = create_actor!(tenant.schema_name, "alice")
+    _bob = create_actor!(tenant.schema_name, "bob")
+
+    drop_reconstruction_tables!(tenant.schema_name)
+
+    assert {:error, :not_conversation_question} =
+             ConversationQA.answer_question(
+               tenant.subject_name,
+               "What did Alice and Bob talk about today?",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 
@@ -159,5 +175,13 @@ defmodule Threadr.ML.ConversationQATest do
       tenant: tenant_schema
     )
     |> Ash.create!()
+  end
+
+  defp drop_reconstruction_tables!(tenant_schema) do
+    Threadr.Repo.query!(
+      "DROP TABLE IF EXISTS \"#{tenant_schema}\".\"conversation_memberships\" CASCADE"
+    )
+
+    Threadr.Repo.query!("DROP TABLE IF EXISTS \"#{tenant_schema}\".\"conversations\" CASCADE")
   end
 end

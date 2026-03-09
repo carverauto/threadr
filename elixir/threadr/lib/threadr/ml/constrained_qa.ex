@@ -6,7 +6,15 @@ defmodule Threadr.ML.ConstrainedQA do
   import Ecto.Query
 
   alias Threadr.ControlPlane
-  alias Threadr.ML.{ActorReference, Generation, GenerationProviderOpts, SemanticQA}
+
+  alias Threadr.ML.{
+    ActorReference,
+    Generation,
+    GenerationProviderOpts,
+    ReconstructionQuery,
+    SemanticQA
+  }
+
   alias Threadr.Repo
 
   @default_limit 8
@@ -200,7 +208,7 @@ defmodule Threadr.ML.ConstrainedQA do
       }
     )
     |> apply_conversation_time_scope(constraints.time_scope)
-    |> Repo.all(prefix: tenant_schema)
+    |> ReconstructionQuery.all(tenant_schema)
     |> Enum.map(&normalize_match/1)
     |> Enum.uniq_by(& &1.message_id)
   end

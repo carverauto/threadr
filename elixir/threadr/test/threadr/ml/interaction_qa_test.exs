@@ -84,6 +84,21 @@ defmodule Threadr.ML.InteractionQATest do
     refute result.context =~ "##!chases"
   end
 
+  test "returns not_interaction_question when reconstruction tables are unavailable" do
+    tenant = create_tenant!("Interaction QA Missing Tables")
+    _sig = create_actor!(tenant.schema_name, "sig")
+
+    drop_reconstruction_tables!(tenant.schema_name)
+
+    assert {:error, :not_interaction_question} =
+             InteractionQA.answer_question(
+               tenant.subject_name,
+               "who does sig talk with the most?",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 
@@ -140,5 +155,13 @@ defmodule Threadr.ML.InteractionQATest do
       tenant: tenant_schema
     )
     |> Ash.create!()
+  end
+
+  defp drop_reconstruction_tables!(tenant_schema) do
+    Threadr.Repo.query!(
+      "DROP TABLE IF EXISTS \"#{tenant_schema}\".\"conversation_memberships\" CASCADE"
+    )
+
+    Threadr.Repo.query!("DROP TABLE IF EXISTS \"#{tenant_schema}\".\"conversations\" CASCADE")
   end
 end

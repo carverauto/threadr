@@ -13,6 +13,7 @@ defmodule Threadr.ML.ConversationQA do
     ConversationQAIntent,
     Generation,
     GenerationProviderOpts,
+    ReconstructionQuery,
     SemanticQA
   }
 
@@ -94,7 +95,7 @@ defmodule Threadr.ML.ConversationQA do
       }
     )
     |> apply_conversation_time_bounds(opts)
-    |> Repo.all(prefix: tenant_schema)
+    |> ReconstructionQuery.all(tenant_schema)
     |> Enum.map(&normalize_conversation/1)
     |> Enum.uniq_by(& &1.conversation_id)
     |> Enum.map(fn conversation ->
@@ -215,7 +216,7 @@ defmodule Threadr.ML.ConversationQA do
         channel_name: ch.name
       }
     )
-    |> Repo.all(prefix: tenant_schema)
+    |> ReconstructionQuery.all(tenant_schema)
     |> Enum.map(fn row ->
       row
       |> Map.update!(:conversation_id, &normalize_identifier/1)

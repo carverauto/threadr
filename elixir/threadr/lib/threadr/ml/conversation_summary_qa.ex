@@ -12,10 +12,9 @@ defmodule Threadr.ML.ConversationSummaryQA do
     ConversationQA,
     ConversationSummaryQAIntent,
     Generation,
-    GenerationProviderOpts
+    GenerationProviderOpts,
+    ReconstructionQuery
   }
-
-  alias Threadr.Repo
 
   @default_limit 5
 
@@ -85,7 +84,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
       }
     )
     |> apply_conversation_time_bounds(opts)
-    |> Repo.all(prefix: tenant_schema)
+    |> ReconstructionQuery.all(tenant_schema)
     |> Enum.map(&normalize_conversation/1)
     |> Enum.map(fn conversation ->
       Map.put(

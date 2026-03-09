@@ -90,6 +90,22 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     assert result.answer.content =~ "What happened last week?"
   end
 
+  test "returns not_conversation_summary_question when reconstruction tables are unavailable" do
+    tenant = create_tenant!("Conversation Summary QA Missing Tables")
+
+    drop_reconstruction_tables!(tenant.schema_name)
+
+    assert {:error, :not_conversation_summary_question} =
+             ConversationSummaryQA.answer_question(
+               tenant.subject_name,
+               "What happened today?",
+               since: ~U[2026-03-09 00:00:00Z],
+               until: ~U[2026-03-10 00:00:00Z],
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 
@@ -163,5 +179,13 @@ defmodule Threadr.ML.ConversationSummaryQATest do
       tenant: tenant_schema
     )
     |> Ash.create!()
+  end
+
+  defp drop_reconstruction_tables!(tenant_schema) do
+    Threadr.Repo.query!(
+      "DROP TABLE IF EXISTS \"#{tenant_schema}\".\"conversation_memberships\" CASCADE"
+    )
+
+    Threadr.Repo.query!("DROP TABLE IF EXISTS \"#{tenant_schema}\".\"conversations\" CASCADE")
   end
 end
