@@ -7,7 +7,7 @@ spec:
     spec:
       initContainers:
         - name: nats-setup
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:c3ea7adc8d5a25efaa6bbe8b813f8af9564df74eb280ae2fc1da25b72a5e7144
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:13f16a8a50b06fb73d693bba0547a7b8b7bc30103004c74e2c0fe8bf1322ee27
       containers:
         - name: threadr-worker
-          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:c3ea7adc8d5a25efaa6bbe8b813f8af9564df74eb280ae2fc1da25b72a5e7144
+          image: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:13f16a8a50b06fb73d693bba0547a7b8b7bc30103004c74e2c0fe8bf1322ee27
