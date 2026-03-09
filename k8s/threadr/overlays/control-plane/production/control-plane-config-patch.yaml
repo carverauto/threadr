@@ -10,5 +10,5 @@ data:
   THREADR_BOT_IMAGE_DRIFT_SYNCER_ENABLED: "true"
   THREADR_EMBEDDINGS_PROVIDER: Threadr.ML.Embeddings.HashProvider
   THREADR_EMBEDDINGS_MODEL: term-hash-384-v1
-  THREADR_IRC_BOT_DEFAULT_IMAGE: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:9ef96f3537f2e5edcd0ac474c53d5cb2a89f75d2c8aedf31b04fbc534f09fbeb
-  THREADR_DISCORD_BOT_DEFAULT_IMAGE: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:9ef96f3537f2e5edcd0ac474c53d5cb2a89f75d2c8aedf31b04fbc534f09fbeb
+  THREADR_IRC_BOT_DEFAULT_IMAGE: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:ae9d8c8316ce3f7d667b8a2f5ea85efb5fd441d38d2e56eb8aa82a63f08eadfa
+  THREADR_DISCORD_BOT_DEFAULT_IMAGE: ghcr.io/carverauto/threadr/threadr-control-plane@sha256:ae9d8c8316ce3f7d667b8a2f5ea85efb5fd441d38d2e56eb8aa82a63f08eadfa
