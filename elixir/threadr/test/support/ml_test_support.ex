@@ -83,6 +83,32 @@ defmodule Threadr.TestGenerationProvider do
   end
 end
 
+defmodule Threadr.TestConversationSummaryProvider do
+  @behaviour Threadr.ML.Generation.Provider
+
+  alias Threadr.ML.Generation.Result
+
+  @impl true
+  def complete(request, opts) do
+    {:ok,
+     %Result{
+       content:
+         """
+         TOPIC: web-4 validation
+         SUMMARY: Bob asked for web-4 to be validated, and Alice later reported the validation was complete. [M1] [M2]
+         """
+         |> String.trim(),
+       model: Keyword.get(opts, :model, "test-llm"),
+       provider: "test-conversation-summary",
+       metadata: %{
+         "system_prompt" => request.system_prompt || Keyword.get(opts, :system_prompt),
+         "mode" => request.mode,
+         "context" => request.context
+       }
+     }}
+  end
+end
+
 defmodule Threadr.TestExtractionProvider do
   @behaviour Threadr.ML.Extraction.Provider
 
@@ -92,6 +118,11 @@ defmodule Threadr.TestExtractionProvider do
   def extract(_request, opts) do
     {:ok,
      %Result{
+       dialogue_act: %{
+         label: "status_update",
+         confidence: 0.96,
+         metadata: %{"requires_follow_up" => false}
+       },
        entities: [
          %{
            entity_type: "person",
@@ -135,6 +166,11 @@ defmodule Threadr.TestExtractionOptsProvider do
   def extract(_request, opts) do
     {:ok,
      %Result{
+       dialogue_act: %{
+         label: "other",
+         confidence: 0.5,
+         metadata: %{}
+       },
        entities: [],
        facts: [],
        model: Keyword.get(opts, :model, "test-llm"),

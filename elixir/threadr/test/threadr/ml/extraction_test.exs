@@ -20,6 +20,8 @@ defmodule Threadr.ML.ExtractionTest do
 
     assert result.provider == "test"
     assert result.model == "test-llm"
+    assert result.dialogue_act.label == "status_update"
+    assert result.dialogue_act.confidence == 0.96
     assert [%{entity_type: "person", name: "Alice"} | _] = result.entities
 
     assert [
@@ -69,6 +71,7 @@ defmodule Threadr.ML.ExtractionTest do
 
     assert result.provider == "test-opts"
     assert result.model == "extract-1"
+    assert result.dialogue_act.label == "other"
     assert result.metadata["provider_name"] == "custom-extractor"
     assert result.metadata["endpoint"] == "https://extract.example.test"
     assert result.metadata["api_key"] == "extract-secret"

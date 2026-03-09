@@ -15,6 +15,10 @@ defmodule ThreadrWeb.TenantQaLive.Index do
          socket
          |> assign(:tenant, tenant)
          |> assign(:membership_role, membership.role)
+         |> assign(
+           :qa_embedding_status,
+           fetch_qa_embedding_status(socket.assigns.current_user, tenant)
+         )
          |> assign(:question, "")
          |> assign(:limit, @default_limit)
          |> assign(:since, "")
@@ -70,6 +74,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
       {:ok, result} ->
         {:noreply,
          socket
+         |> refresh_qa_embedding_status()
          |> assign(:search_result, result)
          |> assign(:answer_result, nil)
          |> assign(:comparison_result, nil)
@@ -87,6 +92,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
       {:ok, result} ->
         {:noreply,
          socket
+         |> refresh_qa_embedding_status()
          |> assign(:answer_result, result)
          |> assign(:search_result, result)
          |> assign(:comparison_result, nil)
@@ -104,6 +110,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
       {:ok, result} ->
         {:noreply,
          socket
+         |> refresh_qa_embedding_status()
          |> assign(:graph_answer_result, result)
          |> assign(:search_result, result.semantic)
          |> assign(:answer_result, nil)
@@ -121,6 +128,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
       {:ok, result} ->
         {:noreply,
          socket
+         |> refresh_qa_embedding_status()
          |> assign(:summary_result, result)
          |> assign(:search_result, result.semantic)
          |> assign(:answer_result, nil)
@@ -138,6 +146,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
       {:ok, result} ->
         {:noreply,
          socket
+         |> refresh_qa_embedding_status()
          |> assign(:comparison_result, result)
          |> assign(:search_result, nil)
          |> assign(:answer_result, nil)
@@ -192,6 +201,31 @@ defmodule ThreadrWeb.TenantQaLive.Index do
                   <div class="text-sm text-base-content/70">{@tenant.subject_name}</div>
                 </div>
                 <span class="badge badge-outline">{@membership_role}</span>
+              </div>
+
+              <div class="rounded-box border border-base-300 bg-base-200 px-4 py-3">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <div class="text-sm font-semibold text-base-content/70">QA Embeddings</div>
+                    <div class="text-xs text-base-content/60">
+                      {qa_embedding_summary(@qa_embedding_status)}
+                    </div>
+                  </div>
+                  <span class={qa_embedding_badge_class(@qa_embedding_status)}>
+                    {qa_embedding_label(@qa_embedding_status)}
+                  </span>
+                </div>
+                <div class="mt-2 text-xs text-base-content/60">
+                  {qa_embedding_detail(@qa_embedding_status)}
+                </div>
+                <div
+                  :if={qa_embedding_timestamp(@qa_embedding_status)}
+                  class="mt-1 text-xs text-base-content/50"
+                >
+                  Latest missing message: {format_datetime(
+                    qa_embedding_timestamp(@qa_embedding_status)
+                  )}
+                </div>
               </div>
 
               <form id="tenant-qa-form" phx-change="change" class="space-y-4">
@@ -675,6 +709,21 @@ defmodule ThreadrWeb.TenantQaLive.Index do
   defp normalize_result_error({:error, reason}),
     do: {:error, "Semantic QA failed: #{inspect(reason)}"}
 
+  defp refresh_qa_embedding_status(socket) do
+    assign(
+      socket,
+      :qa_embedding_status,
+      fetch_qa_embedding_status(socket.assigns.current_user, socket.assigns.tenant)
+    )
+  end
+
+  defp fetch_qa_embedding_status(user, tenant) do
+    case Analysis.qa_embedding_status_for_user(user, tenant.subject_name) do
+      {:ok, status} -> status
+      {:error, _reason} -> nil
+    end
+  end
+
   defp qa_request(socket, question) do
     QARequest.new(question, :user,
       limit: socket.assigns.limit,
@@ -843,6 +892,52 @@ defmodule ThreadrWeb.TenantQaLive.Index do
     do: :erlang.float_to_binary(value, decimals: 4)
 
   defp format_similarity(value), do: to_string(value)
+
+  defp qa_embedding_label(%{status: :ready}), do: "ready"
+  defp qa_embedding_label(%{status: :catching_up}), do: "catching up"
+  defp qa_embedding_label(%{status: :empty}), do: "empty"
+  defp qa_embedding_label(_status), do: "unknown"
+
+  defp qa_embedding_badge_class(%{status: :ready}), do: "badge badge-success"
+  defp qa_embedding_badge_class(%{status: :catching_up}), do: "badge badge-warning"
+  defp qa_embedding_badge_class(%{status: :empty}), do: "badge badge-outline"
+  defp qa_embedding_badge_class(_status), do: "badge badge-neutral"
+
+  defp qa_embedding_summary(%{
+         embedded_messages: embedded,
+         total_messages: total,
+         coverage_percent: pct
+       }) do
+    "#{embedded} / #{total} embedded (#{pct}%)"
+  end
+
+  defp qa_embedding_summary(_status), do: "Embedding status unavailable"
+
+  defp qa_embedding_detail(%{status: :ready, embedding_model: model}) do
+    "All retained messages are embedded for #{model}."
+  end
+
+  defp qa_embedding_detail(%{
+         status: :catching_up,
+         missing_messages: missing,
+         embedding_model: model
+       }) do
+    "#{missing} retained messages still need embeddings for #{model}."
+  end
+
+  defp qa_embedding_detail(%{status: :empty}) do
+    "No retained tenant messages are currently available for QA."
+  end
+
+  defp qa_embedding_detail(_status), do: "Embedding status unavailable"
+
+  defp qa_embedding_timestamp(%{latest_unembedded_observed_at: %DateTime{} = observed_at}),
+    do: observed_at
+
+  defp qa_embedding_timestamp(%{latest_unembedded_observed_at: %NaiveDateTime{} = observed_at}),
+    do: observed_at
+
+  defp qa_embedding_timestamp(_status), do: nil
 
   attr(:id, :string, required: true)
   attr(:delta, :map, required: true)

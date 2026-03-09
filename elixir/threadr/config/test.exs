@@ -16,7 +16,11 @@ config :threadr, Threadr.Repo,
     System.get_env("THREADR_TEST_DB_NAME") ||
       "threadr_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  pool_size: System.schedulers_online() * 2,
+  # Integration smoke tests share a sandbox owner with Broadway workers,
+  # so allow checkout requests to wait longer under transient load.
+  queue_target: 1_000,
+  queue_interval: 5_000
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
@@ -62,3 +66,6 @@ config :threadr, Threadr.Messaging.Topology, messaging_enabled: integration_enab
 
 config :threadr, Threadr.ControlPlane.BotOperationDispatcher, enabled: false
 config :threadr, Threadr.ControlPlane.BotStatusObserver, enabled: false
+config :threadr, Threadr.TenantData.ConversationClusterReviewDispatcher, enabled: false
+config :threadr, Threadr.TenantData.ConversationRelationshipDispatcher, enabled: false
+config :threadr, Threadr.TenantData.ConversationSummaryDispatcher, enabled: false

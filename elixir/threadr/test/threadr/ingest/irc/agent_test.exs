@@ -57,6 +57,12 @@ defmodule Threadr.Ingest.IRC.AgentTest do
     assert envelope.data.channel == "#intel"
     assert envelope.data.body == "hello @bob"
     assert envelope.data.mentions == ["bob"]
+    assert envelope.data.metadata["platform_channel_id"] == "#intel"
+    assert envelope.data.metadata["observed_handle"] == "alice"
+    assert envelope.data.metadata["observed_display_name"] == "alice"
+    assert envelope.data.metadata["irc_user"] == "alice"
+    assert envelope.data.metadata["irc_host"] == "workstation.example.org"
+    assert envelope.data.metadata["conversation_external_id"] == "#intel"
 
     assert envelope.data.raw == %{
              "host" => "workstation.example.org",
@@ -129,5 +135,83 @@ defmodule Threadr.Ingest.IRC.AgentTest do
     assert envelope.data.actor == "alice"
     assert envelope.data.channel == "#intel"
     assert envelope.data.body == "hello @bob"
+  end
+
+  test "publishes IRC nick changes as context events" do
+    config = [
+      tenant_subject_name: "acme-threat-intel",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Threadr.Ingest.IRC.Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %Message{
+        cmd: "NICK",
+        nick: "alice",
+        user: "alice",
+        host: "workstation.example.org",
+        args: ["alice_"]
+      }
+    )
+
+    assert_receive {:published_envelope, envelope}
+    assert envelope.type == "chat.context"
+    assert envelope.data.event_type == "nick_change"
+    assert envelope.data.actor == "alice"
+    assert envelope.data.channel == nil
+    assert envelope.data.metadata["new_handle"] == "alice_"
+    assert envelope.data.raw["new_nick"] == "alice_"
+  end
+
+  test "publishes IRC topic changes as context events" do
+    config = [
+      tenant_subject_name: "acme-threat-intel",
+      channels: ["#intel"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Threadr.Ingest.IRC.Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %Message{
+        cmd: "TOPIC",
+        nick: "alice",
+        user: "alice",
+        host: "workstation.example.org",
+        args: ["#intel", "incident bridge updates"]
+      }
+    )
+
+    assert_receive {:published_envelope, envelope}
+    assert envelope.type == "chat.context"
+    assert envelope.data.event_type == "topic_change"
+    assert envelope.data.actor == "alice"
+    assert envelope.data.channel == "#intel"
+    assert envelope.data.metadata["topic"] == "incident bridge updates"
+    assert envelope.data.raw["topic"] == "incident bridge updates"
   end
 end

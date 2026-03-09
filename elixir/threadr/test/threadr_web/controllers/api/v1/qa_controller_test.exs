@@ -9,7 +9,17 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
   alias Threadr.Events.{ChatMessage, Envelope}
   alias Threadr.Messaging.Topology
 
-  alias Threadr.TenantData.{Actor, Channel, Extraction, Ingest, Message, MessageEmbedding}
+  alias Threadr.TenantData.{
+    Actor,
+    Channel,
+    ConversationAttachment,
+    ExtractedEntity,
+    Extraction,
+    Ingest,
+    Message,
+    MessageEmbedding,
+    MessageLinkInference
+  }
 
   setup do
     previous_ml_config = Application.get_env(:threadr, Threadr.ML, [])
@@ -154,6 +164,34 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     assert Map.has_key?(data, "fact_delta")
     assert data["answer"]["content"] =~ "Baseline Window:"
     assert data["answer"]["content"] =~ "Comparison Window:"
+  end
+
+  test "POST /api/v1/tenants/:subject_name/qa/answer returns grounded conversation summaries for bounded questions",
+       %{conn: conn} do
+    owner = create_user!("owner")
+    tenant = create_tenant!("QA Conversation Summary", owner)
+    seed_conversation_summary_data!(tenant.schema_name)
+
+    conn =
+      conn
+      |> api_key_conn(owner)
+      |> post(~p"/api/v1/tenants/#{tenant.subject_name}/qa/answer", %{
+        "question" => "What happened last week?",
+        "since" => "2026-03-01T00:00:00",
+        "until" => "2026-03-09T00:00:00"
+      })
+
+    assert %{"data" => data} = json_response(conn, 200)
+    assert data["query"]["mode"] == "conversation_summary_qa"
+    assert data["query"]["retrieval"] == "reconstructed_conversations"
+    assert data["query"]["conversation_count"] == 1
+    assert length(data["citations"]) == 2
+    assert hd(data["citations"])["label"] == "C1"
+
+    assert data["context"] =~
+             "Conversation summary QA for tenant activity in the requested time window."
+
+    assert data["answer"]["content"] =~ "What happened last week?"
   end
 
   test "POST /api/v1/tenants/:subject_name/qa/answer returns 422 when no embeddings exist", %{
@@ -355,6 +393,62 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
     create_embedding!(tenant_schema, second_message.id, [0.4, 0.5, 0.6])
   end
 
+  defp seed_conversation_summary_data!(tenant_schema) do
+    alice = create_actor!(tenant_schema, "alice")
+    bob = create_actor!(tenant_schema, "bob")
+    channel = create_channel!(tenant_schema, "ops")
+
+    question =
+      Message
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          external_id: "msg-question-summary",
+          body: "Can you validate web-7 before deploy?",
+          observed_at: ~U[2026-03-08 11:00:00Z],
+          raw: %{"body" => "Can you validate web-7 before deploy?"},
+          metadata: %{
+            "dialogue_act" => %{"label" => "request", "confidence" => 0.92},
+            "conversation_external_id" => "ops"
+          },
+          actor_id: alice.id,
+          channel_id: channel.id
+        },
+        tenant: tenant_schema
+      )
+      |> Ash.create!()
+
+    answer =
+      Message
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          external_id: "msg-answer-summary",
+          body: "Yes, I validated web-7 before deploy.",
+          observed_at: ~U[2026-03-08 11:05:00Z],
+          raw: %{"body" => "Yes, I validated web-7 before deploy."},
+          metadata: %{
+            "dialogue_act" => %{"label" => "status_update", "confidence" => 0.86},
+            "reply_to_external_id" => "msg-question-summary",
+            "conversation_external_id" => "ops"
+          },
+          actor_id: bob.id,
+          channel_id: channel.id
+        },
+        tenant: tenant_schema
+      )
+      |> Ash.create!()
+
+    create_entity!(tenant_schema, question.id, "artifact", "web-7")
+    create_entity!(tenant_schema, answer.id, "artifact", "web-7")
+
+    {:ok, _conversation} = ConversationAttachment.attach_message(question.id, tenant_schema)
+    {:ok, inference} = MessageLinkInference.infer_and_persist(answer.id, tenant_schema)
+
+    {:ok, _conversation} =
+      ConversationAttachment.attach_message(answer.id, tenant_schema, inference: inference)
+  end
+
   defp create_actor!(tenant_schema, handle) do
     Actor
     |> Ash.Changeset.for_create(
@@ -425,6 +519,23 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
         )
         |> Ash.update!()
     end
+  end
+
+  defp create_entity!(tenant_schema, message_id, entity_type, name) do
+    ExtractedEntity
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        entity_type: entity_type,
+        name: name,
+        canonical_name: name,
+        confidence: 0.9,
+        metadata: %{},
+        source_message_id: message_id
+      },
+      tenant: tenant_schema
+    )
+    |> Ash.create!()
   end
 
   defp persist_message!(

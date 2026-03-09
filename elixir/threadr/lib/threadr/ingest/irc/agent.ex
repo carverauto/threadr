@@ -152,6 +152,126 @@ defmodule Threadr.Ingest.IRC.Agent do
     {:noreply, state}
   end
 
+  def handle_info(
+        %Message{cmd: "NICK", nick: nick, user: user, host: host, args: [new_nick]},
+        state
+      ) do
+    publish_context_event(
+      state,
+      "nick_change",
+      nick,
+      nil,
+      %{
+        "observed_handle" => nick,
+        "observed_display_name" => nick,
+        "new_handle" => new_nick,
+        "irc_user" => user,
+        "irc_host" => host
+      },
+      %{
+        "nick" => nick,
+        "new_nick" => new_nick,
+        "user" => user,
+        "host" => host
+      },
+      "#{nick}:#{new_nick}:nick"
+    )
+
+    {:noreply, state}
+  end
+
+  def handle_info(
+        %Message{cmd: "JOIN", nick: nick, user: user, host: host, args: [channel | _]},
+        state
+      ) do
+    publish_channel_context_event(
+      state,
+      "join",
+      nick,
+      user,
+      host,
+      channel,
+      "#{nick}:#{channel}:join"
+    )
+
+    {:noreply, state}
+  end
+
+  def handle_info(
+        %Message{cmd: "PART", nick: nick, user: user, host: host, args: [channel | _]},
+        state
+      ) do
+    publish_channel_context_event(
+      state,
+      "part",
+      nick,
+      user,
+      host,
+      channel,
+      "#{nick}:#{channel}:part"
+    )
+
+    {:noreply, state}
+  end
+
+  def handle_info(%Message{cmd: "QUIT", nick: nick, user: user, host: host, args: args}, state) do
+    publish_context_event(
+      state,
+      "quit",
+      nick,
+      nil,
+      %{
+        "observed_handle" => nick,
+        "observed_display_name" => nick,
+        "irc_user" => user,
+        "irc_host" => host,
+        "reason" => List.first(args)
+      },
+      %{
+        "nick" => nick,
+        "user" => user,
+        "host" => host,
+        "reason" => List.first(args)
+      },
+      "#{nick}:quit"
+    )
+
+    {:noreply, state}
+  end
+
+  def handle_info(
+        %Message{cmd: "TOPIC", nick: nick, user: user, host: host, args: [channel, topic | _]},
+        state
+      ) do
+    if Ingest.channel_allowed?(state.config[:channels], channel) do
+      publish_context_event(
+        state,
+        "topic_change",
+        nick,
+        channel,
+        %{
+          "platform_channel_id" => channel,
+          "conversation_external_id" => channel,
+          "observed_handle" => nick,
+          "observed_display_name" => nick,
+          "irc_user" => user,
+          "irc_host" => host,
+          "topic" => topic
+        },
+        %{
+          "nick" => nick,
+          "user" => user,
+          "host" => host,
+          "channel" => channel,
+          "topic" => topic
+        },
+        "#{nick}:#{channel}:topic"
+      )
+    end
+
+    {:noreply, state}
+  end
+
   def handle_info(_message, state) do
     {:noreply, state}
   end
@@ -176,6 +296,14 @@ defmodule Threadr.Ingest.IRC.Agent do
             body: body,
             channel: channel,
             platform_channel_id: channel,
+            metadata: %{
+              "platform_channel_id" => channel,
+              "observed_handle" => nick,
+              "observed_display_name" => nick,
+              "irc_user" => user,
+              "irc_host" => host,
+              "conversation_external_id" => channel
+            },
             raw: %{
               "host" => host,
               "user" => user,
@@ -190,6 +318,48 @@ defmodule Threadr.Ingest.IRC.Agent do
             channel: channel
           })
     end
+  end
+
+  defp publish_channel_context_event(state, event_type, nick, user, host, channel, external_id) do
+    if Ingest.channel_allowed?(state.config[:channels], channel) do
+      publish_context_event(
+        state,
+        event_type,
+        nick,
+        channel,
+        %{
+          "platform_channel_id" => channel,
+          "conversation_external_id" => channel,
+          "observed_handle" => nick,
+          "observed_display_name" => nick,
+          "irc_user" => user,
+          "irc_host" => host
+        },
+        %{
+          "nick" => nick,
+          "user" => user,
+          "host" => host,
+          "channel" => channel
+        },
+        external_id
+      )
+    else
+      :ok
+    end
+  end
+
+  defp publish_context_event(state, event_type, actor, channel, metadata, raw, external_suffix) do
+    Ingest.publish_context_event(state.config, %{
+      platform: "irc",
+      event_type: event_type,
+      actor: actor,
+      channel: channel,
+      observed_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      external_id: "irc:#{external_suffix}",
+      platform_channel_id: channel,
+      metadata: metadata,
+      raw: raw
+    })
   end
 
   defp blank?(value) when is_binary(value), do: String.trim(value) == ""

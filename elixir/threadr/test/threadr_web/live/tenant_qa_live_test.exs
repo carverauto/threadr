@@ -148,6 +148,91 @@ defmodule ThreadrWeb.TenantQaLiveTest do
     assert rendered =~ "Top fact: Bob reported payroll access was limited"
   end
 
+  test "uses actor-centric retrieval for tenant QA without requiring embeddings", %{conn: conn} do
+    user = create_user!("tenant-qa-actor")
+    tenant = create_tenant!("Tenant QA Actor", user)
+    actor = create_actor!(tenant.schema_name, "twatbot")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "twatbot keeps talking about deploys, restart loops, and operator state."
+    )
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "twatbot also talks about bots, rollouts, and crash recovery."
+    )
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, view, _html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/qa")
+
+    view
+    |> element("#tenant-qa-form")
+    |> render_change(%{"question" => "what does twatbot talk about?", "limit" => "3"})
+
+    view
+    |> element("#tenant-qa-answer")
+    |> render_click()
+
+    rendered = render(view)
+    assert rendered =~ "what does twatbot talk about?"
+    assert rendered =~ "QA Embeddings"
+    assert rendered =~ "catching up"
+    refute rendered =~ "No tenant message embeddings available"
+  end
+
+  test "shows qa embedding readiness and updates after catch-up", %{conn: conn} do
+    user = create_user!("tenant-qa-status")
+    tenant = create_tenant!("Tenant QA Status", user)
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "Alice and Bob discussed endpoint isolation last week."
+    )
+
+    conn =
+      conn
+      |> init_test_session(%{})
+      |> store_in_session(user)
+
+    {:ok, view, _html} = live(conn, ~p"/control-plane/tenants/#{tenant.subject_name}/qa")
+
+    rendered = render(view)
+    assert rendered =~ "QA Embeddings"
+    assert rendered =~ "0 / 1 embedded (0.0%)"
+    assert rendered =~ "catching up"
+    assert rendered =~ "1 retained messages still need embeddings for test-embedding-model."
+
+    view
+    |> element("#tenant-qa-form")
+    |> render_change(%{
+      "question" => "What did Alice and Bob talk about last week?",
+      "limit" => "1"
+    })
+
+    view
+    |> element("#tenant-qa-answer")
+    |> render_click()
+
+    rendered = render(view)
+    assert rendered =~ "1 / 1 embedded (100.0%)"
+    assert rendered =~ "ready"
+    assert rendered =~ "All retained messages are embedded for test-embedding-model."
+  end
+
   test "applies temporal bounds to tenant QA results", %{conn: conn} do
     user = create_user!("tenant-qa-bounded")
     tenant = create_tenant!("Tenant QA Bounded", user)

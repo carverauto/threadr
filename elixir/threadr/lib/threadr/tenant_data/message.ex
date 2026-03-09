@@ -23,6 +23,11 @@ defmodule Threadr.TenantData.Message do
       primary? true
       accept [:external_id, :body, :observed_at, :raw, :metadata, :actor_id, :channel_id]
     end
+
+    update :update do
+      primary? true
+      accept [:metadata]
+    end
   end
 
   attributes do

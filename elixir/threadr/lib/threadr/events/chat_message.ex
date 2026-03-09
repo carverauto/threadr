@@ -5,7 +5,16 @@ defmodule Threadr.Events.ChatMessage do
 
   @derive Jason.Encoder
   @enforce_keys [:platform, :channel, :actor, :body, :observed_at]
-  defstruct [:platform, :channel, :actor, :body, :observed_at, mentions: [], raw: %{}]
+  defstruct [
+    :platform,
+    :channel,
+    :actor,
+    :body,
+    :observed_at,
+    mentions: [],
+    metadata: %{},
+    raw: %{}
+  ]
 
   def from_map(attrs) do
     %__MODULE__{
@@ -15,6 +24,7 @@ defmodule Threadr.Events.ChatMessage do
       body: fetch!(attrs, :body),
       observed_at: fetch_datetime!(attrs, :observed_at),
       mentions: fetch(attrs, :mentions, []),
+      metadata: fetch(attrs, :metadata, %{}),
       raw: fetch(attrs, :raw, %{})
     }
   end

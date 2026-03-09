@@ -31,6 +31,21 @@ config :threadr, Threadr.ControlPlane.BotStatusObserver,
   poll_interval_ms: 15_000,
   batch_size: 50
 
+config :threadr, Threadr.TenantData.ConversationSummaryDispatcher,
+  enabled: false,
+  poll_interval_ms: 60_000,
+  batch_size: 10
+
+config :threadr, Threadr.TenantData.ConversationClusterReviewDispatcher,
+  enabled: false,
+  poll_interval_ms: 60_000,
+  batch_size: 10
+
+config :threadr, Threadr.TenantData.ConversationRelationshipDispatcher,
+  enabled: false,
+  poll_interval_ms: 60_000,
+  batch_size: 10
+
 config :threadr, Threadr.ControlPlane.BotImageDriftSyncer,
   enabled: false,
   poll_interval_ms: 60_000
