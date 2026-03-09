@@ -107,6 +107,7 @@ defmodule Threadr.ML.ConstrainedQATest do
              )
 
     assert result.query.retrieval in [
+             "paired_actor_messages",
              "shared_conversation_messages",
              "actor_messages_about_counterpart"
            ]
@@ -114,6 +115,150 @@ defmodule Threadr.ML.ConstrainedQATest do
     assert result.query.actor_handles == ["fysty"]
     assert result.query.counterpart_actor_handles == ["leku"]
     assert result.context =~ "garden on my terrace"
+  end
+
+  test "pair questions require evidence from both actors and exclude one-sided messages" do
+    tenant = create_tenant!("Constrained QA Pair Guard")
+    sig = create_actor!(tenant.schema_name, "sig")
+    eefer = create_actor!(tenant.schema_name, "eefer--")
+    dio = create_actor!(tenant.schema_name, "dio")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      eefer.id,
+      channel.id,
+      "sig: What is Havana Syndrome?",
+      "eefer-1",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      sig.id,
+      channel.id,
+      "basically a label for a weird set of symptoms reported by diplomats.",
+      "sig-1",
+      DateTime.add(now, 5, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      sig.id,
+      channel.id,
+      "pretty much yeah mogged means outdone and humiliated by comparison.",
+      "sig-mogged",
+      DateTime.add(now, 900, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      dio.id,
+      channel.id,
+      "sig: so mogged means the same as upstaged?",
+      "dio-mogged",
+      DateTime.add(now, 905, :second)
+    )
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "what did sig and eefer-- talk about today?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "paired_actor_messages"
+    assert result.query.actor_handles == ["sig"]
+    assert result.query.counterpart_actor_handles == ["eefer--"]
+    assert Enum.any?(result.citations, &(&1.actor_handle == "sig"))
+    assert Enum.any?(result.citations, &(&1.actor_handle == "eefer--"))
+    assert result.context =~ "Havana Syndrome"
+    refute result.context =~ "mogged"
+  end
+
+  test "answers exact-term mention questions with literal retrieval" do
+    tenant = create_tenant!("Constrained QA Literal Mention")
+    farmr = create_actor!(tenant.schema_name, "farmr")
+    leku = create_actor!(tenant.schema_name, "leku")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      farmr.id,
+      channel.id,
+      "why is the number 1488 related to white supremacy?",
+      "farmr-1488",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "1488 comes up in nazi numerology all the time.",
+      "leku-1488",
+      DateTime.add(now, 5, :second)
+    )
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "who has mentioned 1488?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestConstraintGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.literal_terms == ["1488"]
+    assert Enum.any?(result.citations, &(&1.actor_handle == "farmr"))
+    assert Enum.any?(result.citations, &(&1.actor_handle == "leku"))
+    assert result.context =~ "1488"
+  end
+
+  test "answers literal count-style questions from current-channel messages" do
+    tenant = create_tenant!("Constrained QA Literal Count")
+    eefer = create_actor!(tenant.schema_name, "eefer--")
+    leku = create_actor!(tenant.schema_name, "leku")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      eefer.id,
+      channel.id,
+      "leku: umom",
+      "umom-1",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "eefer--: umoms",
+      "umom-2",
+      DateTime.add(now, 5, :second)
+    )
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "how many umoms jokes were there today and from whom?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestConstraintGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.literal_terms == ["umom"]
+    assert Enum.any?(result.citations, &(&1.actor_handle == "eefer--"))
+    assert Enum.any?(result.citations, &(&1.actor_handle == "leku"))
+    assert result.context =~ "umom"
   end
 
   defp create_tenant!(prefix) do

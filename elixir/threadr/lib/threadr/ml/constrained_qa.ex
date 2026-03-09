@@ -9,6 +9,7 @@ defmodule Threadr.ML.ConstrainedQA do
 
   alias Threadr.ML.{
     ActorReference,
+    ConversationQAIntent,
     Generation,
     GenerationProviderOpts,
     ReconstructionQuery,
@@ -18,6 +19,7 @@ defmodule Threadr.ML.ConstrainedQA do
   alias Threadr.Repo
 
   @default_limit 8
+  @pair_message_window_seconds 300
   @default_system_prompt """
   Extract retrieval constraints from the user's tenant QA question.
   Return strict JSON only with this shape:
@@ -25,10 +27,14 @@ defmodule Threadr.ML.ConstrainedQA do
     "route": "constrained_qa|fallback",
     "actors": ["string"],
     "counterpart_actors": ["string"],
+    "literal_terms": ["string"],
+    "literal_match": "all|any|none",
     "time_scope": "today|yesterday|none",
     "scope_current_channel": true,
     "focus": "topics|summary|activity|unknown"
   }
+  Use "literal_terms" for exact lexical questions like who mentioned a term, how many jokes there were, or who said a phrase.
+  Use "literal_match":"all" when all listed terms should appear in the same message.
   Use "constrained_qa" when the question can be answered from a filtered slice of tenant messages based on actor, time, or current-channel scope.
   Use "fallback" for greetings, drawing requests, relationship ranking questions, graph questions, or questions that need a different specialized path.
   """
@@ -37,15 +43,47 @@ defmodule Threadr.ML.ConstrainedQA do
       when is_binary(tenant_subject_name) and is_binary(question) do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
-         {:ok, constraints} <- extract_constraints(question, opts),
-         {:ok, resolved} <- resolve_constraints(tenant.schema_name, constraints, opts),
-         {:ok, matches, query} <- retrieve_matches(tenant.schema_name, resolved, opts) do
-      build_answer(tenant, question, resolved, matches, query, opts)
+         {:ok, result} <- answer_with_constraints(tenant, question, opts) do
+      {:ok, result}
     else
       {:error, :fallback} -> {:error, :not_constrained_question}
       {:error, :no_constrained_matches} -> {:error, :not_constrained_question}
       {:error, {:actor_not_found, _actor_ref}} -> {:error, :not_constrained_question}
       {:error, {:ambiguous_actor, _actor_ref, _matches}} -> {:error, :not_constrained_question}
+    end
+  end
+
+  defp answer_with_constraints(tenant, question, opts) do
+    with {:ok, constraints} <- resolve_question_constraints(tenant.schema_name, question, opts),
+         {:ok, matches, query} <- retrieve_matches(tenant.schema_name, constraints, opts) do
+      build_answer(tenant, question, constraints, matches, query, opts)
+    end
+  end
+
+  defp resolve_question_constraints(tenant_schema, question, opts) do
+    case ConversationQAIntent.classify(question) do
+      {:ok, %{kind: :talked_with, actor_ref: actor_ref, target_ref: target_ref}} ->
+        with {:ok, actor} <- ActorReference.resolve(tenant_schema, actor_ref, opts),
+             {:ok, target_actor} <- ActorReference.resolve(tenant_schema, target_ref, opts) do
+          {:ok,
+           %{
+             actors: [actor],
+             counterpart_actors: [target_actor],
+             literal_terms: [],
+             literal_match: "all",
+             time_scope: infer_time_scope(question),
+             scope_current_channel: Keyword.get(opts, :requester_channel_name) != nil,
+             focus: "topics",
+             requester_channel_name: Keyword.get(opts, :requester_channel_name),
+             pair_required: true
+           }}
+        end
+
+      {:error, :not_conversation_question} ->
+        with {:ok, constraints} <- extract_constraints(question, opts),
+             {:ok, resolved} <- resolve_constraints(tenant_schema, constraints, opts) do
+          {:ok, Map.put(resolved, :pair_required, false)}
+        end
     end
   end
 
@@ -85,6 +123,8 @@ defmodule Threadr.ML.ConstrainedQA do
        %{
          actors: normalize_refs(Map.get(payload, "actors", [])),
          counterpart_actors: normalize_refs(Map.get(payload, "counterpart_actors", [])),
+         literal_terms: normalize_literal_terms(Map.get(payload, "literal_terms", [])),
+         literal_match: normalize_literal_match(Map.get(payload, "literal_match")),
          time_scope: normalize_time_scope(Map.get(payload, "time_scope")),
          scope_current_channel: Map.get(payload, "scope_current_channel") == true,
          focus: normalize_focus(Map.get(payload, "focus"))
@@ -118,30 +158,57 @@ defmodule Threadr.ML.ConstrainedQA do
        )
        when actors != [] and counterparts != [] do
     matches =
-      fetch_shared_conversation_matches(tenant_schema, actors, counterparts, constraints, opts)
+      fetch_pair_matches(tenant_schema, actors, counterparts, constraints, opts)
 
     case matches do
       [] ->
-        fallback_matches = fetch_direct_matches(tenant_schema, constraints, opts)
-
-        if fallback_matches == [] do
+        if Map.get(constraints, :pair_required, false) do
           {:error, :no_constrained_matches}
         else
-          {:ok, fallback_matches, query_metadata(constraints, "actor_messages_about_counterpart")}
+          fallback_matches = fetch_direct_matches(tenant_schema, constraints, opts)
+
+          if fallback_matches == [] do
+            {:error, :no_constrained_matches}
+          else
+            {:ok, fallback_matches,
+             query_metadata(constraints, "actor_messages_about_counterpart")}
+          end
         end
 
       _ ->
-        {:ok, matches, query_metadata(constraints, "shared_conversation_messages")}
+        {:ok, matches, query_metadata(constraints, "paired_actor_messages")}
     end
   end
 
   defp retrieve_matches(tenant_schema, constraints, opts) do
-    matches = fetch_direct_matches(tenant_schema, constraints, opts)
+    matches =
+      if constraints.literal_terms != [] do
+        fetch_literal_matches(tenant_schema, constraints, opts)
+      else
+        fetch_direct_matches(tenant_schema, constraints, opts)
+      end
 
     if matches == [] do
       {:error, :no_constrained_matches}
     else
-      {:ok, matches, query_metadata(constraints, "filtered_messages")}
+      retrieval =
+        if constraints.literal_terms != [] do
+          "literal_term_messages"
+        else
+          "filtered_messages"
+        end
+
+      {:ok, matches, query_metadata(constraints, retrieval)}
+    end
+  end
+
+  defp fetch_pair_matches(tenant_schema, actors, counterparts, constraints, opts) do
+    shared_matches =
+      fetch_shared_conversation_matches(tenant_schema, actors, counterparts, constraints, opts)
+
+    case ensure_pair_presence(shared_matches, actors, counterparts) do
+      [] -> fetch_mutual_direct_matches(tenant_schema, actors, counterparts, constraints, opts)
+      matches -> matches
     end
   end
 
@@ -173,6 +240,113 @@ defmodule Threadr.ML.ConstrainedQA do
     |> apply_time_scope(constraints.time_scope)
     |> Repo.all(prefix: tenant_schema)
     |> Enum.map(&normalize_match/1)
+  end
+
+  defp fetch_literal_matches(tenant_schema, constraints, opts) do
+    limit = Keyword.get(opts, :limit, @default_limit)
+    actor_ids = Enum.map(constraints.actors, &dump_uuid!(&1.id))
+    literal_filter = literal_filter(constraints.literal_terms, constraints.literal_match)
+
+    from(m in "messages",
+      join: a in "actors",
+      on: a.id == m.actor_id,
+      join: c in "channels",
+      on: c.id == m.channel_id,
+      where: ^actor_filter(actor_ids),
+      where: ^channel_filter(constraints.requester_channel_name),
+      where: ^literal_filter,
+      order_by: [desc: m.observed_at, desc: m.id],
+      limit: ^limit,
+      select: %{
+        message_id: m.id,
+        external_id: m.external_id,
+        body: m.body,
+        observed_at: m.observed_at,
+        actor_handle: a.handle,
+        actor_display_name: a.display_name,
+        channel_name: c.name
+      }
+    )
+    |> apply_time_scope(constraints.time_scope)
+    |> Repo.all(prefix: tenant_schema)
+    |> Enum.map(&normalize_match/1)
+  end
+
+  defp fetch_mutual_direct_matches(tenant_schema, actors, counterparts, constraints, opts) do
+    limit = Keyword.get(opts, :limit, @default_limit)
+    actor_ids = Enum.map(actors, &dump_uuid!(&1.id))
+    counterpart_ids = Enum.map(counterparts, &dump_uuid!(&1.id))
+    actor_patterns = counterpart_patterns(actors)
+    counterpart_patterns = counterpart_patterns(counterparts)
+
+    actor_side =
+      dynamic(
+        [m, _a, _c],
+        m.actor_id in ^actor_ids and ^pattern_filter(counterpart_patterns)
+      )
+
+    counterpart_side =
+      dynamic(
+        [m, _a, _c],
+        m.actor_id in ^counterpart_ids and ^pattern_filter(actor_patterns)
+      )
+
+    seed_matches =
+      from(m in "messages",
+        join: a in "actors",
+        on: a.id == m.actor_id,
+        join: c in "channels",
+        on: c.id == m.channel_id,
+        where: ^channel_filter(constraints.requester_channel_name),
+        where: ^dynamic(^actor_side or ^counterpart_side),
+        order_by: [desc: m.observed_at, desc: m.id],
+        limit: ^(limit * 2),
+        select: %{
+          message_id: m.id,
+          external_id: m.external_id,
+          body: m.body,
+          observed_at: m.observed_at,
+          actor_handle: a.handle,
+          actor_display_name: a.display_name,
+          channel_name: c.name
+        }
+      )
+      |> apply_time_scope(constraints.time_scope)
+      |> Repo.all(prefix: tenant_schema)
+      |> Enum.map(&normalize_match/1)
+
+    if seed_matches == [] do
+      []
+    else
+      pair_actor_ids = actor_ids ++ counterpart_ids
+
+      from(m in "messages",
+        join: a in "actors",
+        on: a.id == m.actor_id,
+        join: c in "channels",
+        on: c.id == m.channel_id,
+        where: ^channel_filter(constraints.requester_channel_name),
+        where: m.actor_id in ^pair_actor_ids,
+        order_by: [desc: m.observed_at, desc: m.id],
+        limit: ^(limit * 8),
+        select: %{
+          message_id: m.id,
+          external_id: m.external_id,
+          body: m.body,
+          observed_at: m.observed_at,
+          actor_handle: a.handle,
+          actor_display_name: a.display_name,
+          channel_name: c.name
+        }
+      )
+      |> apply_time_scope(constraints.time_scope)
+      |> Repo.all(prefix: tenant_schema)
+      |> Enum.map(&normalize_match/1)
+      |> Enum.filter(&within_pair_window?(&1, seed_matches))
+      |> Enum.sort_by(& &1.observed_at, {:desc, NaiveDateTime})
+      |> ensure_pair_presence(actors, counterparts)
+      |> Enum.take(limit * 2)
+    end
   end
 
   defp fetch_shared_conversation_matches(tenant_schema, actors, counterparts, constraints, opts) do
@@ -217,11 +391,37 @@ defmodule Threadr.ML.ConstrainedQA do
     |> Enum.uniq_by(& &1.message_id)
   end
 
+  defp ensure_pair_presence(matches, actors, counterparts) do
+    actor_handles = MapSet.new(Enum.map(actors, &String.downcase(&1.handle)))
+    counterpart_handles = MapSet.new(Enum.map(counterparts, &String.downcase(&1.handle)))
+
+    present_handles =
+      matches
+      |> Enum.map(&String.downcase(&1.actor_handle))
+      |> MapSet.new()
+
+    if MapSet.disjoint?(present_handles, actor_handles) or
+         MapSet.disjoint?(present_handles, counterpart_handles) do
+      []
+    else
+      matches
+    end
+  end
+
+  defp within_pair_window?(match, seed_matches) do
+    Enum.any?(seed_matches, fn seed ->
+      abs(NaiveDateTime.diff(match.observed_at, seed.observed_at, :second)) <=
+        @pair_message_window_seconds
+    end)
+  end
+
   defp query_metadata(constraints, retrieval) do
     %{
       retrieval: retrieval,
       actor_handles: Enum.map(constraints.actors, & &1.handle),
       counterpart_actor_handles: Enum.map(constraints.counterpart_actors, & &1.handle),
+      literal_terms: constraints.literal_terms,
+      literal_match: constraints.literal_match,
       time_scope: constraints.time_scope,
       channel_name: constraints.requester_channel_name
     }
@@ -267,6 +467,7 @@ defmodule Threadr.ML.ConstrainedQA do
         "Counterpart actors",
         Enum.map(constraints.counterpart_actors, & &1.handle)
       )
+      |> maybe_put_summary("Literal terms", constraints.literal_terms)
       |> maybe_put_summary(
         "Time scope",
         constraints.time_scope != :none && Atom.to_string(constraints.time_scope)
@@ -300,9 +501,22 @@ defmodule Threadr.ML.ConstrainedQA do
 
   defp normalize_refs(_value), do: []
 
+  defp normalize_literal_terms(values) when is_list(values) do
+    values
+    |> Enum.map(&to_string/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+  end
+
+  defp normalize_literal_terms(_value), do: []
+
   defp normalize_time_scope("today"), do: :today
   defp normalize_time_scope("yesterday"), do: :yesterday
   defp normalize_time_scope(_value), do: :none
+
+  defp normalize_literal_match(value) when value in ["all", "any"], do: value
+  defp normalize_literal_match(_value), do: "all"
 
   defp normalize_focus(value) when value in ["topics", "summary", "activity"], do: value
   defp normalize_focus(_value), do: "unknown"
@@ -357,9 +571,43 @@ defmodule Threadr.ML.ConstrainedQA do
   defp counterpart_filter([]), do: dynamic(true)
 
   defp counterpart_filter(patterns) do
+    pattern_filter(patterns)
+  end
+
+  defp pattern_filter([]), do: dynamic(true)
+
+  defp pattern_filter(patterns) do
     Enum.reduce(patterns, dynamic(false), fn pattern, acc ->
       dynamic([m, _a, _c], ^acc or ilike(m.body, ^pattern))
     end)
+  end
+
+  defp literal_filter([], _match_mode), do: dynamic(true)
+
+  defp literal_filter(terms, "any") do
+    terms
+    |> Enum.map(&"%#{&1}%")
+    |> Enum.reduce(dynamic(false), fn pattern, acc ->
+      dynamic([m, _a, _c], ^acc or ilike(m.body, ^pattern))
+    end)
+  end
+
+  defp literal_filter(terms, _match_mode) do
+    terms
+    |> Enum.map(&"%#{&1}%")
+    |> Enum.reduce(dynamic(true), fn pattern, acc ->
+      dynamic([m, _a, _c], ^acc and ilike(m.body, ^pattern))
+    end)
+  end
+
+  defp infer_time_scope(question) do
+    downcased = String.downcase(question)
+
+    cond do
+      String.contains?(downcased, "today") -> :today
+      String.contains?(downcased, "yesterday") -> :yesterday
+      true -> :none
+    end
   end
 
   defp apply_time_scope(query, :today) do
