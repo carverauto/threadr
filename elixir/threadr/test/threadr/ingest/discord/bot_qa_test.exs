@@ -61,7 +61,7 @@ defmodule Threadr.Ingest.Discord.BotQATest do
       )
 
     assert_receive {:published_envelope, _envelope}
-    assert_receive {:discord_api_create_message, "12345", %{content: content}}
+    assert_receive {:discord_api_create_message, 12345, %{content: content}}
     assert content =~ "<@1>"
     assert content =~ "what did Alice and Bob talk about last week?"
   end
@@ -97,6 +97,65 @@ defmodule Threadr.Ingest.Discord.BotQATest do
 
     assert_receive {:published_envelope, _envelope}
     refute_receive {:discord_api_create_message, _channel_id, _options}, 200
+  end
+
+  test "casts Discord channel ids for the real API-style adapter" do
+    tenant = create_tenant!("Discord Bot QA Strict API")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "12345")
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice and Bob discussed endpoint isolation last week."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6])
+
+    Consumer.put_config(
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["12345"],
+      publisher: {Threadr.TestPublisher, self()},
+      discord_api: {Threadr.TestStrictDiscordApi, self()},
+      embedding_provider: Threadr.TestEmbeddingProvider,
+      embedding_model: "test-embedding-model",
+      generation_provider: Threadr.TestGenerationProvider,
+      generation_model: "test-chat",
+      discord: %{
+        identity: %{
+          user_id: "999",
+          username: "threadr",
+          global_name: "Threadr"
+        }
+      }
+    )
+
+    :ok =
+      Consumer.handle_event(
+        {:MESSAGE_CREATE,
+         %Message{
+           id: 999_888_778,
+           channel_id: 12_345,
+           guild_id: 54_321,
+           content: "<@999> hello",
+           author: %User{
+             id: 1,
+             username: "alice",
+             global_name: "Alice Display",
+             bot: false
+           },
+           mentions: [%User{id: 999, username: "threadr", global_name: "Threadr"}]
+         }, nil}
+      )
+
+    assert_receive {:published_envelope, _envelope}
+    assert_receive {:discord_api_create_message, 12345, %{content: content}}
+    assert content =~ "<@1>"
+    assert content =~ "hello"
   end
 
   defp create_tenant!(prefix) do

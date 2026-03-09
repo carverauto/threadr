@@ -110,3 +110,10 @@ defmodule Threadr.TestDiscordApi do
     {:ok, %{id: "discord-reply-1"}}
   end
 end
+
+defmodule Threadr.TestStrictDiscordApi do
+  def create_message(channel_id, options, pid) when is_integer(channel_id) do
+    send(pid, {:discord_api_create_message, channel_id, options})
+    {:ok, %{id: "discord-reply-1"}}
+  end
+end

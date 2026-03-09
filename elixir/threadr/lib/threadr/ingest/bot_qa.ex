@@ -256,7 +256,7 @@ defmodule Threadr.Ingest.BotQA do
   end
 
   defp send_discord_reply(api, channel_id, content) do
-    call_adapter(api, :create_message, [channel_id, %{content: content}])
+    call_adapter(api, :create_message, [parse_discord_channel_id(channel_id), %{content: content}])
   end
 
   defp format_reply(%{platform: "irc", reply_prefix: prefix}, content) do
@@ -370,6 +370,17 @@ defmodule Threadr.Ingest.BotQA do
   defp discord_api(config) do
     Keyword.get(config, :discord_api, Nostrum.Api)
   end
+
+  defp parse_discord_channel_id(channel_id) when is_integer(channel_id), do: channel_id
+
+  defp parse_discord_channel_id(channel_id) when is_binary(channel_id) do
+    case Integer.parse(channel_id) do
+      {parsed, ""} -> parsed
+      _ -> channel_id
+    end
+  end
+
+  defp parse_discord_channel_id(channel_id), do: channel_id
 
   defp emit_question_detected(config, request) do
     Threadr.Ingest.emit_runtime_event(config, :question_detected, %{
