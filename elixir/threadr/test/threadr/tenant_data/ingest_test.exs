@@ -219,6 +219,96 @@ defmodule Threadr.TenantData.IngestTest do
            ]
   end
 
+  test "preserves prior authorship across IRC nick changes without unsafe merges" do
+    tenant = create_tenant!("Nick Change Authorship")
+    observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    original_envelope =
+      Envelope.new(
+        ChatMessage.from_map(%{
+          platform: "irc",
+          channel: "#ops",
+          actor: "alice",
+          body: "starting backup validation",
+          observed_at: observed_at,
+          metadata: %{
+            "platform_message_id" => "irc-msg-1",
+            "observed_handle" => "alice"
+          },
+          raw: %{"text" => "starting backup validation"}
+        }),
+        "chat.message",
+        Topology.subject_for(:chat_messages, tenant.subject_name),
+        %{id: "irc-msg-1"}
+      )
+
+    assert {:ok, original_message} = Ingest.persist_envelope(original_envelope)
+
+    nick_change_envelope =
+      Envelope.new(
+        ChatContextEvent.from_map(%{
+          platform: "irc",
+          event_type: "nick_change",
+          actor: "alice",
+          observed_at: DateTime.add(observed_at, 10, :second),
+          metadata: %{
+            "observed_handle" => "alice",
+            "observed_display_name" => "alice",
+            "new_handle" => "alice_",
+            "irc_user" => "alice",
+            "irc_host" => "workstation.example.org"
+          },
+          raw: %{
+            "nick" => "alice",
+            "new_nick" => "alice_",
+            "user" => "alice",
+            "host" => "workstation.example.org"
+          }
+        }),
+        "chat.context",
+        Topology.subject_for(:chat_messages, tenant.subject_name),
+        %{id: "irc:alice:alice_:nick"}
+      )
+
+    assert {:ok, context_event} = Ingest.persist_envelope(nick_change_envelope)
+
+    renamed_envelope =
+      Envelope.new(
+        ChatMessage.from_map(%{
+          platform: "irc",
+          channel: "#ops",
+          actor: "alice_",
+          body: "backup validation finished",
+          observed_at: DateTime.add(observed_at, 20, :second),
+          metadata: %{
+            "platform_message_id" => "irc-msg-2",
+            "observed_handle" => "alice_"
+          },
+          raw: %{"text" => "backup validation finished"}
+        }),
+        "chat.message",
+        Topology.subject_for(:chat_messages, tenant.subject_name),
+        %{id: "irc-msg-2"}
+      )
+
+    assert {:ok, renamed_message} = Ingest.persist_envelope(renamed_envelope)
+
+    actors = fetch_actors(tenant.schema_name)
+
+    alias_observations =
+      fetch_alias_observations_for_context_event(tenant.schema_name, context_event.id)
+
+    assert Enum.sort(Enum.map(actors, & &1.handle)) == ["alice", "alice_"]
+    refute original_message.actor_id == renamed_message.actor_id
+    assert length(alias_observations) == 3
+
+    assert fetch_message!(tenant.schema_name, original_message.id).actor_id ==
+             original_message.actor_id
+
+    assert fetch_message!(tenant.schema_name, renamed_message.id).actor_id ==
+             renamed_message.actor_id
+  end
+
   test "persists alias observations for presence context events without channels" do
     tenant = create_tenant!("Presence Context")
     observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -459,6 +549,17 @@ defmodule Threadr.TenantData.IngestTest do
   defp fetch_context_events(tenant_schema) do
     ContextEvent
     |> Ash.read!(tenant: tenant_schema)
+  end
+
+  defp fetch_actors(tenant_schema) do
+    Threadr.TenantData.Actor
+    |> Ash.read!(tenant: tenant_schema)
+  end
+
+  defp fetch_message!(tenant_schema, message_id) do
+    Threadr.TenantData.Message
+    |> Ash.Query.filter(expr(id == ^message_id))
+    |> Ash.read_one!(tenant: tenant_schema)
   end
 
   defp vertex_count(graph_name, label_name) do

@@ -25,10 +25,12 @@ defmodule Threadr.TenantData.ConversationAttachment do
       when is_binary(message_id) and is_binary(tenant_schema) do
     with {:ok, message} <- fetch_message(message_id, tenant_schema),
          :ok <- mark_dormant_conversations(message, tenant_schema),
-         {:ok, conversation} <- select_or_create_conversation(message, tenant_schema, opts),
-         {:ok, conversation} <-
-           attach_message_to_conversation(conversation, message, tenant_schema, opts) do
-      {:ok, conversation}
+         {:ok, conversation} <- select_or_create_conversation(message, tenant_schema, opts) do
+      if conversation do
+        attach_message_to_conversation(conversation, message, tenant_schema, opts)
+      else
+        {:ok, nil}
+      end
     end
   end
 
@@ -42,6 +44,9 @@ defmodule Threadr.TenantData.ConversationAttachment do
       if winner, do: conversation_for_message(winner.target_message_id, tenant_schema), else: nil
 
     cond do
+      leave_unattached?(message, inference) ->
+        {:ok, nil}
+
       linked_conversation ->
         {:ok, linked_conversation}
 
@@ -59,6 +64,35 @@ defmodule Threadr.TenantData.ConversationAttachment do
         create_conversation(message, tenant_schema, seed: :starter)
     end
   end
+
+  defp leave_unattached?(message, inference) when is_map(inference) do
+    winner = inference[:winner]
+    candidates = inference[:candidates] || []
+
+    body_word_count =
+      message.body
+      |> to_string()
+      |> String.split(~r/\s+/, trim: true)
+      |> length()
+
+    dialogue_act = get_in(message.metadata || %{}, ["dialogue_act", "label"])
+    entity_names = Map.get(message, :entity_names, [])
+    fact_types = Map.get(message, :fact_types, [])
+    top_score = candidates |> List.first() |> then(fn row -> if row, do: row.score, else: 0.0 end)
+    next_score = candidates |> Enum.at(1) |> then(fn row -> if row, do: row.score, else: 0.0 end)
+    margin = max(top_score - next_score, 0.0)
+
+    is_nil(winner) and
+      length(candidates) >= 2 and
+      top_score >= 0.2 and
+      margin <= 0.05 and
+      body_word_count <= 3 and
+      is_nil(dialogue_act) and
+      entity_names == [] and
+      fact_types == []
+  end
+
+  defp leave_unattached?(_message, _inference), do: false
 
   defp attach_message_to_conversation(conversation, message, tenant_schema, opts) do
     inference = Keyword.get(opts, :inference)

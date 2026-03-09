@@ -3,7 +3,14 @@ defmodule Threadr.ML.QAOrchestrator do
   Shared routing between actor-specific QA and generic tenant QA strategies.
   """
 
-  alias Threadr.ML.{ActorQA, GraphRAG, QARequest, SemanticQA}
+  alias Threadr.ML.{
+    ActorQA,
+    ConversationQA,
+    ConversationSummaryQA,
+    GraphRAG,
+    QARequest,
+    SemanticQA
+  }
 
   @type ensure_embeddings_fun :: (map(), QARequest.t() -> :ok | {:error, term()})
 
@@ -13,12 +20,28 @@ defmodule Threadr.ML.QAOrchestrator do
     ensure_embeddings = Keyword.fetch!(opts, :ensure_embeddings)
     runtime_opts = QARequest.to_runtime_opts(request)
 
-    case ActorQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
+    case ConversationQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
       {:ok, result} ->
-        {:ok, Map.put(result, :mode, :actor_qa)}
+        {:ok, Map.put(result, :mode, :conversation_qa)}
 
-      {:error, :not_actor_question} ->
-        fallback_answer(tenant, request, ensure_embeddings)
+      {:error, :not_conversation_question} ->
+        case ActorQA.answer_question(tenant.subject_name, request.question, runtime_opts) do
+          {:ok, result} ->
+            {:ok, Map.put(result, :mode, :actor_qa)}
+
+          {:error, :not_actor_question} ->
+            case ConversationSummaryQA.answer_question(
+                   tenant.subject_name,
+                   request.question,
+                   runtime_opts
+                 ) do
+              {:ok, result} ->
+                {:ok, Map.put(result, :mode, :conversation_summary_qa)}
+
+              {:error, :not_conversation_summary_question} ->
+                fallback_answer(tenant, request, ensure_embeddings)
+            end
+        end
     end
   end
 
