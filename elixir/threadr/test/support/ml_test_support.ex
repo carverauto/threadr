@@ -144,6 +144,15 @@ defmodule Threadr.TestConstraintGenerationProvider do
       String.contains?(prompt, "what did farmr talk about today?") ->
         ~s({"route":"constrained_qa","actors":["farmr"],"counterpart_actors":[],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
 
+      String.contains?(prompt, "how many users have mogged leku?") ->
+        ~s({"route":"constrained_qa","actors":[],"counterpart_actors":[],"literal_terms":["mogged","leku"],"literal_match":"all","time_scope":"none","scope_current_channel":true,"focus":"activity"})
+
+      String.contains?(prompt, "how many umoms jokes were there today and from whom?") ->
+        ~s({"route":"constrained_qa","actors":[],"counterpart_actors":[],"literal_terms":["umom"],"literal_match":"all","time_scope":"today","scope_current_channel":true,"focus":"activity"})
+
+      String.contains?(prompt, "who has mentioned 1488?") ->
+        ~s({"route":"constrained_qa","actors":[],"counterpart_actors":[],"literal_terms":["1488"],"literal_match":"all","time_scope":"none","scope_current_channel":true,"focus":"activity"})
+
       String.contains?(prompt, "what did fysty talk about today with leku?") ->
         ~s({"route":"constrained_qa","actors":["fysty"],"counterpart_actors":["leku"],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
 

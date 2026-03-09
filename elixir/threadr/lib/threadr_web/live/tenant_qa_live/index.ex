@@ -574,7 +574,7 @@ defmodule ThreadrWeb.TenantQaLive.Index do
               {format_datetime(match.observed_at)}
             </:col>
             <:col :let={match} label="Similarity">
-              {format_similarity(match.similarity)}
+              {format_similarity(Map.get(match, :similarity))}
             </:col>
           </.table>
         </div>
