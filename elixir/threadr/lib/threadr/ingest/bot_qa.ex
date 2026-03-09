@@ -364,6 +364,7 @@ defmodule Threadr.Ingest.BotQA do
     []
     |> put_request_opt(:requester_actor_handle, Map.get(request, :actor))
     |> put_request_opt(:requester_external_id, stringify(Map.get(request, :actor_id)))
+    |> put_request_opt(:requester_channel_name, Map.get(request, :channel))
   end
 
   defp discord_api(config) do

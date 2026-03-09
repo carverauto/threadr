@@ -5,6 +5,7 @@ defmodule Threadr.ML.QAOrchestrator do
 
   alias Threadr.ML.{
     ActorQA,
+    ConstrainedQA,
     ConversationQA,
     ConversationSummaryQA,
     GraphRAG,
@@ -45,7 +46,17 @@ defmodule Threadr.ML.QAOrchestrator do
                     {:ok, Map.put(result, :mode, :conversation_summary_qa)}
 
                   {:error, :not_conversation_summary_question} ->
-                    fallback_answer(tenant, request, ensure_embeddings)
+                    case ConstrainedQA.answer_question(
+                           tenant.subject_name,
+                           request.question,
+                           runtime_opts
+                         ) do
+                      {:ok, result} ->
+                        {:ok, Map.put(result, :mode, :constrained_qa)}
+
+                      {:error, :not_constrained_question} ->
+                        fallback_answer(tenant, request, ensure_embeddings)
+                    end
                 end
             end
         end

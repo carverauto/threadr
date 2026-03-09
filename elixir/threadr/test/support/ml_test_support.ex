@@ -83,6 +83,58 @@ defmodule Threadr.TestGenerationProvider do
   end
 end
 
+defmodule Threadr.TestConstraintGenerationProvider do
+  @behaviour Threadr.ML.Generation.Provider
+
+  alias Threadr.ML.Generation.Result
+
+  @impl true
+  def complete(request, opts) do
+    content =
+      case request.mode do
+        :routing -> constraint_payload(request.prompt)
+        _ -> "answer: #{request.prompt}"
+      end
+
+    {:ok,
+     %Result{
+       content: content,
+       model: Keyword.get(opts, :model, "test-llm"),
+       provider: "test-constraints",
+       metadata: %{
+         "system_prompt" => request.system_prompt || Keyword.get(opts, :system_prompt),
+         "mode" => request.mode,
+         "context" => request.context
+       }
+     }}
+  end
+
+  defp constraint_payload(prompt) do
+    cond do
+      String.contains?(prompt, "what did farmr talk about today?") ->
+        ~s({"route":"constrained_qa","actors":["farmr"],"counterpart_actors":[],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
+
+      String.contains?(prompt, "what did fysty talk about today with leku?") ->
+        ~s({"route":"constrained_qa","actors":["fysty"],"counterpart_actors":["leku"],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
+
+      String.contains?(
+        prompt,
+        "what were the general topics that people talked about today in this channel then?"
+      ) ->
+        ~s({"route":"constrained_qa","actors":[],"counterpart_actors":[],"time_scope":"today","scope_current_channel":true,"focus":"summary"})
+
+      String.contains?(prompt, "what did fysty talk about today with leku") ->
+        ~s({"route":"constrained_qa","actors":["fysty"],"counterpart_actors":["leku"],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
+
+      String.contains?(prompt, "what did farmr talk about today") ->
+        ~s({"route":"constrained_qa","actors":["farmr"],"counterpart_actors":[],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
+
+      true ->
+        ~s({"route":"fallback","actors":[],"counterpart_actors":[],"time_scope":"none","scope_current_channel":false,"focus":"unknown"})
+    end
+  end
+end
+
 defmodule Threadr.TestConversationSummaryProvider do
   @behaviour Threadr.ML.Generation.Provider
 

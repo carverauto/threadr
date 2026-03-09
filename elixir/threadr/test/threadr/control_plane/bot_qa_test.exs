@@ -169,6 +169,38 @@ defmodule Threadr.ControlPlane.BotQATest do
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
   end
 
+  test "answers actor topical questions constrained to today" do
+    tenant = create_tenant!("Bot QA Today")
+    actor = create_actor!(tenant.schema_name, "farmr")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "farmr talked about terrace produce, planters, and garden ideas today.",
+      "farmr-today-bot",
+      DateTime.utc_now() |> DateTime.truncate(:second)
+    )
+
+    request =
+      QARequest.new("what did farmr talk about today?", :bot,
+        generation_provider: Threadr.TestConstraintGenerationProvider,
+        generation_model: "test-chat"
+      )
+
+    assert {:ok, result} =
+             Analysis.answer_tenant_question_for_bot(
+               tenant.subject_name,
+               request
+             )
+
+    assert result.mode == :constrained_qa
+    assert result.query.retrieval == "filtered_messages"
+    assert result.query.actor_handles == ["farmr"]
+    assert result.answer.content =~ "what did farmr talk about today?"
+  end
+
   test "answers time-bounded conversation summary questions from reconstructed conversations" do
     tenant = create_tenant!("Bot QA Conversation Summary")
     alice = create_actor!(tenant.schema_name, "alice")
