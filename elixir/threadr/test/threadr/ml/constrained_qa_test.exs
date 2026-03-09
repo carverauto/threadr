@@ -179,6 +179,111 @@ defmodule Threadr.ML.ConstrainedQATest do
     refute result.context =~ "mogged"
   end
 
+  test "pair questions can use same-channel topical clusters without direct mentions" do
+    tenant = create_tenant!("Constrained QA Topical Pair Cluster")
+    leku = create_actor!(tenant.schema_name, "leku")
+    bysin = create_actor!(tenant.schema_name, "bysin")
+    fysty = create_actor!(tenant.schema_name, "fysty")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "AES related-key attacks are interesting, but reduced-round cryptanalysis is not a practical break.",
+      "leku-aes-1",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      fysty.id,
+      channel.id,
+      "i should really start a terrace garden instead",
+      "fysty-garden",
+      DateTime.add(now, 20, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      bysin.id,
+      channel.id,
+      "the bigger weakness is usually implementation bugs and cache-timing leakage, not full AES collapse.",
+      "bysin-aes-1",
+      DateTime.add(now, 35, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "yeah biclique attacks make for good cryptography trivia, but side-channel issues are the real risk.",
+      "leku-aes-2",
+      DateTime.add(now, 55, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      bysin.id,
+      channel.id,
+      "exactly, AES itself is sturdy enough and the practical weaknesses show up around key handling and timing.",
+      "bysin-aes-2",
+      DateTime.add(now, 75, :second)
+    )
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "what did leku and bysin talk about today?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "topical_pair_messages"
+    assert Enum.any?(result.citations, &(&1.actor_handle == "leku"))
+    assert Enum.any?(result.citations, &(&1.actor_handle == "bysin"))
+    assert result.context =~ "AES"
+    assert result.context =~ "cryptography"
+    assert result.context =~ "cache-timing"
+  end
+
+  test "pair questions fail closed for unrelated same-day solo chatter" do
+    tenant = create_tenant!("Constrained QA Pair Fail Closed")
+    leku = create_actor!(tenant.schema_name, "leku")
+    bysin = create_actor!(tenant.schema_name, "bysin")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "my terrace tomatoes are finally doing well.",
+      "leku-garden",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      bysin.id,
+      channel.id,
+      "i need to rotate the tires on my truck this weekend.",
+      "bysin-truck",
+      DateTime.add(now, 45, :second)
+    )
+
+    assert {:error, :not_constrained_question} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "what did leku and bysin talk about today?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+  end
+
   test "answers exact-term mention questions with literal retrieval" do
     tenant = create_tenant!("Constrained QA Literal Mention")
     farmr = create_actor!(tenant.schema_name, "farmr")
