@@ -7,6 +7,45 @@ defmodule Threadr.ML.ActorReference do
 
   alias Threadr.Repo
 
+  @question_stopwords MapSet.new([
+                       "a",
+                       "about",
+                       "all",
+                       "an",
+                       "and",
+                       "did",
+                       "does",
+                       "for",
+                       "happened",
+                       "have",
+                       "has",
+                       "how",
+                       "in",
+                       "is",
+                       "it",
+                       "last",
+                       "month",
+                       "people",
+                       "said",
+                       "talk",
+                       "talked",
+                       "that",
+                       "the",
+                       "this",
+                       "to",
+                       "today",
+                       "was",
+                       "week",
+                       "were",
+                       "what",
+                       "when",
+                       "where",
+                       "who",
+                       "why",
+                       "with",
+                       "yesterday"
+                     ])
+
   @spec resolve(String.t(), String.t(), keyword()) ::
           {:ok, map()}
           | {:error, {:actor_not_found, String.t()} | {:ambiguous_actor, String.t(), [map()]}}
@@ -34,6 +73,20 @@ defmodule Threadr.ML.ActorReference do
     |> trim_matching_quotes()
     |> String.trim_leading("@")
     |> String.trim()
+  end
+
+  @spec find_mentions(String.t(), String.t(), keyword()) :: [map()]
+  def find_mentions(tenant_schema, text, opts \\ [])
+      when is_binary(tenant_schema) and is_binary(text) and is_list(opts) do
+    text
+    |> mention_candidates()
+    |> Enum.reduce([], fn candidate, actors ->
+      case resolve(tenant_schema, candidate, opts) do
+        {:ok, actor} -> [actor | actors]
+        _ -> actors
+      end
+    end)
+    |> Enum.uniq_by(& &1.id)
   end
 
   @spec self_reference?(String.t()) :: boolean()
@@ -144,6 +197,37 @@ defmodule Threadr.ML.ActorReference do
     |> Enum.filter(&is_binary/1)
     |> Enum.map(&normalize/1)
     |> Enum.reject(&(&1 == ""))
+  end
+
+  defp mention_candidates(text) do
+    tokens =
+      text
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9@<_!>'-]+/u, " ")
+      |> String.split(~r/\s+/u, trim: true)
+
+    if tokens == [] do
+      []
+    else
+      max_size = min(length(tokens), 3)
+      sizes = Range.new(max_size, 1, -1)
+
+      for size <- sizes,
+          start <- 0..(length(tokens) - size),
+          candidate = tokens |> Enum.slice(start, size) |> Enum.join(" "),
+          candidate != "",
+          not MapSet.member?(@question_stopwords, candidate),
+          not all_stopwords?(candidate) do
+        candidate
+      end
+      |> Enum.uniq()
+    end
+  end
+
+  defp all_stopwords?(candidate) do
+    candidate
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.all?(&MapSet.member?(@question_stopwords, &1))
   end
 
   defp last_token_candidate(value) do
