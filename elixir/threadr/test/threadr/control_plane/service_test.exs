@@ -1,6 +1,7 @@
 defmodule Threadr.ControlPlane.ServiceTest do
-  use ExUnit.Case, async: true
+  use Threadr.DataCase, async: false
 
+  alias Threadr.ControlPlane
   alias Threadr.ControlPlane.Service
 
   test "slugify derives a stable slug from a tenant name" do
@@ -33,5 +34,52 @@ defmodule Threadr.ControlPlane.ServiceTest do
       })
 
     assert attrs["schema_name"] == "custom_schema"
+  end
+
+  test "create_tenant runs tenant-schema migrations before reporting success" do
+    owner = create_user!("owner")
+    suffix = System.unique_integer([:positive])
+
+    {:ok, tenant} =
+      Service.create_tenant(
+        %{
+          name: "Migrated Tenant #{suffix}",
+          subject_name: "migrated-tenant-#{suffix}"
+        },
+        owner_user: owner
+      )
+
+    assert tenant.tenant_migration_status == "succeeded"
+    assert tenant.tenant_migration_version == Service.latest_tenant_migration_version()
+    assert not is_nil(tenant.tenant_migrated_at)
+
+    assert tenant_table_exists?(tenant.schema_name, "aliases")
+    assert tenant_table_exists?(tenant.schema_name, "alias_observations")
+    assert tenant_table_exists?(tenant.schema_name, "conversations")
+    assert tenant_table_exists?(tenant.schema_name, "conversation_memberships")
+  end
+
+  defp tenant_table_exists?(schema_name, table_name) do
+    result =
+      Threadr.Repo.query!(
+        "SELECT to_regclass($1) IS NOT NULL AS exists",
+        ["#{schema_name}.#{table_name}"]
+      )
+
+    [[exists?]] = result.rows
+    exists?
+  end
+
+  defp create_user!(prefix) do
+    suffix = System.unique_integer([:positive])
+
+    {:ok, user} =
+      ControlPlane.register_user(%{
+        email: "#{prefix}-#{suffix}@example.com",
+        name: "User #{suffix}",
+        password: "threadr-password-#{suffix}"
+      })
+
+    user
   end
 end

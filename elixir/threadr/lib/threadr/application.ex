@@ -10,6 +10,7 @@ defmodule Threadr.Application do
     children =
       [
         Threadr.Repo,
+        Threadr.ControlPlane.TenantMigrationDispatcher,
         Threadr.ControlPlane.BotOperationDispatcher,
         Threadr.ControlPlane.BotStatusObserver,
         Threadr.ControlPlane.BotImageDriftSyncer,

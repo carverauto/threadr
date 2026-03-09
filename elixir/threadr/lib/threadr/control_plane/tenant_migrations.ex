@@ -5,6 +5,8 @@ defmodule Threadr.ControlPlane.TenantMigrations do
 
   alias Threadr.ControlPlane.Service
 
+  @system_opts [context: %{system: true}]
+
   def migrate_all do
     with {:ok, tenants} <- Threadr.ControlPlane.list_tenants(context: %{system: true}) do
       tenants
@@ -47,22 +49,22 @@ defmodule Threadr.ControlPlane.TenantMigrations do
     migrations_path = Threadr.Repo.tenant_migrations_path()
     version = Service.latest_tenant_migration_version()
 
-    with {:ok, tenant} <- Service.mark_tenant_migration_running(tenant),
+    with {:ok, tenant} <- Service.mark_tenant_migration_running(tenant, @system_opts),
          {:ok, _, _versions} <-
            Ecto.Migrator.with_repo(Threadr.Repo, fn repo ->
              {:ok, repo,
               Ecto.Migrator.run(repo, migrations_path, :up, all: true, prefix: schema_name)}
            end),
-         {:ok, tenant} <- Service.mark_tenant_migration_succeeded(tenant, version) do
+         {:ok, tenant} <- Service.mark_tenant_migration_succeeded(tenant, version, @system_opts) do
       tenant_result(tenant)
     else
       {:error, reason} = error ->
-        _ = Service.mark_tenant_migration_failed(tenant, reason)
+        _ = Service.mark_tenant_migration_failed(tenant, reason, @system_opts)
         error
     end
   rescue
     error ->
-      _ = Service.mark_tenant_migration_failed(tenant, error)
+      _ = Service.mark_tenant_migration_failed(tenant, error, @system_opts)
       reraise error, __STACKTRACE__
   end
 

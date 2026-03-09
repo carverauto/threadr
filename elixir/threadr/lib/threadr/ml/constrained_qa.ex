@@ -177,8 +177,9 @@ defmodule Threadr.ML.ConstrainedQA do
 
   defp fetch_shared_conversation_matches(tenant_schema, actors, counterparts, constraints, opts) do
     limit = Keyword.get(opts, :limit, @default_limit)
-    actor_ids = Enum.map(actors, & &1.id)
-    counterpart_ids = Enum.map(counterparts, & &1.id)
+    actor_member_ids = Enum.map(actors, & &1.id)
+    counterpart_member_ids = Enum.map(counterparts, & &1.id)
+    allowed_actor_ids = Enum.map(actors ++ counterparts, &dump_uuid!(&1.id))
 
     from(c in "conversations",
       join: cm_actor in "conversation_memberships",
@@ -193,7 +194,10 @@ defmodule Threadr.ML.ConstrainedQA do
       on: a.id == m.actor_id,
       join: ch in "channels",
       on: ch.id == m.channel_id,
-      where: cm_actor.member_id in ^actor_ids and cm_counterpart.member_id in ^counterpart_ids,
+      where:
+        cm_actor.member_id in ^actor_member_ids and
+          cm_counterpart.member_id in ^counterpart_member_ids,
+      where: m.actor_id in ^allowed_actor_ids,
       where: ^shared_channel_filter(constraints.requester_channel_name),
       order_by: [desc: m.observed_at, desc: m.id],
       limit: ^limit,

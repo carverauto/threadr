@@ -42,7 +42,7 @@ defmodule Threadr.ML.ConversationQA do
   end
 
   defp build_answer(tenant, question, intent, actor, target_actor, conversations, opts) do
-    citations = build_citations(tenant.schema_name, conversations)
+    citations = build_citations(tenant.schema_name, conversations, [actor.id, target_actor.id])
     context = build_conversation_context(question, actor, target_actor, conversations, citations)
 
     with {:ok, answer} <- Generation.answer_question(question, context, generation_opts(opts)) do
@@ -107,12 +107,16 @@ defmodule Threadr.ML.ConversationQA do
     end)
   end
 
-  def build_citations(tenant_schema, conversations)
+  def build_citations(tenant_schema, conversations) do
+    build_citations(tenant_schema, conversations, [])
+  end
+
+  def build_citations(tenant_schema, conversations, actor_ids)
       when is_binary(tenant_schema) and is_list(conversations) do
     conversation_ids = Enum.map(conversations, & &1.conversation_id)
 
     support_messages_by_conversation =
-      supporting_messages_by_conversation(tenant_schema, conversation_ids)
+      supporting_messages_by_conversation(tenant_schema, conversation_ids, actor_ids)
 
     selected_messages =
       conversations
@@ -173,8 +177,6 @@ defmodule Threadr.ML.ConversationQA do
 
         [
           "[Conversation #{index}] #{time_window_label(conversation)} in #{ChannelLabel.format(conversation.channel_name)}",
-          "Topic: #{conversation.topic_summary || fallback_topic(conversation)}",
-          "Summary: #{conversation.summary_text || fallback_summary(conversation)}",
           "Open pending items: #{conversation.open_pending_item_count}",
           if(labels == "", do: nil, else: "Supporting citations: #{labels}")
         ]
@@ -191,10 +193,11 @@ defmodule Threadr.ML.ConversationQA do
     Enum.join(header_lines ++ conversation_lines ++ blankable(evidence), "\n\n")
   end
 
-  defp supporting_messages_by_conversation(_tenant_schema, []), do: %{}
+  defp supporting_messages_by_conversation(_tenant_schema, [], _actor_ids), do: %{}
 
-  defp supporting_messages_by_conversation(tenant_schema, conversation_ids) do
+  defp supporting_messages_by_conversation(tenant_schema, conversation_ids, actor_ids) do
     dumped_ids = Enum.map(conversation_ids, &dump_uuid!/1)
+    dumped_actor_ids = Enum.map(actor_ids, &dump_uuid!/1)
 
     from(cm in "conversation_memberships",
       join: m in "messages",
@@ -204,6 +207,7 @@ defmodule Threadr.ML.ConversationQA do
       join: ch in "channels",
       on: ch.id == m.channel_id,
       where: cm.conversation_id in ^dumped_ids and cm.member_kind == "message",
+      where: ^actor_membership_filter(dumped_actor_ids),
       order_by: [asc: m.observed_at, asc: m.id],
       select: %{
         conversation_id: cm.conversation_id,
@@ -226,6 +230,11 @@ defmodule Threadr.ML.ConversationQA do
     |> Enum.group_by(& &1.conversation_id)
   end
 
+  defp actor_membership_filter([]), do: dynamic(true)
+
+  defp actor_membership_filter(dumped_actor_ids),
+    do: dynamic([_cm, m, _a, _ch], m.actor_id in ^dumped_actor_ids)
+
   defp pick_support_messages(messages) when length(messages) <= @max_support_messages,
     do: messages
 
@@ -237,34 +246,6 @@ defmodule Threadr.ML.ConversationQA do
     [first, second, last]
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq_by(& &1.message_id)
-  end
-
-  defp fallback_topic(conversation) do
-    conversation.entity_summary
-    |> Map.get("names", [])
-    |> List.wrap()
-    |> Enum.take(3)
-    |> case do
-      [] -> "shared conversation"
-      names -> Enum.join(names, ", ")
-    end
-  end
-
-  defp fallback_summary(conversation) do
-    participants =
-      conversation.participant_summary
-      |> Map.get("actor_handles", [])
-      |> List.wrap()
-      |> Enum.join(", ")
-
-    entities =
-      conversation.entity_summary
-      |> Map.get("names", [])
-      |> List.wrap()
-      |> Enum.take(3)
-      |> Enum.join(", ")
-
-    "#{participants} discussed #{if(entities == "", do: "shared work", else: entities)}."
   end
 
   defp time_window_label(conversation) do

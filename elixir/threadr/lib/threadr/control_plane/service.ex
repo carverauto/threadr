@@ -22,20 +22,16 @@ defmodule Threadr.ControlPlane.Service do
 
   def create_tenant(attrs, opts \\ []) do
     ash_opts = ash_opts(opts)
-    system_opts = system_ash_opts(opts)
 
     with {:ok, tenant} <-
            attrs
            |> normalize_tenant_attrs()
            |> Threadr.ControlPlane.create_tenant(ash_opts),
          {:ok, _membership} <- maybe_create_owner_membership(tenant, opts),
-         {:ok, tenant} <-
-           mark_tenant_migration_succeeded(
-             tenant,
-             latest_tenant_migration_version(),
-             system_opts
-           ) do
-      {:ok, tenant}
+         {:ok, _result} <-
+           Threadr.ControlPlane.TenantMigrations.migrate_tenant(tenant) |> wrap_ok(),
+         {:ok, migrated_tenant} <- fetch_tenant!(tenant.id) do
+      {:ok, migrated_tenant}
     end
   end
 
@@ -111,6 +107,10 @@ defmodule Threadr.ControlPlane.Service do
     |> Enum.filter(&match?({_, _}, &1))
     |> Enum.map(&elem(&1, 0))
     |> Enum.max(fn -> nil end)
+  end
+
+  defp fetch_tenant!(tenant_id) do
+    Threadr.ControlPlane.get_tenant(tenant_id, context: %{system: true})
   end
 
   def list_user_tenants(%{id: user_id}, opts \\ []) when is_binary(user_id) do
