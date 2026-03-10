@@ -38,7 +38,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     thanew = create_actor!(tenant.schema_name, "THANEW")
     leku = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.new!(Date.utc_today(), ~T[12:00:00], "Etc/UTC")
 
     create_message!(
       tenant.schema_name,
@@ -77,11 +77,45 @@ defmodule Threadr.ML.ConstrainedQATest do
              )
 
     assert result.query.mode == "constrained_qa"
-    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.retrieval == "topic_ranked_messages"
     assert result.query.actor_handles == ["THANEW"]
-    assert result.query.literal_terms == ["dnb"]
+    assert result.query.topic_terms == ["dnb"]
     assert result.context =~ "not a big fan of dnb tbh"
     refute result.context =~ "i like jungle more than dnb"
+  end
+
+  test "falls back to a wider same-day actor slice when topical wording is just rhetorical fluff" do
+    tenant = create_tenant!("Constrained QA Actor Dirt")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    for index <- 1..12 do
+      create_message!(
+        tenant.schema_name,
+        thanew.id,
+        channel.id,
+        "THANEW topic #{index} from earlier today",
+        "thanew-dirt-#{index}",
+        DateTime.add(now, index * 900, :second)
+      )
+    end
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "what disgusting filth did THANEW talk about today? i want all the dirt",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestConstraintGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.mode == "constrained_qa"
+    assert result.query.retrieval == "topic_ranked_messages"
+    assert result.query.actor_handles == ["THANEW"]
+    assert length(result.citations) == 12
+    assert result.context =~ "THANEW topic 1"
+    assert result.context =~ "THANEW topic 12"
   end
 
   test "answers current-channel topical summary questions constrained to today" do
