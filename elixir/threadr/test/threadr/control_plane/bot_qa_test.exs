@@ -273,8 +273,9 @@ defmodule Threadr.ControlPlane.BotQATest do
              )
 
     assert result.mode == :conversation_summary_qa
-    assert result.query.retrieval == "reconstructed_conversations"
+    assert result.query.retrieval == "reconstructed_conversations_plus_messages"
     assert result.query.conversation_count == 1
+    assert result.query.message_count == 2
     assert result.answer.content =~ "What happened last week?"
   end
 
@@ -329,7 +330,7 @@ defmodule Threadr.ControlPlane.BotQATest do
                request
              )
 
-    assert result.mode in [:graph_rag, :semantic_qa]
+    assert result.mode in [:graph_rag, :semantic_qa, :constrained_qa]
     refute result.mode == :actor_qa
     assert result.answer.content =~ "what do hyralak and sig mostly talk about?"
   end

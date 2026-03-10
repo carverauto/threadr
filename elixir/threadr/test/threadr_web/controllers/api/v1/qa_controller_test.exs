@@ -183,8 +183,9 @@ defmodule ThreadrWeb.Api.V1.QaControllerTest do
 
     assert %{"data" => data} = json_response(conn, 200)
     assert data["query"]["mode"] == "conversation_summary_qa"
-    assert data["query"]["retrieval"] == "reconstructed_conversations"
+    assert data["query"]["retrieval"] == "reconstructed_conversations_plus_messages"
     assert data["query"]["conversation_count"] == 1
+    assert data["query"]["message_count"] == 2
     assert length(data["citations"]) == 2
     assert hd(data["citations"])["label"] == "C1"
 
