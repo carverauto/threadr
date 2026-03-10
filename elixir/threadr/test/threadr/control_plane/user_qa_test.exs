@@ -252,8 +252,9 @@ defmodule Threadr.ControlPlane.UserQATest do
              )
 
     assert result.mode == :conversation_summary_qa
-    assert result.query.retrieval == "reconstructed_conversations"
+    assert result.query.retrieval == "reconstructed_conversations_plus_messages"
     assert result.query.conversation_count == 1
+    assert result.query.message_count == 2
     assert result.answer.content =~ "What happened last week?"
   end
 

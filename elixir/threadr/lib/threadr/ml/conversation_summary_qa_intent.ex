@@ -38,7 +38,14 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
         "can you recap what people talked about",
         "summarize the conversations",
         "summarize what happened"
-      ])
+      ]) or
+      topic_summary_question?(question)
+  end
+
+  defp topic_summary_question?(question) do
+    summary_verb?(question) and
+      summary_subject?(question) and
+      infer_time_scope(question) != :none
   end
 
   defp happened_summary_question?(question) do
@@ -59,7 +66,7 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
 
   defp infer_time_scope(question) do
     cond do
-      String.contains?(question, "today") -> :today
+      String.contains?(question, "today") or String.contains?(question, "todays") -> :today
       String.contains?(question, "yesterday") -> :yesterday
       String.contains?(question, "last week") -> :last_week
       String.contains?(question, "last month") -> :last_month
@@ -68,7 +75,23 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
   end
 
   defp current_channel_scope?(question) do
-    String.contains?(question, "channel") or String.contains?(question, "here")
+    String.contains?(question, "channel") or
+      String.contains?(question, "here") or
+      Regex.match?(~r/(?:^|\s)#[^\s]+/u, question)
+  end
+
+  defp summary_verb?(question) do
+    String.contains?(question, "recap") or
+      String.contains?(question, "summarize") or
+      String.contains?(question, "summary")
+  end
+
+  defp summary_subject?(question) do
+    String.contains?(question, "topics") or
+      String.contains?(question, "chats") or
+      String.contains?(question, "discussions") or
+      String.contains?(question, "talked about") or
+      String.contains?(question, "talking about")
   end
 
   defp normalize_question(question) do

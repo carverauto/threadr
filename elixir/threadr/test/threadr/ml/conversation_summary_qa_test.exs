@@ -78,8 +78,9 @@ defmodule Threadr.ML.ConversationSummaryQATest do
              )
 
     assert result.query.kind == :time_bounded_summary
-    assert result.query.retrieval == "reconstructed_conversations"
+    assert result.query.retrieval == "reconstructed_conversations_plus_messages"
     assert result.query.conversation_count == 1
+    assert result.query.message_count == 2
     assert length(result.citations) == 2
     assert length(result.matches) == 2
 
@@ -209,6 +210,7 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     assert result.query.kind == :time_bounded_summary
     assert result.query.channel_name == "#!chases"
     assert result.query.conversation_count == 1
+    assert result.query.message_count == 2
     assert result.context =~ "#!chases"
     refute result.context =~ "#ops"
     assert result.answer.content =~ "can you recap the channel discussions for today please"
@@ -277,8 +279,64 @@ defmodule Threadr.ML.ConversationSummaryQATest do
              )
 
     assert result.query.conversation_count == 7
+    assert result.query.message_count == 14
     assert length(result.conversations) == 7
     assert length(result.citations) >= 7
+  end
+
+  test "summarizes a same-day named-channel message window even without reconstructed conversations" do
+    tenant = create_tenant!("Conversation Summary QA Message Window")
+    leku = create_actor!(tenant.schema_name, "leku")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    larsini0 = create_actor!(tenant.schema_name, "larsini0")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      larsini0.id,
+      channel.id,
+      "THANEW: u can tell i play a certain kind of dnb",
+      "msg-window-1",
+      now,
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "not a big fan of dnb tbh",
+      "msg-window-2",
+      DateTime.add(now, 120, :second),
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "zero point energy tweet was nonsense",
+      "msg-window-3",
+      DateTime.add(now, 240, :second),
+      %{}
+    )
+
+    assert {:ok, result} =
+             ConversationSummaryQA.answer_question(
+               tenant.subject_name,
+               "summarize the topics from todays chats in #!chases",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "message_window"
+    assert result.query.conversation_count == 0
+    assert result.query.message_count == 3
+    assert result.context =~ "window_messages=3"
+    assert result.context =~ "not a big fan of dnb tbh"
+    assert result.context =~ "zero point energy tweet was nonsense"
   end
 
   defp create_tenant!(prefix) do

@@ -16,8 +16,12 @@ defmodule Threadr.ML.ConversationSummaryQA do
     ReconstructionQuery
   }
 
+  alias Threadr.Repo
+
   @default_limit 20
   @max_limit 50
+  @default_message_limit 120
+  @max_message_limit 250
 
   def answer_question(tenant_subject_name, question, opts \\ [])
       when is_binary(tenant_subject_name) and is_binary(question) do
@@ -26,20 +30,25 @@ defmodule Threadr.ML.ConversationSummaryQA do
          {:ok, intent} <- ConversationSummaryQAIntent.classify(question),
          resolved_opts <- resolve_summary_opts(intent, opts),
          :ok <- require_time_bounds(resolved_opts),
-         conversations when conversations != [] <-
-           fetch_conversations(tenant.schema_name, resolved_opts) do
-      build_answer(tenant, question, intent, conversations, resolved_opts)
+         conversations <- fetch_conversations(tenant.schema_name, resolved_opts),
+         messages <- fetch_summary_messages(tenant.schema_name, resolved_opts),
+         true <- conversations != [] or messages != [] do
+      build_answer(tenant, question, intent, conversations, messages, resolved_opts)
     else
-      [] -> {:error, :not_conversation_summary_question}
+      false -> {:error, :not_conversation_summary_question}
       {:error, :missing_time_bounds} -> {:error, :not_conversation_summary_question}
       {:error, :not_conversation_summary_question} = error -> error
     end
   end
 
-  defp build_answer(tenant, question, intent, conversations, opts) do
-    citations = ConversationQA.build_citations(tenant.schema_name, conversations)
+  defp build_answer(tenant, question, intent, conversations, messages, opts) do
+    citations =
+      tenant.schema_name
+      |> build_summary_citations(conversations, messages)
+
     matches = citation_matches(citations)
-    context = build_summary_context(question, conversations, citations, opts)
+    retrieval = retrieval_mode(conversations, messages)
+    context = build_summary_context(question, conversations, messages, citations, retrieval, opts)
 
     with {:ok, answer} <- Generation.answer_question(question, context, generation_opts(opts)) do
       {:ok,
@@ -50,8 +59,9 @@ defmodule Threadr.ML.ConversationSummaryQA do
          query: %{
            mode: "conversation_summary_qa",
            kind: intent.kind,
-           retrieval: "reconstructed_conversations",
+           retrieval: retrieval,
            conversation_count: length(conversations),
+           message_count: length(messages),
            evidence_count: length(citations),
            channel_name: Keyword.get(opts, :requester_channel_name),
            since: format_timestamp(Keyword.get(opts, :since)),
@@ -63,8 +73,40 @@ defmodule Threadr.ML.ConversationSummaryQA do
          facts_over_time: [],
          context: context,
          answer: answer
-       }}
+      }}
     end
+  end
+
+  defp build_summary_citations(tenant_schema, conversations, messages) do
+    conversation_citations = ConversationQA.build_citations(tenant_schema, conversations)
+
+    conversation_message_ids =
+      conversation_citations
+      |> Enum.map(& &1.message_id)
+      |> MapSet.new()
+
+    message_citations =
+      messages
+      |> Enum.reject(&MapSet.member?(conversation_message_ids, &1.message_id))
+      |> Enum.with_index(length(conversation_citations) + 1)
+      |> Enum.map(fn {message, index} ->
+        %{
+          label: "C#{index}",
+          rank: index,
+          message_id: message.message_id,
+          external_id: message.external_id,
+          body: message.body,
+          observed_at: message.observed_at,
+          actor_handle: message.actor_handle,
+          actor_display_name: message.actor_display_name,
+          channel_name: message.channel_name,
+          similarity: 1.0,
+          extracted_entities: [],
+          extracted_facts: []
+        }
+      end)
+
+    conversation_citations ++ message_citations
   end
 
   defp fetch_conversations(tenant_schema, opts) do
@@ -100,16 +142,17 @@ defmodule Threadr.ML.ConversationSummaryQA do
     end)
   end
 
-  defp build_summary_context(question, conversations, citations, opts) do
+  defp build_summary_context(question, conversations, messages, citations, retrieval, opts) do
     header_lines = [
       "Conversation summary QA for tenant activity in the requested time window.",
       "Question: #{question}",
       "Window: #{format_timestamp(Keyword.get(opts, :since))} -> #{format_timestamp(Keyword.get(opts, :until))}",
-      "Evidence retrieval: reconstructed_conversations; conversations=#{length(conversations)}; supporting_messages=#{length(citations)}."
+      "Evidence retrieval: #{retrieval}; conversations=#{length(conversations)}; window_messages=#{length(messages)}; supporting_messages=#{length(citations)}."
     ]
 
     citation_labels_by_conversation =
       citations
+      |> Enum.filter(&Map.has_key?(&1, :conversation_id))
       |> Enum.group_by(& &1.conversation_id, & &1.label)
 
     conversation_lines =
@@ -133,13 +176,22 @@ defmodule Threadr.ML.ConversationSummaryQA do
         |> Enum.join("\n")
       end)
 
+    message_window_lines =
+      if messages == [] do
+        []
+      else
+        [
+          "Window message sample spans #{length(messages)} messages across the requested scope."
+        ]
+      end
+
     evidence =
       case citations do
         [] -> ""
         rows -> Threadr.ML.SemanticQA.build_context(rows)
       end
 
-    Enum.join(header_lines ++ conversation_lines ++ blankable(evidence), "\n\n")
+    Enum.join(header_lines ++ conversation_lines ++ message_window_lines ++ blankable(evidence), "\n\n")
   end
 
   defp citation_matches(citations) do
@@ -197,6 +249,33 @@ defmodule Threadr.ML.ConversationSummaryQA do
     |> maybe_filter_conversation_until(Keyword.get(opts, :until))
   end
 
+  defp fetch_summary_messages(tenant_schema, opts) do
+    limit = message_limit(opts)
+
+    from(m in "messages",
+      join: a in "actors",
+      on: a.id == m.actor_id,
+      join: c in "channels",
+      on: c.id == m.channel_id,
+      where: ^message_channel_filter(Keyword.get(opts, :requester_channel_name)),
+      order_by: [asc: m.observed_at, asc: m.id],
+      limit: ^limit,
+      select: %{
+        message_id: m.id,
+        external_id: m.external_id,
+        body: m.body,
+        observed_at: m.observed_at,
+        actor_handle: a.handle,
+        actor_display_name: a.display_name,
+        channel_name: c.name
+      }
+    )
+    |> maybe_filter_message_since(Keyword.get(opts, :since))
+    |> maybe_filter_message_until(Keyword.get(opts, :until))
+    |> Repo.all(prefix: tenant_schema)
+    |> Enum.map(&normalize_message/1)
+  end
+
   defp resolve_summary_opts(intent, opts) do
     opts
     |> maybe_put_inferred_bounds(intent.time_scope)
@@ -225,6 +304,13 @@ defmodule Threadr.ML.ConversationSummaryQA do
   defp channel_filter(channel_name) do
     normalized = String.downcase(String.trim(channel_name))
     dynamic([_c, ch], fragment("lower(?) = ?", ch.name, ^normalized))
+  end
+
+  defp message_channel_filter(nil), do: dynamic(true)
+
+  defp message_channel_filter(channel_name) do
+    normalized = String.downcase(String.trim(channel_name))
+    dynamic([_m, _a, c], fragment("lower(?) = ?", c.name, ^normalized))
   end
 
   defp inferred_bounds(:today), do: day_bounds(Date.utc_today())
@@ -272,9 +358,35 @@ defmodule Threadr.ML.ConversationSummaryQA do
     where(query, [c, _ch], c.opened_at <= ^until)
   end
 
+  defp maybe_filter_message_since(query, nil), do: query
+
+  defp maybe_filter_message_since(query, %NaiveDateTime{} = since) do
+    maybe_filter_message_since(query, DateTime.from_naive!(since, "Etc/UTC"))
+  end
+
+  defp maybe_filter_message_since(query, %DateTime{} = since) do
+    where(query, [m, _a, _c], m.observed_at >= ^since)
+  end
+
+  defp maybe_filter_message_until(query, nil), do: query
+
+  defp maybe_filter_message_until(query, %NaiveDateTime{} = until) do
+    maybe_filter_message_until(query, DateTime.from_naive!(until, "Etc/UTC"))
+  end
+
+  defp maybe_filter_message_until(query, %DateTime{} = until) do
+    where(query, [m, _a, _c], m.observed_at <= ^until)
+  end
+
   defp normalize_conversation(conversation) do
     conversation
     |> Map.update!(:conversation_id, &normalize_identifier/1)
+  end
+
+  defp normalize_message(message) do
+    message
+    |> Map.update!(:message_id, &normalize_identifier/1)
+    |> Map.update!(:external_id, &normalize_identifier/1)
   end
 
   defp normalize_identifier(nil), do: nil
@@ -323,4 +435,15 @@ defmodule Threadr.ML.ConversationSummaryQA do
     |> max(1)
     |> min(@max_limit)
   end
+
+  defp message_limit(opts) do
+    opts
+    |> Keyword.get(:message_limit, @default_message_limit)
+    |> max(1)
+    |> min(@max_message_limit)
+  end
+
+  defp retrieval_mode([], _messages), do: "message_window"
+  defp retrieval_mode(_conversations, []), do: "reconstructed_conversations"
+  defp retrieval_mode(_conversations, _messages), do: "reconstructed_conversations_plus_messages"
 end
