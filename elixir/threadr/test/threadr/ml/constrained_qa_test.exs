@@ -467,6 +467,58 @@ defmodule Threadr.ML.ConstrainedQATest do
     assert result.context =~ "umom"
   end
 
+  test "answers channel-scoped topical activity questions from older same-day evidence" do
+    tenant = create_tenant!("Constrained QA Channel Topic Activity")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    larsinio = create_actor!(tenant.schema_name, "larsinio")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "first up",
+      "first-up-1",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      larsinio.id,
+      channel.id,
+      "says u",
+      "first-up-2",
+      DateTime.add(now, 60, :second)
+    )
+
+    for index <- 1..10 do
+      create_message!(
+        tenant.schema_name,
+        larsinio.id,
+        channel.id,
+        "later chatter #{index}",
+        "later-#{index}",
+        DateTime.add(now, 600 + index, :second)
+      )
+    end
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "who was first up today?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestConstraintGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "hybrid_topic_messages"
+    assert result.query.topic_terms == ["first", "up"]
+    assert result.query.channel_name == "#!chases"
+    assert result.context =~ "first up"
+    refute result.context =~ "later chatter 10"
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 

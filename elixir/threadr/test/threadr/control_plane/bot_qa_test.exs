@@ -196,8 +196,9 @@ defmodule Threadr.ControlPlane.BotQATest do
              )
 
     assert result.mode == :constrained_qa
-    assert result.query.retrieval == "filtered_messages"
+    assert result.query.retrieval == "hybrid_topic_messages"
     assert result.query.actor_handles == ["farmr"]
+    assert result.query.topic_terms == ["farmr"]
     assert result.answer.content =~ "what did farmr talk about today?"
   end
 
