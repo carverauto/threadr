@@ -47,6 +47,7 @@ defmodule Threadr.ML.ConstrainedQA do
                         "to",
                         "want",
                         "what",
+                        "was",
                         "when",
                         "where",
                         "which",
@@ -205,16 +206,19 @@ defmodule Threadr.ML.ConstrainedQA do
            ),
          {:ok, payload} <- parse_payload(result.content),
          "constrained_qa" <- Map.get(payload, "route") do
+      literal_terms = normalize_literal_terms(Map.get(payload, "literal_terms", []))
+      focus = normalize_focus(Map.get(payload, "focus"))
+
       {:ok,
        %{
          actors: normalize_refs(Map.get(payload, "actors", [])),
          counterpart_actors: normalize_refs(Map.get(payload, "counterpart_actors", [])),
-         literal_terms: normalize_literal_terms(Map.get(payload, "literal_terms", [])),
-         topic_terms: [],
+         literal_terms: literal_terms,
+         topic_terms: infer_topic_terms(question, literal_terms, focus),
          literal_match: normalize_literal_match(Map.get(payload, "literal_match")),
          time_scope: normalize_time_scope(Map.get(payload, "time_scope")),
          scope_current_channel: Map.get(payload, "scope_current_channel") == true,
-         focus: normalize_focus(Map.get(payload, "focus"))
+         focus: focus
        }}
     else
       "fallback" -> {:error, :fallback}
@@ -229,18 +233,18 @@ defmodule Threadr.ML.ConstrainedQA do
     if actors == [] do
       {:error, :fallback}
     else
-      literal_terms = heuristic_literal_terms(question, actors)
+      topic_terms = heuristic_topic_terms(question, actors)
 
       {:ok,
        %{
          actors: actors,
          counterpart_actors: [],
          literal_terms: [],
-         topic_terms: literal_terms,
+         topic_terms: topic_terms,
          literal_match: "all",
          time_scope: infer_time_scope(question),
          scope_current_channel: Keyword.get(opts, :requester_channel_name) != nil,
-         focus: heuristic_focus(literal_terms),
+         focus: heuristic_focus(topic_terms),
          requester_channel_name: Keyword.get(opts, :requester_channel_name),
          pair_required: false
        }}
@@ -299,7 +303,7 @@ defmodule Threadr.ML.ConstrainedQA do
           {:ok, matches, query_metadata(constraints, "literal_term_messages")}
         end
 
-      constraints.actors != [] and Map.get(constraints, :topic_terms, []) != [] ->
+      Map.get(constraints, :topic_terms, []) != [] ->
         case fetch_hybrid_topic_matches(tenant_schema, constraints, opts) do
           [] ->
             matches = fetch_direct_matches(tenant_schema, constraints, opts)
@@ -883,7 +887,7 @@ defmodule Threadr.ML.ConstrainedQA do
 
   defp normalize_literal_terms(_value), do: []
 
-  defp heuristic_literal_terms(question, actors) do
+  defp heuristic_topic_terms(question, actors) do
     actor_terms =
       actors
       |> Enum.flat_map(fn actor -> [actor.handle, actor.display_name, actor.external_id] end)
@@ -907,6 +911,14 @@ defmodule Threadr.ML.ConstrainedQA do
     |> Enum.uniq()
     |> Enum.take(4)
   end
+
+  defp infer_topic_terms(_question, [_ | _], _focus), do: []
+
+  defp infer_topic_terms(question, [], focus) when focus in ["topics", "activity"] do
+    heuristic_topic_terms(question, [])
+  end
+
+  defp infer_topic_terms(_question, [], _focus), do: []
 
   defp heuristic_focus([]), do: "activity"
   defp heuristic_focus(_terms), do: "topics"

@@ -156,6 +156,9 @@ defmodule Threadr.TestConstraintGenerationProvider do
       String.contains?(prompt, "who has mentioned 1488?") ->
         ~s({"route":"constrained_qa","actors":[],"counterpart_actors":[],"literal_terms":["1488"],"literal_match":"all","time_scope":"none","scope_current_channel":true,"focus":"activity"})
 
+      String.contains?(prompt, "who was first up today?") ->
+        ~s({"route":"constrained_qa","actors":[],"counterpart_actors":[],"literal_terms":[],"literal_match":"all","time_scope":"today","scope_current_channel":true,"focus":"activity"})
+
       String.contains?(prompt, "what did fysty talk about today with leku?") ->
         ~s({"route":"constrained_qa","actors":["fysty"],"counterpart_actors":["leku"],"time_scope":"today","scope_current_channel":false,"focus":"topics"})
 
