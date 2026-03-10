@@ -434,8 +434,13 @@ defmodule Threadr.Ingest.BotQA do
   end
 
   defp actor_history_question?(config, request) do
-    starts_with_question_word?(request.question) and
+    question_like?(request.question) and
       mentions_known_actor?(config, request.question, requester_runtime_opts(request))
+  end
+
+  defp question_like?(question) when is_binary(question) do
+    trimmed = String.trim(question)
+    String.ends_with?(trimmed, "?") or starts_with_question_word?(trimmed)
   end
 
   defp mentions_known_actor?(config, question, requester_opts) do

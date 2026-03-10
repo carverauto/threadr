@@ -348,6 +348,65 @@ defmodule Threadr.Ingest.IRC.BotQATest do
     refute raw_cmd =~ "insufficient context"
   end
 
+  test "routes auxiliary-form actor questions into tenant qa when the actor is known" do
+    tenant = create_tenant!("IRC Bot Known Actor Preference")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "not a big fan of dnb tbh"
+    )
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "but its good background shit for playing games"
+    )
+
+    config = [
+      tenant_subject_name: tenant.subject_name,
+      tenant_id: tenant.id,
+      bot_id: "bot-123",
+      channels: ["#!chases"],
+      publisher: {Threadr.TestPublisher, self()},
+      irc_client: Threadr.TestIRCClient,
+      irc_client_options: [test_pid: self()],
+      generation_provider: Threadr.TestConstraintGenerationProvider,
+      generation_model: "test-chat",
+      irc: %{
+        host: "irc.example.org",
+        port: 6667,
+        ssl: false,
+        nick: "threadr"
+      }
+    ]
+
+    {:ok, pid} = start_supervised({Agent, config})
+
+    assert_receive {:irc_client_connect, :tcp, "irc.example.org", 6667}
+
+    send(
+      pid,
+      %IRCMessage{
+        cmd: "PRIVMSG",
+        nick: "leku",
+        user: "leku",
+        host: "workstation.example.org",
+        args: ["#!chases", "threadr: does THANEW like dnb?"]
+      }
+    )
+
+    assert_receive {:published_envelope, _envelope}, 1_000
+    assert_receive {:irc_client_cmd, raw_cmd}, 1_000
+    assert raw_cmd =~ "PRIVMSG #!chases :leku:"
+    assert raw_cmd =~ "not a big fan of dnb"
+    refute raw_cmd =~ "I’m not sure"
+  end
+
   test "splits long IRC replies across multiple PRIVMSG lines" do
     tenant = create_tenant!("IRC Bot QA Split Reply")
 

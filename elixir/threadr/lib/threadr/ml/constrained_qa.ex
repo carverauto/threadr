@@ -22,6 +22,33 @@ defmodule Threadr.ML.ConstrainedQA do
   @pair_message_window_seconds 300
   @pair_cluster_gap_seconds 600
   @pair_cluster_scan_limit 96
+  @question_stopwords MapSet.new([
+                        "a",
+                        "an",
+                        "are",
+                        "can",
+                        "did",
+                        "do",
+                        "does",
+                        "for",
+                        "had",
+                        "has",
+                        "how",
+                        "i",
+                        "is",
+                        "it",
+                        "me",
+                        "should",
+                        "tell",
+                        "to",
+                        "want",
+                        "what",
+                        "when",
+                        "where",
+                        "which",
+                        "who",
+                        "why"
+                      ])
   @stopwords MapSet.new([
                "about",
                "after",
@@ -77,6 +104,20 @@ defmodule Threadr.ML.ConstrainedQA do
 
   def answer_question(tenant_subject_name, question, opts \\ [])
       when is_binary(tenant_subject_name) and is_binary(question) do
+    case retrieve_for_question(tenant_subject_name, question, opts) do
+      {:ok, retrieval} ->
+        with {:ok, answer} <-
+               Generation.answer_question(question, retrieval.context, generation_opts(opts)) do
+          {:ok, Map.put(retrieval, :answer, answer)}
+        end
+
+      {:error, :not_constrained_question} = error ->
+        error
+    end
+  end
+
+  def retrieve_for_question(tenant_subject_name, question, opts \\ [])
+      when is_binary(tenant_subject_name) and is_binary(question) do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
          {:ok, result} <- answer_with_constraints(tenant, question, opts) do
@@ -92,7 +133,7 @@ defmodule Threadr.ML.ConstrainedQA do
   defp answer_with_constraints(tenant, question, opts) do
     with {:ok, constraints} <- resolve_question_constraints(tenant.schema_name, question, opts),
          {:ok, matches, query} <- retrieve_matches(tenant.schema_name, constraints, opts) do
-      build_answer(tenant, question, constraints, matches, query, opts)
+      {:ok, build_retrieval_result(tenant, question, constraints, matches, query)}
     end
   end
 
@@ -116,35 +157,39 @@ defmodule Threadr.ML.ConstrainedQA do
         end
 
       {:error, :not_conversation_question} ->
-        with {:ok, constraints} <- extract_constraints(question, opts),
-             {:ok, resolved} <- resolve_constraints(tenant_schema, constraints, opts) do
-          {:ok, Map.put(resolved, :pair_required, false)}
+        case extract_constraints(question, opts) do
+          {:ok, constraints} ->
+            with {:ok, resolved} <- resolve_constraints(tenant_schema, constraints, opts) do
+              {:ok, Map.put(resolved, :pair_required, false)}
+            end
+
+          {:error, :fallback} ->
+            derive_constraints_from_known_actors(tenant_schema, question, opts)
+
+          {:error, _reason} = error ->
+            error
         end
     end
   end
 
-  defp build_answer(tenant, question, constraints, matches, query, opts) do
+  defp build_retrieval_result(tenant, question, constraints, matches, query) do
     citations = build_citations(matches)
     context = build_context(question, constraints, citations)
 
-    with {:ok, answer} <- Generation.answer_question(question, context, generation_opts(opts)) do
-      {:ok,
-       %{
-         tenant_subject_name: tenant.subject_name,
-         tenant_schema: tenant.schema_name,
-         question: question,
-         query:
-           query
-           |> Map.put(:mode, "constrained_qa")
-           |> Map.put(:focus, constraints.focus)
-           |> Map.put(:scope_current_channel, constraints.scope_current_channel),
-         matches: matches,
-         citations: citations,
-         facts_over_time: [],
-         context: context,
-         answer: answer
-       }}
-    end
+    %{
+      tenant_subject_name: tenant.subject_name,
+      tenant_schema: tenant.schema_name,
+      question: question,
+      query:
+        query
+        |> Map.put(:mode, "constrained_qa")
+        |> Map.put(:focus, constraints.focus)
+        |> Map.put(:scope_current_channel, constraints.scope_current_channel),
+      matches: matches,
+      citations: citations,
+      facts_over_time: [],
+      context: context
+    }
   end
 
   defp extract_constraints(question, opts) do
@@ -169,6 +214,29 @@ defmodule Threadr.ML.ConstrainedQA do
       "fallback" -> {:error, :fallback}
       {:error, _reason} -> {:error, :fallback}
       _ -> {:error, :fallback}
+    end
+  end
+
+  defp derive_constraints_from_known_actors(tenant_schema, question, opts) do
+    actors = ActorReference.find_mentions(tenant_schema, question, opts)
+
+    if actors == [] do
+      {:error, :fallback}
+    else
+      literal_terms = heuristic_literal_terms(question, actors)
+
+      {:ok,
+       %{
+         actors: actors,
+         counterpart_actors: [],
+         literal_terms: literal_terms,
+         literal_match: "all",
+         time_scope: infer_time_scope(question),
+         scope_current_channel: Keyword.get(opts, :requester_channel_name) != nil,
+         focus: heuristic_focus(literal_terms),
+         requester_channel_name: Keyword.get(opts, :requester_channel_name),
+         pair_required: false
+       }}
     end
   end
 
@@ -777,6 +845,34 @@ defmodule Threadr.ML.ConstrainedQA do
   end
 
   defp normalize_literal_terms(_value), do: []
+
+  defp heuristic_literal_terms(question, actors) do
+    actor_terms =
+      actors
+      |> Enum.flat_map(fn actor -> [actor.handle, actor.display_name, actor.external_id] end)
+      |> Enum.filter(&is_binary/1)
+      |> Enum.flat_map(fn value ->
+        value
+        |> String.downcase()
+        |> String.replace(~r/[^a-z0-9]+/u, " ")
+        |> String.split(~r/\s+/u, trim: true)
+      end)
+      |> MapSet.new()
+
+    question
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, " ")
+    |> String.split(~r/\s+/u, trim: true)
+    |> Enum.reject(&(String.length(&1) < 2))
+    |> Enum.reject(&MapSet.member?(@stopwords, &1))
+    |> Enum.reject(&MapSet.member?(@question_stopwords, &1))
+    |> Enum.reject(&MapSet.member?(actor_terms, &1))
+    |> Enum.uniq()
+    |> Enum.take(4)
+  end
+
+  defp heuristic_focus([]), do: "activity"
+  defp heuristic_focus(_terms), do: "topics"
 
   defp normalize_time_scope("today"), do: :today
   defp normalize_time_scope("yesterday"), do: :yesterday

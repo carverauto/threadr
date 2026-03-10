@@ -242,9 +242,9 @@ defmodule ThreadrWeb.Api.V1.QaController do
       actor_handle: match.actor_handle,
       actor_display_name: match.actor_display_name,
       channel_name: match.channel_name,
-      model: match.model,
-      distance: match.distance,
-      similarity: match.similarity
+      model: Map.get(match, :model),
+      distance: Map.get(match, :distance),
+      similarity: Map.get(match, :similarity)
     })
   end
 
