@@ -345,29 +345,28 @@ defmodule Threadr.ML.ConversationSummaryQA do
     dynamic([_m, _a, c], fragment("lower(?) = ?", c.name, ^normalized))
   end
 
-  defp inferred_bounds(:today), do: day_bounds(Date.utc_today())
-  defp inferred_bounds(:yesterday), do: day_bounds(Date.add(Date.utc_today(), -1))
+  defp inferred_bounds(:today), do: rolling_bounds(24 * 60 * 60)
+  defp inferred_bounds(:yesterday), do: rolling_offset_bounds(48 * 60 * 60, 24 * 60 * 60)
 
   defp inferred_bounds(:last_week) do
-    today = Date.utc_today()
-    start_date = Date.add(today, -7)
-    since = DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC")
-    until = DateTime.new!(today, ~T[23:59:59], "Etc/UTC")
-    {since, until}
+    rolling_bounds(7 * 24 * 60 * 60)
   end
 
   defp inferred_bounds(:last_month) do
-    today = Date.utc_today()
-    start_date = Date.add(today, -30)
-    since = DateTime.new!(start_date, ~T[00:00:00], "Etc/UTC")
-    until = DateTime.new!(today, ~T[23:59:59], "Etc/UTC")
+    rolling_bounds(30 * 24 * 60 * 60)
+  end
+
+  defp rolling_bounds(seconds) do
+    until = DateTime.utc_now() |> DateTime.truncate(:second)
+    since = DateTime.add(until, -seconds, :second)
     {since, until}
   end
 
-  defp day_bounds(date) do
-    since = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-    until = DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
-    {since, until}
+  defp rolling_offset_bounds(start_offset_seconds, end_offset_seconds) do
+    until = DateTime.utc_now() |> DateTime.truncate(:second)
+    since = DateTime.add(until, -start_offset_seconds, :second)
+    offset_until = DateTime.add(until, -end_offset_seconds, :second)
+    {since, offset_until}
   end
 
   defp maybe_filter_conversation_since(query, nil), do: query

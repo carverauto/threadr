@@ -87,7 +87,8 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
   end
 
   defp summary_subject?(question) do
-    String.contains?(question, "topics") or
+    String.contains?(question, "conversations") or
+      String.contains?(question, "topics") or
       String.contains?(question, "chats") or
       String.contains?(question, "discussions") or
       String.contains?(question, "talked about") or

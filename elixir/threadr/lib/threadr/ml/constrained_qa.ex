@@ -1057,17 +1057,16 @@ defmodule Threadr.ML.ConstrainedQA do
   defp apply_conversation_time_scope(query, :none), do: query
 
   defp today_bounds do
-    date = Date.utc_today()
-    since = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-    until = DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
+    until = DateTime.utc_now() |> DateTime.truncate(:second)
+    since = DateTime.add(until, -(24 * 60 * 60), :second)
     {since, until}
   end
 
   defp yesterday_bounds do
-    date = Date.add(Date.utc_today(), -1)
-    since = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-    until = DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
-    {since, until}
+    until = DateTime.utc_now() |> DateTime.truncate(:second)
+    since = DateTime.add(until, -(48 * 60 * 60), :second)
+    prior_until = DateTime.add(until, -(24 * 60 * 60), :second)
+    {since, prior_until}
   end
 
   defp extraction_generation_opts(opts) do

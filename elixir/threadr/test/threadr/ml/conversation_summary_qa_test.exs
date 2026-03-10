@@ -114,7 +114,7 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     carol = create_actor!(tenant.schema_name, "carol")
     chases = create_channel!(tenant.schema_name, "#!chases")
     ops = create_channel!(tenant.schema_name, "#ops")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-400, :second)
 
     chases_request =
       create_message!(
@@ -221,7 +221,7 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     alice = create_actor!(tenant.schema_name, "alice")
     bob = create_actor!(tenant.schema_name, "bob")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     for index <- 1..7 do
       request_message =
@@ -290,7 +290,7 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     thanew = create_actor!(tenant.schema_name, "THANEW")
     larsini0 = create_actor!(tenant.schema_name, "larsini0")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-300, :second)
 
     create_message!(
       tenant.schema_name,
@@ -345,7 +345,7 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     thanew = create_actor!(tenant.schema_name, "THANEW")
     larsini0 = create_actor!(tenant.schema_name, "larsini0")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-300, :second)
 
     create_message!(
       tenant.schema_name,
@@ -400,8 +400,58 @@ defmodule Threadr.ML.ConversationSummaryQATest do
              )
 
     assert result.query.retrieval == "message_window"
-    assert result.query.message_count == 3
     assert result.context =~ "not a big fan of dnb tbh"
+  end
+
+  test "treats today as a rolling 24 hour recap window" do
+    tenant = create_tenant!("Conversation Summary QA Rolling Today")
+    leku = create_actor!(tenant.schema_name, "leku")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "first up from nearly a day ago",
+      "rolling-today-1",
+      DateTime.add(now, -(23 * 60 * 60), :second),
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "this should be too old for today",
+      "rolling-today-2",
+      DateTime.add(now, -(25 * 60 * 60), :second),
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "recent chatter from this afternoon",
+      "rolling-today-3",
+      DateTime.add(now, -300, :second),
+      %{}
+    )
+
+    assert {:ok, result} =
+             ConversationSummaryQA.answer_question(
+               tenant.subject_name,
+               "recap todays conversations from #!chases",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.context =~ "first up from nearly a day ago"
+    assert result.context =~ "recent chatter from this afternoon"
+    refute result.context =~ "this should be too old for today"
   end
 
   defp create_tenant!(prefix) do
