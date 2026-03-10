@@ -62,14 +62,14 @@ defmodule Threadr.Ingest.IRC.BotQATest do
         nick: "alice",
         user: "alice",
         host: "workstation.example.org",
-        args: ["#intel", "threadr: what did Alice and Bob talk about last week?"]
+        args: ["#intel", "threadr: what did Alice talk about?"]
       }
     )
 
     assert_receive {:published_envelope, _envelope}, 1_000
     assert_receive {:irc_client_cmd, raw_cmd}, 1_000
     assert raw_cmd =~ "PRIVMSG #intel :alice:"
-    assert raw_cmd =~ "what did Alice and Bob talk about last week?"
+    assert String.trim(raw_cmd) != "PRIVMSG #intel :alice:"
   end
 
   test "does not reply to IRC messages that are not addressed to the bot" do

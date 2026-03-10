@@ -124,7 +124,8 @@ defmodule Threadr.ML.GraphRAGTest do
              )
 
     assert result.semantic.query.mode == "constrained_qa"
-    assert result.semantic.query.retrieval == "literal_term_messages"
+    assert result.semantic.query.retrieval == "hybrid_topic_messages"
+    assert result.semantic.query.topic_terms == ["dnb"]
 
     assert Enum.any?(
              result.semantic.citations,

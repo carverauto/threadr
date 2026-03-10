@@ -339,6 +339,71 @@ defmodule Threadr.ML.ConversationSummaryQATest do
     assert result.context =~ "zero point energy tweet was nonsense"
   end
 
+  test "includes hybrid-ranked summary messages that fall outside the chronological window slice" do
+    tenant = create_tenant!("Conversation Summary QA Hybrid Window")
+    leku = create_actor!(tenant.schema_name, "leku")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    larsini0 = create_actor!(tenant.schema_name, "larsini0")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "today mostly involved random banter about travel prep",
+      "hybrid-window-1",
+      now,
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      larsini0.id,
+      channel.id,
+      "people also complained about coffee and sleep",
+      "hybrid-window-2",
+      DateTime.add(now, 60, :second),
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "someone dropped a zero point energy link again",
+      "hybrid-window-3",
+      DateTime.add(now, 120, :second),
+      %{}
+    )
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "not a big fan of dnb tbh",
+      "hybrid-window-4",
+      DateTime.add(now, 180, :second),
+      %{}
+    )
+
+    assert {:ok, result} =
+             ConversationSummaryQA.answer_question(
+               tenant.subject_name,
+               "summarize the topics from todays chats in #!chases about dnb",
+               requester_channel_name: "#!chases",
+               message_limit: 3,
+               embedding_provider: Threadr.TestEmbeddingProvider,
+               embedding_model: "test-embedding-model",
+               generation_provider: Threadr.TestGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.retrieval == "message_window"
+    assert result.query.message_count == 3
+    assert result.context =~ "not a big fan of dnb tbh"
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 

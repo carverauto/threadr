@@ -12,6 +12,7 @@ defmodule Threadr.ML.ConstrainedQA do
     ConversationQAIntent,
     Generation,
     GenerationProviderOpts,
+    HybridRetriever,
     ReconstructionQuery,
     SemanticQA
   }
@@ -23,6 +24,7 @@ defmodule Threadr.ML.ConstrainedQA do
   @pair_cluster_gap_seconds 600
   @pair_cluster_scan_limit 96
   @question_stopwords MapSet.new([
+                        "all",
                         "a",
                         "an",
                         "are",
@@ -39,7 +41,9 @@ defmodule Threadr.ML.ConstrainedQA do
                         "it",
                         "me",
                         "should",
+                        "talk",
                         "tell",
+                        "the",
                         "to",
                         "want",
                         "what",
@@ -147,6 +151,7 @@ defmodule Threadr.ML.ConstrainedQA do
              actors: [actor],
              counterpart_actors: [target_actor],
              literal_terms: [],
+             topic_terms: [],
              literal_match: "all",
              time_scope: infer_time_scope(question),
              scope_current_channel: Keyword.get(opts, :requester_channel_name) != nil,
@@ -205,6 +210,7 @@ defmodule Threadr.ML.ConstrainedQA do
          actors: normalize_refs(Map.get(payload, "actors", [])),
          counterpart_actors: normalize_refs(Map.get(payload, "counterpart_actors", [])),
          literal_terms: normalize_literal_terms(Map.get(payload, "literal_terms", [])),
+         topic_terms: [],
          literal_match: normalize_literal_match(Map.get(payload, "literal_match")),
          time_scope: normalize_time_scope(Map.get(payload, "time_scope")),
          scope_current_channel: Map.get(payload, "scope_current_channel") == true,
@@ -229,7 +235,8 @@ defmodule Threadr.ML.ConstrainedQA do
        %{
          actors: actors,
          counterpart_actors: [],
-         literal_terms: literal_terms,
+         literal_terms: [],
+         topic_terms: literal_terms,
          literal_match: "all",
          time_scope: infer_time_scope(question),
          scope_current_channel: Keyword.get(opts, :requester_channel_name) != nil,
@@ -282,24 +289,52 @@ defmodule Threadr.ML.ConstrainedQA do
   end
 
   defp retrieve_matches(tenant_schema, constraints, opts) do
-    matches =
-      if constraints.literal_terms != [] do
-        fetch_literal_matches(tenant_schema, constraints, opts)
-      else
-        fetch_direct_matches(tenant_schema, constraints, opts)
-      end
+    cond do
+      constraints.literal_terms != [] ->
+        matches = fetch_literal_matches(tenant_schema, constraints, opts)
 
-    if matches == [] do
-      {:error, :no_constrained_matches}
-    else
-      retrieval =
-        if constraints.literal_terms != [] do
-          "literal_term_messages"
+        if matches == [] do
+          {:error, :no_constrained_matches}
         else
-          "filtered_messages"
+          {:ok, matches, query_metadata(constraints, "literal_term_messages")}
         end
 
-      {:ok, matches, query_metadata(constraints, retrieval)}
+      constraints.actors != [] and Map.get(constraints, :topic_terms, []) != [] ->
+        case fetch_hybrid_topic_matches(tenant_schema, constraints, opts) do
+          [] ->
+            matches = fetch_direct_matches(tenant_schema, constraints, opts)
+
+            if matches == [] do
+              {:error, :no_constrained_matches}
+            else
+              {:ok, matches, query_metadata(constraints, "filtered_messages")}
+            end
+
+          matches ->
+            {:ok, matches, query_metadata(constraints, "hybrid_topic_messages")}
+        end
+
+      true ->
+        matches = fetch_direct_matches(tenant_schema, constraints, opts)
+
+        if matches == [] do
+          {:error, :no_constrained_matches}
+        else
+          {:ok, matches, query_metadata(constraints, "filtered_messages")}
+        end
+    end
+  end
+
+  defp fetch_hybrid_topic_matches(tenant_schema, constraints, opts) do
+    actor_ids = Enum.map(constraints.actors, &dump_uuid!(&1.id))
+
+    case HybridRetriever.search_messages(
+           tenant_schema,
+           hybrid_topic_query(constraints),
+           hybrid_topic_opts(constraints, opts, actor_ids)
+         ) do
+      {:ok, matches, _query} -> matches
+      {:error, _reason} -> []
     end
   end
 
@@ -756,6 +791,7 @@ defmodule Threadr.ML.ConstrainedQA do
       actor_handles: Enum.map(constraints.actors, & &1.handle),
       counterpart_actor_handles: Enum.map(constraints.counterpart_actors, & &1.handle),
       literal_terms: constraints.literal_terms,
+      topic_terms: Map.get(constraints, :topic_terms, []),
       literal_match: constraints.literal_match,
       time_scope: constraints.time_scope,
       channel_name: constraints.requester_channel_name
@@ -803,6 +839,7 @@ defmodule Threadr.ML.ConstrainedQA do
         Enum.map(constraints.counterpart_actors, & &1.handle)
       )
       |> maybe_put_summary("Literal terms", constraints.literal_terms)
+      |> maybe_put_summary("Topic terms", Map.get(constraints, :topic_terms, []))
       |> maybe_put_summary(
         "Time scope",
         constraints.time_scope != :none && Atom.to_string(constraints.time_scope)
@@ -1078,6 +1115,33 @@ defmodule Threadr.ML.ConstrainedQA do
 
   defp dump_uuid!(value) when is_binary(value), do: Ecto.UUID.dump!(value)
   defp dump_uuid!(value), do: value
+
+  defp hybrid_topic_query(constraints) do
+    case Map.get(constraints, :topic_terms, []) do
+      [] -> Enum.map(constraints.actors, & &1.handle) |> Enum.join(" ")
+      terms -> Enum.join(terms, " ")
+    end
+  end
+
+  defp hybrid_topic_opts(constraints, opts, actor_ids) do
+    opts
+    |> Keyword.put(:actor_ids, actor_ids)
+    |> Keyword.put(:channel_name, constraints.requester_channel_name)
+    |> apply_hybrid_time_scope(constraints.time_scope)
+    |> Keyword.put_new(:limit, @default_limit)
+  end
+
+  defp apply_hybrid_time_scope(opts, :today) do
+    {since, until} = today_bounds()
+    opts |> Keyword.put(:since, since) |> Keyword.put(:until, until)
+  end
+
+  defp apply_hybrid_time_scope(opts, :yesterday) do
+    {since, until} = yesterday_bounds()
+    opts |> Keyword.put(:since, since) |> Keyword.put(:until, until)
+  end
+
+  defp apply_hybrid_time_scope(opts, :none), do: opts
 
   defp blank?(value), do: value in [nil, ""]
 end

@@ -77,11 +77,61 @@ defmodule Threadr.ML.ConstrainedQATest do
              )
 
     assert result.query.mode == "constrained_qa"
-    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.retrieval == "hybrid_topic_messages"
     assert result.query.actor_handles == ["THANEW"]
-    assert result.query.literal_terms == ["dnb"]
+    assert result.query.topic_terms == ["dnb"]
     assert result.context =~ "not a big fan of dnb tbh"
     refute result.context =~ "i like jungle more than dnb"
+  end
+
+  test "falls back to a broader actor slice when rhetorical topic terms do not match literally" do
+    tenant = create_tenant!("Constrained QA Actor Rhetorical")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    other = create_actor!(tenant.schema_name, "leku")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "corporate bootlicker is HR's dream and an employee's worst nightmare",
+      "thanew-work-1",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "nobody is logging this immediately just to prove production",
+      "thanew-work-2",
+      DateTime.add(now, 15, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      other.id,
+      channel.id,
+      "this should not leak into the actor slice",
+      "leku-noise",
+      DateTime.add(now, 30, :second)
+    )
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "what disgusting filth did THANEW talk about today? i want all the dirt",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestConstraintGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.actor_handles == ["THANEW"]
+    assert result.query.topic_terms == ["disgusting", "filth", "dirt"]
+    assert result.context =~ "corporate bootlicker"
+    assert result.context =~ "prove production"
+    refute result.context =~ "this should not leak"
   end
 
   test "answers current-channel topical summary questions constrained to today" do

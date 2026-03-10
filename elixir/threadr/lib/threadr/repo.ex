@@ -4,7 +4,7 @@ defmodule Threadr.Repo do
   import Ecto.Query
 
   def installed_extensions do
-    ["age", "vector", "timescaledb", "pg_search", "citext"]
+    ["age", "vector", "timescaledb", "pg_search", "pg_trgm", "citext"]
   end
 
   def min_pg_version do

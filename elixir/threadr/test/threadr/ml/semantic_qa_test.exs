@@ -123,6 +123,87 @@ defmodule Threadr.ML.SemanticQATest do
              )
   end
 
+  test "falls back to lexical retrieval when embeddings are missing but the message text matches" do
+    tenant = create_tenant!("Semantic QA Lexical Fallback")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+
+    create_message!(
+      tenant.schema_name,
+      actor.id,
+      channel.id,
+      "Alice said DNB is fine background music for games."
+    )
+
+    assert {:ok, result} =
+             SemanticQA.search_messages(
+               tenant.subject_name,
+               "does alice like dnb?",
+               embedding_provider: Threadr.TestEmbeddingProvider,
+               embedding_model: "test-embedding-model",
+               limit: 1
+             )
+
+    assert result.query.retrieval == "hybrid"
+    assert result.query.retrieval_sources == ["lexical"]
+    assert result.query.lexical_match_count == 1
+    assert [match] = result.matches
+    assert match.body =~ "DNB is fine background music"
+    assert match.similarity > 0.0
+  end
+
+  test "expands hybrid retrieval with nearby supporting messages" do
+    tenant = create_tenant!("Semantic QA Expansion")
+    actor = create_actor!(tenant.schema_name, "alice")
+    channel = create_channel!(tenant.schema_name, "ops")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    message =
+      create_message!(
+        tenant.schema_name,
+        actor.id,
+        channel.id,
+        "Alice mentioned Bob in incident response planning."
+      )
+
+    create_embedding!(tenant.schema_name, message.id, [0.4, 0.5, 0.6], "test-embedding-model")
+
+    follow_up =
+      Message
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          external_id: Ecto.UUID.generate(),
+          body: "Bob later followed up on endpoint isolation.",
+          observed_at: DateTime.add(now, 90, :second),
+          raw: %{"body" => "Bob later followed up on endpoint isolation."},
+          metadata: %{"reply_to_external_id" => message.external_id},
+          actor_id: actor.id,
+          channel_id: channel.id
+        },
+        tenant: tenant.schema_name
+      )
+      |> Ash.create!()
+
+    assert {:ok, result} =
+             SemanticQA.search_messages(
+               tenant.subject_name,
+               "Who did Alice mention?",
+               embedding_provider: Threadr.TestEmbeddingProvider,
+               embedding_model: "test-embedding-model",
+               limit: 1,
+               expansion_limit: 1
+             )
+
+    assert result.query.retrieval == "hybrid"
+    assert result.query.seed_match_count == 1
+    assert result.query.expanded_match_count == 1
+    assert Enum.at(result.matches, 0).message_id == message.id
+    assert Enum.at(result.matches, 1).message_id == follow_up.id
+    assert result.context =~ "Alice mentioned Bob in incident response planning."
+    assert result.context =~ "Bob later followed up on endpoint isolation."
+  end
+
   test "passes embedding endpoint and provider config through query embedding calls" do
     tenant = create_tenant!("Semantic QA Embedding Opts")
     actor = create_actor!(tenant.schema_name, "alice")

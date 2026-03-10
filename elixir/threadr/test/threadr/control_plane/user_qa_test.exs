@@ -172,7 +172,8 @@ defmodule Threadr.ControlPlane.UserQATest do
              )
 
     assert result.mode == :constrained_qa
-    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.retrieval == "hybrid_topic_messages"
+    assert result.query.topic_terms == ["dnb"]
     assert result.query.actor_handles == ["THANEW"]
     assert result.context =~ "not a big fan of dnb tbh"
     refute result.context =~ "i like jungle more than dnb"
