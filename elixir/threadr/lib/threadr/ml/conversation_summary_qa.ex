@@ -13,6 +13,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
     ConversationSummaryQAIntent,
     Generation,
     GenerationProviderOpts,
+    HybridRetriever,
     ReconstructionQuery
   }
 
@@ -31,7 +32,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
          resolved_opts <- resolve_summary_opts(intent, opts),
          :ok <- require_time_bounds(resolved_opts),
          conversations <- fetch_conversations(tenant.schema_name, resolved_opts),
-         messages <- fetch_summary_messages(tenant.schema_name, resolved_opts),
+         messages <- fetch_summary_messages(tenant.schema_name, question, resolved_opts),
          true <- conversations != [] or messages != [] do
       build_answer(tenant, question, intent, conversations, messages, resolved_opts)
     else
@@ -73,7 +74,7 @@ defmodule Threadr.ML.ConversationSummaryQA do
          facts_over_time: [],
          context: context,
          answer: answer
-      }}
+       }}
     end
   end
 
@@ -191,7 +192,10 @@ defmodule Threadr.ML.ConversationSummaryQA do
         rows -> Threadr.ML.SemanticQA.build_context(rows)
       end
 
-    Enum.join(header_lines ++ conversation_lines ++ message_window_lines ++ blankable(evidence), "\n\n")
+    Enum.join(
+      header_lines ++ conversation_lines ++ message_window_lines ++ blankable(evidence),
+      "\n\n"
+    )
   end
 
   defp citation_matches(citations) do
@@ -249,7 +253,24 @@ defmodule Threadr.ML.ConversationSummaryQA do
     |> maybe_filter_conversation_until(Keyword.get(opts, :until))
   end
 
-  defp fetch_summary_messages(tenant_schema, opts) do
+  defp fetch_summary_messages(tenant_schema, question, opts) do
+    limit = message_limit(opts)
+    window_messages = fetch_window_messages(tenant_schema, opts)
+    hybrid_messages = fetch_hybrid_summary_messages(tenant_schema, question, opts)
+
+    hybrid_ids = MapSet.new(Enum.map(hybrid_messages, & &1.message_id))
+
+    window_fill =
+      window_messages
+      |> Enum.reject(&MapSet.member?(hybrid_ids, &1.message_id))
+      |> Enum.take(max(limit - length(hybrid_messages), 0))
+
+    (hybrid_messages ++ window_fill)
+    |> Enum.uniq_by(& &1.message_id)
+    |> Enum.sort_by(&{&1.observed_at, &1.message_id}, :asc)
+  end
+
+  defp fetch_window_messages(tenant_schema, opts) do
     limit = message_limit(opts)
 
     from(m in "messages",
@@ -274,6 +295,17 @@ defmodule Threadr.ML.ConversationSummaryQA do
     |> maybe_filter_message_until(Keyword.get(opts, :until))
     |> Repo.all(prefix: tenant_schema)
     |> Enum.map(&normalize_message/1)
+  end
+
+  defp fetch_hybrid_summary_messages(tenant_schema, question, opts) do
+    limit = hybrid_message_limit(opts)
+
+    tenant_schema
+    |> HybridRetriever.search_messages(question, hybrid_summary_opts(opts, limit))
+    |> case do
+      {:ok, matches, _query} -> Enum.take(matches, limit)
+      {:error, _reason} -> []
+    end
   end
 
   defp resolve_summary_opts(intent, opts) do
@@ -441,6 +473,22 @@ defmodule Threadr.ML.ConversationSummaryQA do
     |> Keyword.get(:message_limit, @default_message_limit)
     |> max(1)
     |> min(@max_message_limit)
+  end
+
+  defp hybrid_message_limit(opts) do
+    total_limit = message_limit(opts)
+
+    total_limit
+    |> div(3)
+    |> max(8)
+    |> min(40)
+    |> min(total_limit)
+  end
+
+  defp hybrid_summary_opts(opts, limit) do
+    opts
+    |> Keyword.put(:limit, limit)
+    |> Keyword.put(:channel_name, Keyword.get(opts, :requester_channel_name))
   end
 
   defp retrieval_mode([], _messages), do: "message_window"

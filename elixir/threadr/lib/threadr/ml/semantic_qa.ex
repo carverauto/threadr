@@ -4,29 +4,25 @@ defmodule Threadr.ML.SemanticQA do
   """
 
   import Ecto.Query
-  import Pgvector.Ecto.Query
 
   alias Threadr.CompareDelta
   alias Threadr.ControlPlane
 
   alias Threadr.ML.{
     ChannelLabel,
-    EmbeddingProviderOpts,
-    Embeddings,
     Generation,
-    GenerationProviderOpts
+    GenerationProviderOpts,
+    HybridRetriever
   }
 
   alias Threadr.Repo
-
-  @default_limit 5
 
   def answer_question(tenant_subject_name, question, opts \\ [])
       when is_binary(tenant_subject_name) and is_binary(question) do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
          {:ok, matches, query_result} <-
-           search_messages_in_schema(tenant.schema_name, question, opts),
+           HybridRetriever.search_messages(tenant.schema_name, question, opts),
          citations = build_citations(matches, tenant.schema_name),
          facts_over_time = facts_over_time(citations),
          {:ok, generation_result} <-
@@ -51,7 +47,7 @@ defmodule Threadr.ML.SemanticQA do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
          {:ok, matches, query_result} <-
-           search_messages_in_schema(tenant.schema_name, question, opts),
+           HybridRetriever.search_messages(tenant.schema_name, question, opts),
          citations = build_citations(matches, tenant.schema_name) do
       {:ok,
        %{
@@ -196,65 +192,6 @@ defmodule Threadr.ML.SemanticQA do
   defp format_window_value(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
   defp format_window_value(value), do: to_string(value)
 
-  defp search_messages_in_schema(tenant_schema, question, opts) do
-    with {:ok, query_embedding} <- Embeddings.embed_query(question, embedding_opts(opts)) do
-      {:ok, query_vector} = Ash.Vector.new(query_embedding.embedding)
-      model = Keyword.get(opts, :embedding_model, default_embedding_model())
-      limit = Keyword.get(opts, :limit, @default_limit)
-
-      matches =
-        from(me in "message_embeddings",
-          join: m in "messages",
-          on: m.id == me.message_id,
-          join: a in "actors",
-          on: a.id == m.actor_id,
-          join: c in "channels",
-          on: c.id == m.channel_id,
-          where: me.model == ^model,
-          order_by: cosine_distance(me.embedding, ^query_vector),
-          limit: ^limit,
-          select: %{
-            message_id: m.id,
-            external_id: m.external_id,
-            body: m.body,
-            observed_at: m.observed_at,
-            actor_handle: a.handle,
-            actor_display_name: a.display_name,
-            channel_name: c.name,
-            model: me.model,
-            distance: cosine_distance(me.embedding, ^query_vector)
-          }
-        )
-        |> Repo.all(prefix: tenant_schema)
-        |> Enum.map(&normalize_match/1)
-        |> maybe_filter_since(Keyword.get(opts, :since))
-        |> maybe_filter_until(Keyword.get(opts, :until))
-
-      case matches do
-        [] ->
-          {:error, :no_message_embeddings}
-
-        _ ->
-          {:ok, matches,
-           %{
-             model: model,
-             provider: query_embedding.provider,
-             metadata: Map.get(query_embedding, :metadata, %{})
-           }}
-      end
-    end
-  end
-
-  defp normalize_match(match) do
-    distance = normalize_distance(match.distance)
-
-    match
-    |> Map.update!(:message_id, &normalize_identifier/1)
-    |> Map.update!(:external_id, &normalize_identifier/1)
-    |> Map.put(:distance, distance)
-    |> Map.put(:similarity, 1.0 - distance)
-  end
-
   defp build_citations(matches, tenant_schema) do
     entities_by_message =
       fetch_entities_by_message(tenant_schema, Enum.map(matches, & &1.message_id))
@@ -343,10 +280,6 @@ defmodule Threadr.ML.SemanticQA do
   defp missing_extraction_table?(%Postgrex.Error{postgres: %{code: "42P01"}}), do: true
   defp missing_extraction_table?(_error), do: false
 
-  defp normalize_distance(%Decimal{} = distance), do: Decimal.to_float(distance)
-  defp normalize_distance(distance) when is_float(distance), do: distance
-  defp normalize_distance(distance) when is_integer(distance), do: distance / 1
-
   defp normalize_identifier(nil), do: nil
 
   defp normalize_identifier(value) when is_binary(value) do
@@ -406,59 +339,9 @@ defmodule Threadr.ML.SemanticQA do
     line <> "\nFacts: " <> suffix
   end
 
-  defp default_embedding_model do
-    Application.get_env(:threadr, Threadr.ML, [])
-    |> Keyword.fetch!(:embeddings)
-    |> Keyword.fetch!(:model)
-  end
-
-  defp embedding_opts(opts) do
-    EmbeddingProviderOpts.from_prefixed(opts)
-  end
-
   defp generation_opts(opts) do
     GenerationProviderOpts.from_prefixed(opts)
   end
-
-  defp maybe_filter_since(matches, nil), do: matches
-
-  defp maybe_filter_since(matches, %NaiveDateTime{} = since) do
-    Enum.filter(matches, &compare_observed_at(&1.observed_at, since, :gte))
-  end
-
-  defp maybe_filter_since(matches, %DateTime{} = since) do
-    Enum.filter(matches, &compare_observed_at(&1.observed_at, since, :gte))
-  end
-
-  defp maybe_filter_until(matches, nil), do: matches
-
-  defp maybe_filter_until(matches, %NaiveDateTime{} = until) do
-    Enum.filter(matches, &compare_observed_at(&1.observed_at, until, :lte))
-  end
-
-  defp maybe_filter_until(matches, %DateTime{} = until) do
-    Enum.filter(matches, &compare_observed_at(&1.observed_at, until, :lte))
-  end
-
-  defp compare_observed_at(%DateTime{} = observed_at, %DateTime{} = value, :gte),
-    do: DateTime.compare(observed_at, value) in [:gt, :eq]
-
-  defp compare_observed_at(%DateTime{} = observed_at, %DateTime{} = value, :lte),
-    do: DateTime.compare(observed_at, value) in [:lt, :eq]
-
-  defp compare_observed_at(%NaiveDateTime{} = observed_at, %NaiveDateTime{} = value, :gte),
-    do: NaiveDateTime.compare(observed_at, value) in [:gt, :eq]
-
-  defp compare_observed_at(%NaiveDateTime{} = observed_at, %NaiveDateTime{} = value, :lte),
-    do: NaiveDateTime.compare(observed_at, value) in [:lt, :eq]
-
-  defp compare_observed_at(%DateTime{} = observed_at, %NaiveDateTime{} = value, op),
-    do: compare_observed_at(observed_at, DateTime.from_naive!(value, "Etc/UTC"), op)
-
-  defp compare_observed_at(%NaiveDateTime{} = observed_at, %DateTime{} = value, op),
-    do: compare_observed_at(DateTime.from_naive!(observed_at, "Etc/UTC"), value, op)
-
-  defp compare_observed_at(_observed_at, _value, _op), do: false
 
   defp facts_over_time(citations) do
     citations
