@@ -33,6 +33,57 @@ defmodule Threadr.ML.ConstrainedQATest do
     assert result.context =~ "terrace produce"
   end
 
+  test "derives actor topical constraints heuristically when routing falls back" do
+    tenant = create_tenant!("Constrained QA Actor Preference")
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    leku = create_actor!(tenant.schema_name, "leku")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "not a big fan of dnb tbh",
+      "thanew-dnb-1",
+      now
+    )
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "but its good background shit for playing games",
+      "thanew-dnb-2",
+      DateTime.add(now, 10, :second)
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "i like jungle more than dnb",
+      "leku-dnb",
+      DateTime.add(now, 20, :second)
+    )
+
+    assert {:ok, result} =
+             ConstrainedQA.answer_question(
+               tenant.subject_name,
+               "does THANEW like dnb?",
+               requester_channel_name: "#!chases",
+               generation_provider: Threadr.TestConstraintGenerationProvider,
+               generation_model: "test-chat"
+             )
+
+    assert result.query.mode == "constrained_qa"
+    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.actor_handles == ["THANEW"]
+    assert result.query.literal_terms == ["dnb"]
+    assert result.context =~ "not a big fan of dnb tbh"
+    refute result.context =~ "i like jungle more than dnb"
+  end
+
   test "answers current-channel topical summary questions constrained to today" do
     tenant = create_tenant!("Constrained QA Channel Today")
     farmr = create_actor!(tenant.schema_name, "farmr")

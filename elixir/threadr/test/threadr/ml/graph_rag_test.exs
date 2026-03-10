@@ -73,6 +73,67 @@ defmodule Threadr.ML.GraphRAGTest do
     assert result.summary.content =~ "Topic:"
   end
 
+  test "uses actor-filtered constrained retrieval before semantic fallback for graph answers" do
+    tenant = create_tenant!("Graph RAG Actor Topic")
+    observed_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    _question_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "larsini0",
+        "#!chases",
+        "THANEW: u can tell i play a certain kind of dnb",
+        ["THANEW"],
+        observed_at
+      )
+
+    _answer_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "THANEW",
+        "#!chases",
+        "not a big fan of dnb tbh",
+        [],
+        DateTime.add(observed_at, 60, :second)
+      )
+
+    _follow_up_message =
+      persist_message!(
+        tenant.subject_name,
+        tenant.schema_name,
+        "THANEW",
+        "#!chases",
+        "but its good background shit for playing games",
+        [],
+        DateTime.add(observed_at, 120, :second)
+      )
+
+    request =
+      QARequest.new("does THANEW like dnb?", :user,
+        requester_channel_name: "#!chases",
+        generation_provider: Threadr.TestConstraintGenerationProvider,
+        generation_model: "test-chat"
+      )
+
+    assert {:ok, result} =
+             GraphRAG.answer_question(
+               tenant.subject_name,
+               request
+             )
+
+    assert result.semantic.query.mode == "constrained_qa"
+    assert result.semantic.query.retrieval == "literal_term_messages"
+
+    assert Enum.any?(
+             result.semantic.citations,
+             &String.contains?(&1.body, "not a big fan of dnb")
+           )
+
+    refute Enum.any?(result.semantic.citations, &String.contains?(&1.body, "incident response"))
+  end
+
   defp create_tenant!(prefix) do
     suffix = System.unique_integer([:positive])
 

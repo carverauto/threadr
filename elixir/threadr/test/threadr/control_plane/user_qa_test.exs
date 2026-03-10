@@ -129,6 +129,55 @@ defmodule Threadr.ControlPlane.UserQATest do
     assert result.answer.content =~ "What did Alice and Bob talk about last week?"
   end
 
+  test "answers single-actor topical questions for users from filtered actor messages" do
+    owner = create_user!("single-actor-topic")
+    tenant = create_tenant!("User QA Single Actor Topic", owner)
+    thanew = create_actor!(tenant.schema_name, "THANEW")
+    leku = create_actor!(tenant.schema_name, "leku")
+    channel = create_channel!(tenant.schema_name, "#!chases")
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "not a big fan of dnb tbh"
+    )
+
+    create_message!(
+      tenant.schema_name,
+      thanew.id,
+      channel.id,
+      "but its good background shit for playing games"
+    )
+
+    create_message!(
+      tenant.schema_name,
+      leku.id,
+      channel.id,
+      "i like jungle more than dnb"
+    )
+
+    request =
+      QARequest.new("does THANEW like dnb?", :user,
+        requester_channel_name: "#!chases",
+        generation_provider: Threadr.TestConstraintGenerationProvider,
+        generation_model: "test-chat"
+      )
+
+    assert {:ok, result} =
+             Analysis.answer_tenant_question_for_user(
+               owner,
+               tenant.subject_name,
+               request
+             )
+
+    assert result.mode == :constrained_qa
+    assert result.query.retrieval == "literal_term_messages"
+    assert result.query.actor_handles == ["THANEW"]
+    assert result.context =~ "not a big fan of dnb tbh"
+    refute result.context =~ "i like jungle more than dnb"
+  end
+
   test "answers time-bounded conversation summary questions for users from reconstructed conversations" do
     owner = create_user!("conversation-summary")
     tenant = create_tenant!("User QA Conversation Summary", owner)

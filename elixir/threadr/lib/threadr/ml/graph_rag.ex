@@ -8,6 +8,7 @@ defmodule Threadr.ML.GraphRAG do
 
   alias Threadr.ML.{
     ChannelLabel,
+    ConstrainedQA,
     Generation,
     GenerationProviderOpts,
     QARequest,
@@ -93,8 +94,7 @@ defmodule Threadr.ML.GraphRAG do
       when is_binary(tenant_subject_name) and is_binary(question) do
     with {:ok, tenant} <-
            ControlPlane.get_tenant_by_subject_name(tenant_subject_name, context: %{system: true}),
-         {:ok, semantic} <-
-           SemanticQA.search_messages(tenant.subject_name, question, opts),
+         {:ok, semantic} <- retrieve_seed_context(tenant.subject_name, question, opts),
          {:ok, graph_neighborhood} <-
            Graph.neighborhood(
              Enum.map(semantic.matches, & &1.message_id),
@@ -113,6 +113,19 @@ defmodule Threadr.ML.GraphRAG do
          graph: graph,
          context: build_context(semantic, graph)
        }}
+    end
+  end
+
+  defp retrieve_seed_context(tenant_subject_name, question, opts) do
+    case ConstrainedQA.retrieve_for_question(tenant_subject_name, question, opts) do
+      {:ok, result} ->
+        {:ok, result}
+
+      {:error, :not_constrained_question} ->
+        SemanticQA.search_messages(tenant_subject_name, question, opts)
+
+      {:error, _reason} ->
+        SemanticQA.search_messages(tenant_subject_name, question, opts)
     end
   end
 
