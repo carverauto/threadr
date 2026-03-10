@@ -22,6 +22,11 @@ defmodule Threadr.ML.ConversationSummaryQAIntentTest do
              )
   end
 
+  test "classifies recap requests phrased around conversations" do
+    assert {:ok, %{kind: :time_bounded_summary, time_scope: :today, scope_current_channel: true}} =
+             ConversationSummaryQAIntent.classify("recap todays conversations from #!chases")
+  end
+
   test "leaves non-summary questions alone" do
     assert {:error, :not_conversation_summary_question} =
              ConversationSummaryQAIntent.classify("Who did Alice mention?")

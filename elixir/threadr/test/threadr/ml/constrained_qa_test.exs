@@ -38,7 +38,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     thanew = create_actor!(tenant.schema_name, "THANEW")
     leku = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -89,7 +89,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     thanew = create_actor!(tenant.schema_name, "THANEW")
     other = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -140,7 +140,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     leku = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
 
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -179,7 +179,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     fysty = create_actor!(tenant.schema_name, "fysty")
     leku = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -224,7 +224,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     eefer = create_actor!(tenant.schema_name, "eefer--")
     dio = create_actor!(tenant.schema_name, "dio")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -286,7 +286,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     bysin = create_actor!(tenant.schema_name, "bysin")
     fysty = create_actor!(tenant.schema_name, "fysty")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -355,7 +355,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     leku = create_actor!(tenant.schema_name, "leku")
     bysin = create_actor!(tenant.schema_name, "bysin")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -390,7 +390,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     farmr = create_actor!(tenant.schema_name, "farmr")
     leku = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -431,7 +431,7 @@ defmodule Threadr.ML.ConstrainedQATest do
     eefer = create_actor!(tenant.schema_name, "eefer--")
     leku = create_actor!(tenant.schema_name, "leku")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
 
     create_message!(
       tenant.schema_name,
@@ -472,7 +472,8 @@ defmodule Threadr.ML.ConstrainedQATest do
     thanew = create_actor!(tenant.schema_name, "THANEW")
     larsinio = create_actor!(tenant.schema_name, "larsinio")
     channel = create_channel!(tenant.schema_name, "#!chases")
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-1_000, :second)
+    earlier = DateTime.add(now, -(23 * 60 * 60), :second)
 
     create_message!(
       tenant.schema_name,
@@ -480,7 +481,7 @@ defmodule Threadr.ML.ConstrainedQATest do
       channel.id,
       "first up",
       "first-up-1",
-      now
+      earlier
     )
 
     create_message!(
@@ -489,7 +490,7 @@ defmodule Threadr.ML.ConstrainedQATest do
       channel.id,
       "says u",
       "first-up-2",
-      DateTime.add(now, 60, :second)
+      DateTime.add(earlier, 60, :second)
     )
 
     for index <- 1..10 do
