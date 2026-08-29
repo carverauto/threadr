@@ -21,6 +21,7 @@ defmodule Threadr.ML.BotIntentTest do
   test "classifies analyst questions as qa" do
     assert BotIntent.classify("who does sig talk with the most?") == :qa
     assert BotIntent.classify("what happened last week?") == :qa
+    assert BotIntent.classify("summarize these chats for the past week") == :qa
     assert BotIntent.classify("what did sig and eefer-- talk about today?") == :qa
     assert BotIntent.classify("who has mentioned 1488?") == :qa
     assert BotIntent.classify("what were people talking about today in this channel?") == :qa
