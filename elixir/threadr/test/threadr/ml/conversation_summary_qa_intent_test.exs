@@ -8,6 +8,11 @@ defmodule Threadr.ML.ConversationSummaryQAIntentTest do
              ConversationSummaryQAIntent.classify("What happened last week?")
   end
 
+  test "classifies past week summary wording" do
+    assert {:ok, %{kind: :time_bounded_summary, time_scope: :last_week}} =
+             ConversationSummaryQAIntent.classify("summarize these chats for the past week")
+  end
+
   test "classifies recap requests for the current channel" do
     assert {:ok, %{kind: :time_bounded_summary, time_scope: :today, scope_current_channel: true}} =
              ConversationSummaryQAIntent.classify(

@@ -53,7 +53,9 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
       "what happened today",
       "what happened yesterday",
       "what happened last week",
+      "what happened past week",
       "what happened last month",
+      "what happened past month",
       "what happened in ",
       "what happened here"
     ])
@@ -66,11 +68,20 @@ defmodule Threadr.ML.ConversationSummaryQAIntent do
 
   defp infer_time_scope(question) do
     cond do
-      String.contains?(question, "today") or String.contains?(question, "todays") -> :today
-      String.contains?(question, "yesterday") -> :yesterday
-      String.contains?(question, "last week") -> :last_week
-      String.contains?(question, "last month") -> :last_month
-      true -> :none
+      String.contains?(question, "today") or String.contains?(question, "todays") ->
+        :today
+
+      String.contains?(question, "yesterday") ->
+        :yesterday
+
+      String.contains?(question, "last week") or String.contains?(question, "past week") ->
+        :last_week
+
+      String.contains?(question, "last month") or String.contains?(question, "past month") ->
+        :last_month
+
+      true ->
+        :none
     end
   end
 
