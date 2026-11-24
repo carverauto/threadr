@@ -13,6 +13,8 @@ config :threadr,
   ash_domains: [Threadr.ControlPlane, Threadr.TenantData],
   web_enabled: true
 
+config :ash, default_string_length_count: :codepoints
+
 config :threadr, :bot_reconciler, Threadr.ControlPlane.KubernetesBotReconciler
 config :threadr, :kubernetes_client, Threadr.ControlPlane.KubernetesReqClient
 config :threadr, :command_executor, Threadr.Commands.NoopExecutor
