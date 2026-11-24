@@ -49,7 +49,7 @@ defmodule Threadr.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:ash, "~> 3.19"},
+      {:ash, "~> 3.38"},
       {:ash_authentication, "~> 4.13"},
       {:ash_authentication_phoenix, "~> 2.15"},
       {:ash_phoenix, "~> 2.3"},
